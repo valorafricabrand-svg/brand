@@ -1,0 +1,12 @@
+/.env
+/vendor
+/node_modules
+/public/storage
+/storage/*.key
+/storage/*.sqlite
+/Homestead.yaml
+/Homestead.json
+/.idea
+.vscode
+/.phpunit.result.cache
+/.env.backup

@@ -1,0 +1,11 @@
+{
+  "name": "valor-africa-site-tools",
+  "version": "1.0.0",
+  "description": "Helper tools for optimizing images and setting up the project",
+  "scripts": {
+    "optimize-images": "node optimizer.js"
+  },
+  "dependencies": {
+    "sharp": "^0.32.0"
+  }
+}
