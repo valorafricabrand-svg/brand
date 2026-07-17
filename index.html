@@ -20,18 +20,18 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --ink:#1c160f;
-    --ink-soft:#3a2f22;
-    --indigo:#22345c;
+    --ink:#120f0b;
+    --ink-soft:#3f3427;
+    --indigo:#243b62;
     --indigo-deep:#16233f;
-    --parchment:#efe3c9;
-    --parchment-2:#e5d5ac;
-    --ochre:#c2731f;
-    --gold:#d9a441;
-    --rust:#a63b2b;
-    --line: rgba(28,22,15,0.14);
-    --line-light: rgba(239,227,201,0.22);
-    --shadow: 0 20px 50px rgba(22,35,63,0.18);
+    --parchment:#f7efe0;
+    --parchment-2:#efe0c6;
+    --ochre:#c97b23;
+    --gold:#e4b04a;
+    --rust:#9e3926;
+    --line: rgba(18,15,11,0.12);
+    --line-light: rgba(247,239,224,0.22);
+    --shadow: 0 24px 60px rgba(22,35,63,0.18);
     --ease: cubic-bezier(.16,.8,.24,1);
   }
 
@@ -46,9 +46,9 @@
     margin:0;
     background-color:var(--parchment);
     background-image:
-      radial-gradient(circle at 15% 15%, rgba(217,164,65,0.14), transparent 24%),
-      radial-gradient(circle at 82% 10%, rgba(194,115,31,0.08), transparent 20%),
-      radial-gradient(circle at 30% 90%, rgba(34,52,92,0.06), transparent 18%);
+      radial-gradient(circle at 12% 10%, rgba(228,176,74,0.16), transparent 22%),
+      radial-gradient(circle at 88% 6%, rgba(201,123,35,0.11), transparent 18%),
+      radial-gradient(circle at 32% 92%, rgba(36,59,98,0.08), transparent 16%);
     background-attachment:fixed;
     color:var(--ink);
     font-family:'Sora', system-ui, sans-serif;
@@ -187,7 +187,7 @@
   /* ---------- Hero ---------- */
   .hero{
     position:relative;
-    background:var(--ink);
+    background:linear-gradient(135deg, var(--ink) 0%, #18263d 44%, #243b62 100%);
     color:var(--parchment);
     overflow:hidden;
     padding:clamp(70px,12vw,130px) 0 0;
@@ -228,26 +228,39 @@
   .btn{
     display:inline-flex; align-items:center; gap:10px;
     padding:15px 26px;
-    border-radius:3px;
+    border-radius:999px;
     font-weight:600; font-size:14.5px;
     letter-spacing:0.01em;
     border:1.5px solid transparent;
-    transition:transform 0.25s var(--ease), background 0.25s var(--ease), border-color .25s var(--ease);
+    box-shadow:0 12px 28px rgba(0,0,0,0.14);
+    transition:transform 0.25s var(--ease), background 0.25s var(--ease), border-color .25s var(--ease), box-shadow .25s var(--ease);
   }
-  .btn-primary{ background:var(--ochre); color:var(--ink); }
-  .btn-primary:hover{ background:var(--gold); transform:translateY(-2px); }
-  .btn-ghost{ border-color:rgba(239,227,201,0.4); color:var(--parchment); }
-  .btn-ghost:hover{ border-color:var(--parchment); transform:translateY(-2px); }
+  .btn-primary{ background:linear-gradient(135deg, var(--gold), var(--ochre)); color:var(--ink); }
+  .btn-primary:hover{ background:linear-gradient(135deg, #f2c462, var(--gold)); transform:translateY(-2px); box-shadow:0 16px 32px rgba(0,0,0,0.18); }
+  .btn-ghost{ border-color:rgba(239,227,201,0.4); color:var(--parchment); background:rgba(255,255,255,0.04); }
+  .btn-ghost:hover{ border-color:var(--parchment); transform:translateY(-2px); box-shadow:0 16px 32px rgba(0,0,0,0.14); }
   .btn-dark{ background:var(--indigo); color:var(--parchment); }
   .btn-dark:hover{ background:var(--indigo-deep); transform:translateY(-2px); }
 
+  .hero-highlights{ display:flex; flex-wrap:wrap; gap:12px; margin-top:28px; }
+  .highlight-pill{
+    display:inline-flex; align-items:center; gap:10px;
+    padding:10px 14px; border-radius:999px;
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(239,227,201,0.16);
+    color:var(--parchment);
+    font-size:13px;
+  }
+  .highlight-pill strong{ color:var(--gold); font-family:'Fraunces',serif; font-size:16px; }
+
   .hero-card{
     position:relative;
-    background:rgba(239,227,201,0.06);
-    border:1px solid rgba(239,227,201,0.16);
-    border-radius:6px;
+    background:linear-gradient(160deg, rgba(239,227,201,0.14), rgba(28,22,15,0.12));
+    border:1px solid rgba(239,227,201,0.18);
+    border-radius:18px;
     overflow:hidden;
     min-height:420px;
+    box-shadow:0 22px 48px rgba(0,0,0,0.24);
   }
   .hero-card img{
     position:absolute;
@@ -311,12 +324,13 @@
     border:1px solid var(--line);
   }
   .pillar{
-    background:var(--parchment);
+    background:linear-gradient(180deg, var(--parchment) 0%, #f8f0e6 100%);
     padding:40px 34px;
     position:relative;
-    transition:background 0.3s var(--ease);
+    transition:transform 0.3s var(--ease), box-shadow 0.3s var(--ease), background 0.3s var(--ease);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);
   }
-  .pillar:hover{ background:var(--parchment-2); }
+  .pillar:hover{ background:var(--parchment-2); transform:translateY(-3px); box-shadow:0 16px 32px rgba(18,15,11,0.08); }
   .pillar-icon{ width:46px; height:46px; margin-bottom:26px; }
   .pillar h3{ font-size:23px; margin-bottom:14px; }
   .pillar p{ color:var(--ink-soft); font-size:15px; margin-bottom:20px;}
@@ -356,10 +370,11 @@
 
   .service-visual{
     background:linear-gradient(160deg, var(--indigo), var(--indigo-deep));
-    border-radius:8px;
+    border-radius:14px;
     padding:38px;
     position:sticky; top:110px;
-    border:1px solid rgba(239,227,201,0.1);
+    border:1px solid rgba(239,227,201,0.14);
+    box-shadow:0 22px 44px rgba(0,0,0,0.22);
   }
   .service-visual .swatches{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:28px;}
   .swatch{ aspect-ratio:1; border-radius:4px; }
@@ -377,12 +392,22 @@
   }
   .merch-card{
     background:var(--ink);
-    border-radius:6px;
+    border-radius:14px;
     overflow:hidden;
     position:relative;
     aspect-ratio:3/4;
     display:flex; flex-direction:column; justify-content:flex-end;
+    box-shadow:0 18px 36px rgba(18,15,11,0.14);
+    transition:transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
   }
+  .merch-card::before{
+    content:"";
+    position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(18,15,11,0.04) 0%, rgba(18,15,11,0.34) 100%);
+    z-index:1;
+    pointer-events:none;
+  }
+  .merch-card:hover{ transform:translateY(-4px); box-shadow:0 22px 42px rgba(18,15,11,0.2); }
   .merch-card.tall{ grid-row: span 2; aspect-ratio:auto; }
   .merch-art{
     position:absolute;
@@ -411,10 +436,11 @@
   .community{ background:var(--parchment-2); padding:clamp(70px,10vw,110px) 0; }
   .community-grid{ display:grid; grid-template-columns:1fr 1fr; gap:60px; align-items:center; }
   .community-visual{
-    background:var(--ink); border-radius:8px; padding:44px;
+    background:linear-gradient(140deg, var(--ink) 0%, #1d2d49 100%); border-radius:16px; padding:44px;
     position:relative; overflow:hidden;
     min-height:380px;
     display:flex; flex-direction:column; justify-content:space-between;
+    box-shadow:0 22px 44px rgba(18,15,11,0.2);
   }
   .community-visual::before{
     content:"";
@@ -436,7 +462,7 @@
   /* ---------- Testimonials ---------- */
   .testimonials{ background:var(--parchment); padding:clamp(60px,8vw,90px) 0; }
   .t-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border:1px solid var(--line); }
-  .t-card{ background:var(--parchment); padding:32px; display:flex; flex-direction:column; gap:20px; justify-content:space-between; }
+  .t-card{ background:linear-gradient(180deg, var(--parchment) 0%, #f8f0e6 100%); padding:32px; display:flex; flex-direction:column; gap:20px; justify-content:space-between; border-radius:12px; box-shadow:inset 0 1px 0 rgba(255,255,255,0.5); }
   .t-card p{ font-family:'Fraunces',serif; font-size:17px; line-height:1.45; color:var(--ink); }
   .t-who{ display:flex; align-items:center; gap:12px; }
   .t-avatar{ width:38px; height:38px; border-radius:50%; background:var(--indigo); flex-shrink:0; display:flex; align-items:center; justify-content:center; color:var(--gold); font-family:'Fraunces',serif; font-size:14px;}
@@ -445,10 +471,11 @@
 
   /* ---------- CTA banner ---------- */
   .cta-band{
-    background:var(--rust);
+    background:linear-gradient(135deg, var(--rust) 0%, #b2472a 100%);
     color:var(--parchment);
     padding:clamp(60px,9vw,90px) 0;
     text-align:center;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);
   }
   .cta-band h2{ font-size:clamp(30px,5vw,52px); color:var(--parchment); max-width:760px; margin:0 auto 28px; }
   .cta-band .btn-row{ justify-content:center; }
@@ -537,6 +564,11 @@
         <div class="btn-row">
           <a href="#contact" class="btn btn-primary">Start Your Brand →</a>
           <a href="#merch" class="btn btn-ghost">See the Merchandise</a>
+        </div>
+        <div class="hero-highlights">
+          <div class="highlight-pill"><strong>12+</strong><span>countries served</span></div>
+          <div class="highlight-pill"><strong>120+</strong><span>brands launched</span></div>
+          <div class="highlight-pill"><strong>∞</strong><span>detail-led production</span></div>
         </div>
       </div>
       <div class="hero-card reveal">
