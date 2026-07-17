@@ -425,6 +425,27 @@
     font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gold); font-weight:600; margin-bottom:6px; display:block;
   }
   .merch-info h4{ color:var(--parchment); font-size:19px; }
+  .shop-section{
+    margin-top:40px;
+    padding:28px;
+    background:linear-gradient(135deg, rgba(36,59,98,0.05), rgba(201,123,35,0.08));
+    border:1px solid rgba(36,59,98,0.12);
+    border-radius:16px;
+  }
+  .shop-head{ display:flex; align-items:end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:22px; }
+  .shop-head h3{ font-size:24px; }
+  .shop-head p{ color:var(--ink-soft); max-width:520px; }
+  .shop-grid{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:18px; }
+  .shop-card{ background:var(--parchment); border:1px solid rgba(18,15,11,0.08); border-radius:14px; overflow:hidden; box-shadow:0 14px 28px rgba(18,15,11,0.08); }
+  .shop-card img{ width:100%; height:220px; object-fit:cover; }
+  .shop-card-body{ padding:18px; display:flex; flex-direction:column; gap:10px; }
+  .product-badge{ display:inline-flex; align-self:flex-start; padding:6px 10px; border-radius:999px; background:rgba(201,123,35,0.14); color:var(--ochre); font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; }
+  .shop-card h4{ font-size:18px; }
+  .shop-card p{ color:var(--ink-soft); font-size:14px; }
+  .shop-meta{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:8px; }
+  .price{ font-weight:700; color:var(--indigo); }
+  .shop-link{ color:var(--rust); font-weight:700; font-size:14px; }
+  .shop-link:hover{ text-decoration:underline; }
   .merch-note{
     margin-top:40px;
     display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px;
@@ -545,6 +566,7 @@
       <li><a href="#pillars">What We Do</a></li>
       <li><a href="#services">Branding</a></li>
       <li><a href="#merch">Merchandise</a></li>
+      <li><a href="#shop">Shop</a></li>
       <li><a href="#community">Community</a></li>
       <li><a href="#contact" class="nav-cta">Start a Project</a></li>
     </ul>
@@ -735,6 +757,45 @@
       <div class="merch-card reveal">
         <img class="merch-art" src="images/5D006391-F19A-4DB0-970D-69A242182D19.jpg" alt="Valor Africa lifestyle brand imagery">
         <div class="merch-info"><span class="tag">Lifestyle</span><h4>Street-ready brand expressions</h4></div>
+      </div>
+    </div>
+
+    <div class="shop-section reveal" id="shop">
+      <div class="shop-head">
+        <div>
+          <span class="eyebrow">Valor Africa Shop</span>
+          <h3>Shop the signature collection</h3>
+        </div>
+        <p>Branded essentials for teams, events, launches, and everyday wear — produced with the same detail as our studio work.</p>
+      </div>
+      <div class="shop-grid">
+        <article class="shop-card">
+          <img src="images/IMG_0729.jpg" alt="Signature sweat set">
+          <div class="shop-card-body">
+            <span class="product-badge">Teamwear</span>
+            <h4>Signature Sweat Set</h4>
+            <p>Soft, elevated loungewear with embroidered Valor Africa branding.</p>
+            <div class="shop-meta"><span class="price">KES 4,500</span><a class="shop-link" href="#contact">Reserve</a></div>
+          </div>
+        </article>
+        <article class="shop-card">
+          <img src="images/IMG_1212.jpg" alt="Premium launch tee">
+          <div class="shop-card-body">
+            <span class="product-badge">Launch Drop</span>
+            <h4>Premium Launch Tee</h4>
+            <p>Clean, bold streetwear for founders, partners, and community activations.</p>
+            <div class="shop-meta"><span class="price">KES 2,800</span><a class="shop-link" href="#contact">Reserve</a></div>
+          </div>
+        </article>
+        <article class="shop-card">
+          <img src="images/IMG_20210205_154823.jpg" alt="Branded gifting pack">
+          <div class="shop-card-body">
+            <span class="product-badge">Gift Kit</span>
+            <h4>Brand Gift Pack</h4>
+            <p>Packaging-ready gifting sets designed for clients, events, and partners.</p>
+            <div class="shop-meta"><span class="price">KES 6,200</span><a class="shop-link" href="#contact">Reserve</a></div>
+          </div>
+        </article>
       </div>
     </div>
 
