@@ -991,11 +991,30 @@
 </script>
 
 <script>
-  // Small curated slider image list for quick visibility testing
+  // Gallery slider images
   const sliderImages = [
     "IMG_0729.jpg",
     "IMG_1212.jpg",
     "IMG_9415.jpg",
+    "IMG_20210205_154823.jpg",
+    "IMG_3282.jpg",
+    "PhotoRoom_20220829_222804.png",
+    "PhotoRoom_20220901_081033.jpg",
+    "PhotoRoom_20220910_074443.jpg",
+    "PhotoRoom_20220927_074321.jpg",
+    "PhotoRoom_20221118_021626.jpg",
+    "PhotoRoom_20230323_080421.jpg",
+    "0037AE54-4CD5-47E0-B113-979E1D34E2AF.jpg",
+    "07B2D599-BA68-4FE9-B06D-0921EAA342F2.jpg",
+    "4B845D28-C5D5-4968-AA08-C57418C5B819.jpg",
+    "52D62502-C0A7-4EDD-AEE3-370A48668A0E.jpg",
+    "54F15520-FA4B-4651-9C31-C2C6EECCCE75.jpg",
+    "5D006391-F19A-4DB0-970D-69A242182D19.jpg",
+    "772F7391-0EAD-49FE-8812-4B11449393AD.jpg",
+    "AACDD523-E3D8-4B09-8A3C-438958EC6002.jpg",
+    "B7B98527-ADA7-4AB4-8ED4-607E6F5ADC49.jpg",
+    "BE7C77E3-23C9-48EF-AC6C-DBA72F90EC37.jpg",
+    "E99CAB56-C92A-4B43-A85F-0EBF1BD1200D.jpg",
     "one.jpg"
   ];
 
@@ -1009,8 +1028,8 @@
     const slide = document.createElement('div');
     slide.className = 'slide';
     const img = document.createElement('img');
-    img.src = `images/${file}`;
-    img.alt = `Slide ${idx+1}`;
+    img.src = `images/gallery/${file}`;
+    img.alt = `Valor Africa brand showcase ${idx+1}`;
     slide.appendChild(img);
     slidesEl.appendChild(slide);
 
