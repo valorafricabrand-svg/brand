@@ -189,50 +189,6 @@
   }
   .menu-btn span{ width:24px; height:2px; background:var(--ink); display:block; }
 
-  /* ---------- Mockup Banners ---------- */
-  .mockup-section{
-    background:var(--parchment);
-    padding:clamp(60px, 10vw, 100px) 0;
-  }
-  .mockup-grid{
-    display:grid;
-    grid-template-columns:repeat(2, 1fr);
-    gap:24px;
-    margin-bottom:28px;
-  }
-  .mockup-card{
-    position:relative;
-    overflow:hidden;
-    border-radius:18px;
-    aspect-ratio:16/10;
-    box-shadow:0 16px 40px rgba(18,15,11,0.12);
-    transition:transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
-  }
-  .mockup-card:hover{ transform:translateY(-6px); box-shadow:0 24px 54px rgba(18,15,11,0.18); }
-  .mockup-card img{
-    width:100%;
-    height:100%;
-    object-fit:cover;
-    display:block;
-  }
-  .mockup-full{
-    position:relative;
-    overflow:hidden;
-    border-radius:18px;
-    aspect-ratio:20/8;
-    box-shadow:0 16px 40px rgba(18,15,11,0.12);
-  }
-  .mockup-full img{
-    width:100%;
-    height:100%;
-    object-fit:cover;
-    display:block;
-  }
-  @media (max-width:768px){
-    .mockup-grid{ grid-template-columns:1fr; }
-    .mockup-card{ aspect-ratio:16/12; }
-    .mockup-full{ aspect-ratio:16/10; }
-  }
   .hero{
     position:relative;
     background:linear-gradient(135deg, var(--ink) 0%, #18263d 44%, #243b62 100%);
@@ -659,63 +615,6 @@
         <!-- chevron weave pattern, 24px repeat -->
         <g id="chevronRow"></g>
       </svg>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== MOCKUP BANNERS ===================== -->
-<section class="mockup-section" id="mockups">
-  <div class="wrap">
-    <div class="section-head reveal">
-      <span class="eyebrow">Valor Africa in Action</span>
-      <h2>Brand work brought to life — across merchandise, campaigns, and experiences.</h2>
-    </div>
-
-    <!-- Full-width banner -->
-    <div class="mockup-full reveal">
-      <img src="images/gallery/IMG_0729.jpg" alt="Valor Africa branded merchandise in action">
-    </div>
-
-    <!-- 2-column mockup grid -->
-    <div class="mockup-grid" style="margin-top: 28px;">
-      <div class="mockup-card reveal">
-        <img src="images/gallery/IMG_1212.jpg" alt="Branded apparel mockup">
-      </div>
-      <div class="mockup-card reveal">
-        <img src="images/gallery/5D006391-F19A-4DB0-970D-69A242182D19.jpg" alt="Lifestyle brand expression">
-      </div>
-      <div class="mockup-card reveal">
-        <img src="images/gallery/IMG_20210205_154823.jpg" alt="Packaging and branding">
-      </div>
-      <div class="mockup-card reveal">
-        <img src="images/gallery/PhotoRoom_20220829_222804.png" alt="Studio product mockup">
-      </div>
-    </div>
-
-    <!-- Another full-width banner -->
-    <div class="mockup-full reveal" style="margin-top: 28px;">
-      <img src="images/gallery/IMG_9415.jpg" alt="Valor Africa brand campaign showcase">
-    </div>
-
-    <!-- Additional 2-column grid with more mockups -->
-    <div class="mockup-grid" style="margin-top: 28px;">
-      <div class="mockup-card reveal">
-        <img src="images/gallery/PhotoRoom_20220901_081033.jpg" alt="Brand identity system">
-      </div>
-      <div class="mockup-card reveal">
-        <img src="images/gallery/PhotoRoom_20220910_074443.jpg" alt="Merchandise detail shot">
-      </div>
-      <div class="mockup-card reveal">
-        <img src="images/gallery/PhotoRoom_20220927_074321.jpg" alt="Branded studio work">
-      </div>
-      <div class="mockup-card reveal">
-        <img src="images/gallery/PhotoRoom_20221118_021626.jpg" alt="Launch campaign mockup">
-      </div>
-    </div>
-
-    <!-- Full-width closing banner -->
-    <div class="mockup-full reveal" style="margin-top: 28px;">
-      <img src="images/gallery/one.jpg" alt="Complete brand experience">
     </div>
   </div>
 </section>
