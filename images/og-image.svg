@@ -1,0 +1,24 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" rx="32" fill="#120F0B"/>
+  <rect x="44" y="44" width="1112" height="542" rx="24" fill="url(#bg)"/>
+  <circle cx="938" cy="184" r="182" fill="#E4B04A" fill-opacity="0.16"/>
+  <circle cx="290" cy="494" r="212" fill="#C97B23" fill-opacity="0.14"/>
+  <path d="M183 430L365 224L549 430" stroke="#F7EFE0" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M290 430L469 247L647 430" stroke="#E4B04A" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="688" y="206" width="336" height="200" rx="20" fill="#F7EFE0" fill-opacity="0.96"/>
+  <rect x="720" y="238" width="96" height="96" rx="18" fill="#243B62"/>
+  <path d="M748 278H788" stroke="#F7EFE0" stroke-width="10" stroke-linecap="round"/>
+  <path d="M748 300H804" stroke="#F7EFE0" stroke-width="10" stroke-linecap="round"/>
+  <path d="M748 322H780" stroke="#F7EFE0" stroke-width="10" stroke-linecap="round"/>
+  <text x="720" y="386" fill="#120F0B" font-family="Georgia, 'Times New Roman', serif" font-size="44" font-weight="700">Valor Africa</text>
+  <text x="720" y="425" fill="#9E3926" font-family="'Segoe UI', Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="2.5">BRAND STUDIO &amp; MERCH HOUSE</text>
+  <text x="120" y="170" fill="#F7EFE0" font-family="'Segoe UI', Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="4">VALOR AFRICA</text>
+  <text x="120" y="226" fill="#F7EFE0" font-family="Georgia, 'Times New Roman', serif" font-size="62" font-weight="700">Brands with soul.</text>
+  <text x="120" y="272" fill="#EFE0C6" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="400">Identity, merchandise, and community designed to travel far.</text>
+  <defs>
+    <linearGradient id="bg" x1="84" y1="64" x2="1100" y2="560" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#243B62"/>
+      <stop offset="1" stop-color="#16233F"/>
+    </linearGradient>
+  </defs>
+</svg>
