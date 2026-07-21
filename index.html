@@ -189,80 +189,50 @@
   }
   .menu-btn span{ width:24px; height:2px; background:var(--ink); display:block; }
 
-  /* ---------- Gallery --------- */
-  .gallery{
-    position:relative;
-    width:100%;
-    overflow:hidden;
-    background:#000;
+  /* ---------- Mockup Banners ---------- */
+  .mockup-section{
+    background:var(--parchment);
+    padding:clamp(60px, 10vw, 100px) 0;
   }
-  .gallery-container{
-    width:100%;
-    aspect-ratio:16/9;
-    position:relative;
-    overflow:hidden;
+  .mockup-grid{
+    display:grid;
+    grid-template-columns:repeat(2, 1fr);
+    gap:24px;
+    margin-bottom:28px;
   }
-  .gallery-slides{
-    display:flex;
-    width:100%;
-    height:100%;
-    transition:transform 0.7s var(--ease);
-    will-change:transform;
-  }
-  .gallery-slide{
-    min-width:100%;
-    flex-shrink:0;
+  .mockup-card{
     position:relative;
     overflow:hidden;
+    border-radius:18px;
+    aspect-ratio:16/10;
+    box-shadow:0 16px 40px rgba(18,15,11,0.12);
+    transition:transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
   }
-  .gallery-slide img{
+  .mockup-card:hover{ transform:translateY(-6px); box-shadow:0 24px 54px rgba(18,15,11,0.18); }
+  .mockup-card img{
     width:100%;
     height:100%;
     object-fit:cover;
     display:block;
   }
-  .gallery-btn{
-    position:absolute;
-    top:50%;
-    transform:translateY(-50%);
-    background:rgba(0,0,0,0.5);
-    color:white;
-    border:none;
-    width:56px;
-    height:56px;
-    border-radius:50%;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:28px;
-    cursor:pointer;
-    z-index:10;
-    transition:background 0.2s ease;
+  .mockup-full{
+    position:relative;
+    overflow:hidden;
+    border-radius:18px;
+    aspect-ratio:20/8;
+    box-shadow:0 16px 40px rgba(18,15,11,0.12);
   }
-  .gallery-btn:hover{ background:rgba(0,0,0,0.8); }
-  .gallery-btn.prev{ left:20px; }
-  .gallery-btn.next{ right:20px; }
-  .gallery-dots{
-    position:absolute;
-    bottom:20px;
-    left:50%;
-    transform:translateX(-50%);
-    display:flex;
-    gap:10px;
-    z-index:10;
+  .mockup-full img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
   }
-  .gallery-dot{
-    width:12px;
-    height:12px;
-    border-radius:50%;
-    border:none;
-    background:rgba(255,255,255,0.4);
-    cursor:pointer;
-    transition:background 0.2s ease;
+  @media (max-width:768px){
+    .mockup-grid{ grid-template-columns:1fr; }
+    .mockup-card{ aspect-ratio:16/12; }
+    .mockup-full{ aspect-ratio:16/10; }
   }
-  .gallery-dot.active{ background:var(--gold); }
-
-  /* ---------- Hero ---------- */
   .hero{
     position:relative;
     background:linear-gradient(135deg, var(--ink) 0%, #18263d 44%, #243b62 100%);
@@ -613,9 +583,6 @@
     .community-grid{ grid-template-columns:1fr; }
     .t-grid{ grid-template-columns:1fr; }
     .footer-grid{ grid-template-columns:1fr 1fr; }
-    .gallery-btn{ width:48px; height:48px; font-size:22px; }
-    .gallery-btn.prev{ left:12px; }
-    .gallery-btn.next{ right:12px; }
   }
   @media (max-width:680px){
     .nav-links{
@@ -655,20 +622,6 @@
   </nav>
 </header>
 
-<!-- ===================== GALLERY ===================== -->
-<section class="gallery">
-  <div class="gallery-container">
-    <div class="gallery-slides" id="gallerySlides">
-      <!-- Slides inserted by JavaScript -->
-    </div>
-    <button class="gallery-btn prev" id="galleryPrev" aria-label="Previous image">‹</button>
-    <button class="gallery-btn next" id="galleryNext" aria-label="Next image">›</button>
-    <div class="gallery-dots" id="galleryDots">
-      <!-- Dots inserted by JavaScript -->
-    </div>
-  </div>
-</section>
-
 <!-- ===================== HERO ===================== -->
 <section class="hero" id="top">
   <div class="hero-bg"></div>
@@ -706,6 +659,63 @@
         <!-- chevron weave pattern, 24px repeat -->
         <g id="chevronRow"></g>
       </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== MOCKUP BANNERS ===================== -->
+<section class="mockup-section" id="mockups">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">Valor Africa in Action</span>
+      <h2>Brand work brought to life — across merchandise, campaigns, and experiences.</h2>
+    </div>
+
+    <!-- Full-width banner -->
+    <div class="mockup-full reveal">
+      <img src="images/gallery/IMG_0729.jpg" alt="Valor Africa branded merchandise in action">
+    </div>
+
+    <!-- 2-column mockup grid -->
+    <div class="mockup-grid" style="margin-top: 28px;">
+      <div class="mockup-card reveal">
+        <img src="images/gallery/IMG_1212.jpg" alt="Branded apparel mockup">
+      </div>
+      <div class="mockup-card reveal">
+        <img src="images/gallery/5D006391-F19A-4DB0-970D-69A242182D19.jpg" alt="Lifestyle brand expression">
+      </div>
+      <div class="mockup-card reveal">
+        <img src="images/gallery/IMG_20210205_154823.jpg" alt="Packaging and branding">
+      </div>
+      <div class="mockup-card reveal">
+        <img src="images/gallery/PhotoRoom_20220829_222804.png" alt="Studio product mockup">
+      </div>
+    </div>
+
+    <!-- Another full-width banner -->
+    <div class="mockup-full reveal" style="margin-top: 28px;">
+      <img src="images/gallery/IMG_9415.jpg" alt="Valor Africa brand campaign showcase">
+    </div>
+
+    <!-- Additional 2-column grid with more mockups -->
+    <div class="mockup-grid" style="margin-top: 28px;">
+      <div class="mockup-card reveal">
+        <img src="images/gallery/PhotoRoom_20220901_081033.jpg" alt="Brand identity system">
+      </div>
+      <div class="mockup-card reveal">
+        <img src="images/gallery/PhotoRoom_20220910_074443.jpg" alt="Merchandise detail shot">
+      </div>
+      <div class="mockup-card reveal">
+        <img src="images/gallery/PhotoRoom_20220927_074321.jpg" alt="Branded studio work">
+      </div>
+      <div class="mockup-card reveal">
+        <img src="images/gallery/PhotoRoom_20221118_021626.jpg" alt="Launch campaign mockup">
+      </div>
+    </div>
+
+    <!-- Full-width closing banner -->
+    <div class="mockup-full reveal" style="margin-top: 28px;">
+      <img src="images/gallery/one.jpg" alt="Complete brand experience">
     </div>
   </div>
 </section>
@@ -1136,85 +1146,6 @@
 
   // initialize
   update();
-</script>
-
-<script>
-  // Gallery slider - loads all images from gallery folder
-  const galleryImages = [
-    "gallery/0037AE54-4CD5-47E0-B113-979E1D34E2AF.jpg",
-    "gallery/07B2D599-BA68-4FE9-B06D-0921EAA342F2.jpg",
-    "gallery/4B845D28-C5D5-4968-AA08-C57418C5B819.jpg",
-    "gallery/52D62502-C0A7-4EDD-AEE3-370A48668A0E.jpg",
-    "gallery/54F15520-FA4B-4651-9C31-C2C6EECCCE75.jpg",
-    "gallery/5D006391-F19A-4DB0-970D-69A242182D19.jpg",
-    "gallery/772F7391-0EAD-49FE-8812-4B11449393AD.jpg",
-    "gallery/AACDD523-E3D8-4B09-8A3C-438958EC6002.jpg",
-    "gallery/B7B98527-ADA7-4AB4-8ED4-607E6F5ADC49.jpg",
-    "gallery/BE7C77E3-23C9-48EF-AC6C-DBA72F90EC37.jpg",
-    "gallery/E99CAB56-C92A-4B43-A85F-0EBF1BD1200D.jpg",
-    "gallery/IMG_0729.jpg",
-    "gallery/IMG_20210205_154823.jpg",
-    "gallery/IMG_3282.jpg",
-    "gallery/IMG_9415.jpg",
-    "gallery/one.jpg",
-    "gallery/PhotoRoom_20220829_222804.png",
-    "gallery/PhotoRoom_20220901_081033.jpg",
-    "gallery/PhotoRoom_20220910_074443.jpg",
-    "gallery/PhotoRoom_20220927_074321.jpg",
-    "gallery/PhotoRoom_20221118_021626.jpg",
-    "gallery/PhotoRoom_20230323_080421.jpg"
-  ];
-
-  const gallerySlidesEl = document.getElementById('gallerySlides');
-  const galleryDotsEl = document.getElementById('galleryDots');
-  const galleryPrevBtn = document.getElementById('galleryPrev');
-  const galleryNextBtn = document.getElementById('galleryNext');
-
-  galleryImages.forEach((file, idx) => {
-    const slide = document.createElement('div');
-    slide.className = 'gallery-slide';
-    const img = document.createElement('img');
-    img.src = `images/${file}`;
-    img.alt = `Gallery image ${idx+1}`;
-    img.loading = 'lazy';
-    slide.appendChild(img);
-    gallerySlidesEl.appendChild(slide);
-
-    const dot = document.createElement('button');
-    dot.className = 'gallery-dot';
-    dot.addEventListener('click', () => galleryGoToSlide(idx));
-    dot.setAttribute('aria-label', `Go to image ${idx+1}`);
-    galleryDotsEl.appendChild(dot);
-  });
-
-  let galleryCurrent = 0;
-  const galleryTotal = galleryImages.length;
-  const galleryDots = Array.from(galleryDotsEl.children);
-
-  function galleryUpdate() {
-    gallerySlidesEl.style.transform = `translateX(-${galleryCurrent * 100}%)`;
-    galleryDots.forEach((d, i) => d.classList.toggle('active', i === galleryCurrent));
-  }
-
-  function galleryGoToSlide(i){ 
-    galleryCurrent = (i + galleryTotal) % galleryTotal; 
-    galleryUpdate(); 
-  }
-  
-  galleryNextBtn.addEventListener('click', () => galleryGoToSlide(galleryCurrent + 1));
-  galleryPrevBtn.addEventListener('click', () => galleryGoToSlide(galleryCurrent - 1));
-
-  // Auto-rotate every 6 seconds
-  let galleryAutoplay = setInterval(() => galleryGoToSlide(galleryCurrent + 1), 6000);
-  [galleryPrevBtn, galleryNextBtn, gallerySlidesEl, galleryDotsEl].forEach(el => 
-    el.addEventListener('mouseenter', () => clearInterval(galleryAutoplay))
-  );
-  [galleryPrevBtn, galleryNextBtn, gallerySlidesEl, galleryDotsEl].forEach(el => 
-    el.addEventListener('mouseleave', () => galleryAutoplay = setInterval(() => galleryGoToSlide(galleryCurrent + 1), 6000))
-  );
-
-  // Initialize gallery
-  galleryUpdate();
 </script>
 
 </body>
