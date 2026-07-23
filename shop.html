@@ -67,6 +67,17 @@
   .offer-banner.show{ display:block; }
 
   .shop-main{ padding:40px 0 90px; }
+  .shop-signature{ padding:40px 0; }
+  .shop-signature .section-head{ display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end; justify-content:space-between; }
+  .shop-signature h2{ font-size:clamp(28px,4vw,36px); margin:0; }
+  .shop-signature p{ max-width:760px; color:var(--ink-soft); margin:14px 0 0; }
+  .signature-grid{ display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:18px; margin-top:28px; }
+  .signature-card{ border-radius:18px; overflow:hidden; background:#fffaf0; border:1px solid var(--line); box-shadow:0 16px 32px rgba(18,15,11,0.08); }
+  .signature-card img{ width:100%; height:220px; object-fit:cover; display:block; }
+  .signature-card .caption{ padding:14px 16px 18px; font-size:13px; color:var(--ink-soft); }
+  .signature-action{ margin-top:24px; display:flex; justify-content:flex-start; }
+  .signature-action a{ display:inline-flex; align-items:center; justify-content:center; background:var(--rust); color:#fff; padding:12px 22px; border-radius:999px; font-weight:700; font-size:14px; letter-spacing:0.02em; box-shadow:0 16px 30px rgba(158,57,38,0.14); transition:transform 0.2s ease, background 0.2s ease; }
+  .signature-action a:hover{ transform:translateY(-1px); background:#b7412f; }
   .shop-grid{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:22px; min-height:200px; }
   .shop-card{
     background:#fffaf0; border:1px solid var(--line); border-radius:16px; overflow:hidden;
@@ -140,6 +151,35 @@
 
 <main class="shop-main">
   <div class="wrap">
+    <section class="shop-signature">
+      <div class="section-head">
+        <div>
+          <h2>Shop the signature collection</h2>
+          <p>Every shop launch is benchmarked against our best work for Valor Africa Brand Studio. These images pull from our real merch stories and contextual brand shoots to show what the collection looks like in market.</p>
+        </div>
+      </div>
+      <div class="signature-grid">
+        <article class="signature-card">
+          <img src="images/IMG_0729.jpg" alt="Valor Africa branded apparel" loading="lazy">
+          <div class="caption">Real studio product photography from the Valor Africa merch launch.</div>
+        </article>
+        <article class="signature-card">
+          <img src="images/IMG_1212.jpg" alt="Valor Africa sweat set" loading="lazy">
+          <div class="caption">Signature sweat set shown in a high-end brand presentation.</div>
+        </article>
+        <article class="signature-card">
+          <img src="images/IMG_20210205_154823.jpg" alt="Valor Africa gifting pack" loading="lazy">
+          <div class="caption">Packaged brand gifts and premium merch staging from our shop archive.</div>
+        </article>
+        <article class="signature-card">
+          <img src="images/one.jpg" alt="Valor Africa lifestyle merch" loading="lazy">
+          <div class="caption">Lifestyle imagery and product staging inspired by Valor Africa's social identity.</div>
+        </article>
+      </div>
+      <div class="signature-action">
+        <a href="#shop-grid">Shop now</a>
+      </div>
+    </section>
     <div id="shop-grid" class="shop-grid">
       <p class="state-text">Loading products…</p>
     </div>
