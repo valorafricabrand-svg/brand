@@ -570,7 +570,7 @@
       <li><a href="#pillars">What We Do</a></li>
       <li><a href="#services">Branding</a></li>
       <li><a href="#merch">Merchandise</a></li>
-      <li><a href="#shop">Shop</a></li>
+      <li><a href="shop.html">Shop</a></li>
       <li><a href="#community">Community</a></li>
       <li><a href="#contact" class="nav-cta">Start a Project</a></li>
     </ul>
@@ -772,36 +772,45 @@
         </div>
         <p>Branded essentials for teams, events, launches, and everyday wear — produced with the same detail as our studio work.</p>
       </div>
-      <div class="shop-grid">
-        <article class="shop-card">
-          <img src="images/IMG_0729.jpg" alt="Signature sweat set">
-          <div class="shop-card-body">
-            <span class="product-badge">Teamwear</span>
-            <h4>Signature Sweat Set</h4>
-            <p>Soft, elevated loungewear with embroidered Valor Africa branding.</p>
-            <div class="shop-meta"><span class="price">KES 4,500</span><a class="shop-link" href="#contact">Reserve</a></div>
-          </div>
-        </article>
-        <article class="shop-card">
-          <img src="images/IMG_1212.jpg" alt="Premium launch tee">
-          <div class="shop-card-body">
-            <span class="product-badge">Launch Drop</span>
-            <h4>Premium Launch Tee</h4>
-            <p>Clean, bold streetwear for founders, partners, and community activations.</p>
-            <div class="shop-meta"><span class="price">KES 2,800</span><a class="shop-link" href="#contact">Reserve</a></div>
-          </div>
-        </article>
-        <article class="shop-card">
-          <img src="images/IMG_20210205_154823.jpg" alt="Branded gifting pack">
-          <div class="shop-card-body">
-            <span class="product-badge">Gift Kit</span>
-            <h4>Brand Gift Pack</h4>
-            <p>Packaging-ready gifting sets designed for clients, events, and partners.</p>
-            <div class="shop-meta"><span class="price">KES 6,200</span><a class="shop-link" href="#contact">Reserve</a></div>
-          </div>
-        </article>
+      <div class="shop-grid" id="home-shop-preview">
+        <!-- Live preview of the first 3 products, loaded from the shop API -->
+      </div>
+      <div style="text-align:center; margin-top:28px;">
+        <a href="shop.html" class="btn btn-dark">Browse the Full Shop →</a>
       </div>
     </div>
+    <script>
+      (function () {
+        var API_BASE = window.VALOR_SHOP_API || 'http://localhost:4000';
+        var el = document.getElementById('home-shop-preview');
+        if (!el) return;
+        fetch(API_BASE + '/api/products?page=1&limit=3')
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+          .then(function (data) {
+            var products = data.products || [];
+            if (products.length === 0) { el.remove(); return; }
+            el.innerHTML = products.map(function (p) {
+              var discounted = p.applied_offer && p.final_price_cents < p.original_price_cents;
+              var price = (p.currency || 'KES') + ' ' + (p.final_price_cents / 100).toLocaleString();
+              return (
+                '<article class="shop-card">' +
+                  '<img src="' + (p.image_url || 'images/one.jpg') + '" alt="' + (p.name || '') + '">' +
+                  '<div class="shop-card-body">' +
+                    (discounted ? '<span class="product-badge">' + p.applied_offer.name + '</span>' : '') +
+                    '<h4>' + p.name + '</h4>' +
+                    '<p>' + (p.description || '') + '</p>' +
+                    '<div class="shop-meta"><span class="price">' + price + '</span><a class="shop-link" href="shop.html">View</a></div>' +
+                  '</div>' +
+                '</article>'
+              );
+            }).join('');
+          })
+          .catch(function () {
+            // Backend not reachable — hide the live preview, the "Browse the Full Shop" button still works
+            el.remove();
+          });
+      })();
+    </script>
 
     <div class="merch-note reveal">
       <p>Most orders combine two or three categories into one branded kit — we handle design, sourcing, and delivery as a single project.</p>
@@ -915,7 +924,7 @@
         <h5>Contact</h5>
         <ul>
           <li><a href="mailto:hello@valorafrica.co.ke">hello@valorafrica.co.ke</a></li>
-          <li><a href="tel:+254712345678">+254 712 345 678</a></li>
+          <li><a href="tel:+254113665283">+254 113 665 283</a></li>
           <li><a href="https://valorafrica.co.ke/locations">Nairobi · Lagos · Accra</a></li>
         </ul>
       </div>

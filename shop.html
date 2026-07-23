@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shop — Valor Africa</title>
+<meta name="description" content="Browse and shop Valor Africa merchandise — tees, totes, notebooks, and more.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://valorafrica.co.ke/shop.html">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#120f0b;
+    --ink-soft:#3f3427;
+    --indigo:#243b62;
+    --indigo-deep:#16233f;
+    --parchment:#f7efe0;
+    --parchment-2:#efe0c6;
+    --ochre:#c97b23;
+    --gold:#e4b04a;
+    --rust:#9e3926;
+    --line: rgba(18,15,11,0.12);
+    --shadow: 0 24px 60px rgba(22,35,63,0.18);
+    --ease: cubic-bezier(.16,.8,.24,1);
+  }
+  *,*::before,*::after{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background-color:var(--parchment);
+    background-image:
+      radial-gradient(circle at 12% 10%, rgba(228,176,74,0.16), transparent 22%),
+      radial-gradient(circle at 88% 6%, rgba(201,123,35,0.11), transparent 18%);
+    background-attachment:fixed;
+    color:var(--ink);
+    font-family:'Sora', system-ui, sans-serif;
+    font-size:16px;
+    line-height:1.5;
+  }
+  h1,h2,h3{ font-family:'Fraunces', serif; font-weight:600; line-height:1.15; margin:0; }
+  a{ color:inherit; text-decoration:none; }
+  .wrap{ max-width:1180px; margin:0 auto; padding:0 24px; }
+
+  header{ position:sticky; top:0; z-index:40; background:rgba(247,239,224,0.92); backdrop-filter:blur(10px); border-bottom:1px solid var(--line); }
+  .nav{ max-width:1180px; margin:0 auto; padding:16px 24px; display:flex; align-items:center; justify-content:space-between; }
+  .logo{ display:flex; align-items:center; gap:10px; font-weight:700; font-size:16px; }
+  .logo-mark{ width:32px; height:32px; }
+  .logo small{ display:block; font-size:9px; letter-spacing:0.12em; color:var(--ink-soft); font-weight:600; }
+  .nav-links{ display:flex; gap:26px; list-style:none; margin:0; padding:0; align-items:center; }
+  .nav-links a{ font-size:14.5px; font-weight:600; color:var(--ink-soft); }
+  .nav-links a:hover{ color:var(--rust); }
+  .nav-cta{ background:var(--rust); color:#fff !important; padding:10px 18px; border-radius:999px; }
+
+  .shop-hero{ padding:64px 0 20px; text-align:center; }
+  .shop-hero .eyebrow{ display:inline-block; font-size:12.5px; letter-spacing:0.12em; text-transform:uppercase; color:var(--rust); font-weight:700; margin-bottom:14px; }
+  .shop-hero h1{ font-size:clamp(32px,5vw,48px); max-width:700px; margin:0 auto 14px; }
+  .shop-hero p{ color:var(--ink-soft); max-width:520px; margin:0 auto; }
+
+  .offer-banner{
+    display:none; max-width:720px; margin:26px auto 0; background:var(--indigo); color:var(--parchment);
+    padding:14px 22px; border-radius:999px; text-align:center; font-weight:600; font-size:14.5px;
+    box-shadow:var(--shadow);
+  }
+  .offer-banner.show{ display:block; }
+
+  .shop-main{ padding:40px 0 90px; }
+  .shop-grid{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:22px; min-height:200px; }
+  .shop-card{
+    background:#fffaf0; border:1px solid var(--line); border-radius:16px; overflow:hidden;
+    box-shadow:0 14px 30px rgba(18,15,11,0.07); display:flex; flex-direction:column;
+  }
+  .shop-card img{ width:100%; height:230px; object-fit:cover; background:var(--parchment-2); }
+  .shop-card-body{ padding:20px; display:flex; flex-direction:column; gap:8px; flex:1; }
+  .shop-card h3{ font-size:19px; }
+  .shop-card p.desc{ color:var(--ink-soft); font-size:13.5px; flex:1; }
+  .price-row{ display:flex; align-items:baseline; gap:10px; margin-top:6px; }
+  .price-now{ font-size:19px; font-weight:700; color:var(--rust); }
+  .price-was{ font-size:14px; color:var(--ink-soft); text-decoration:line-through; opacity:0.7; }
+  .offer-tag{
+    display:inline-block; align-self:flex-start; background:var(--gold); color:var(--ink);
+    font-size:11px; font-weight:700; padding:3px 10px; border-radius:999px; letter-spacing:0.03em;
+  }
+  .reserve-link{
+    margin-top:10px; display:inline-block; text-align:center; background:var(--ink); color:var(--parchment);
+    padding:11px; border-radius:10px; font-weight:700; font-size:14px; transition:background 0.2s;
+  }
+  .reserve-link:hover{ background:var(--rust); }
+
+  .state-text{ text-align:center; color:var(--ink-soft); padding:60px 0; grid-column:1/-1; }
+
+  .pagination{ display:flex; justify-content:center; align-items:center; gap:8px; margin-top:44px; flex-wrap:wrap; }
+  .page-btn{
+    min-width:40px; height:40px; padding:0 12px; border-radius:10px; border:1px solid var(--line);
+    background:#fff; font-weight:700; font-size:14px; cursor:pointer; color:var(--ink-soft);
+  }
+  .page-btn:hover:not(:disabled){ border-color:var(--rust); color:var(--rust); }
+  .page-btn.active{ background:var(--rust); border-color:var(--rust); color:#fff; }
+  .page-btn:disabled{ opacity:0.4; cursor:not-allowed; }
+
+  footer{ background:var(--ink); color:var(--parchment); padding:50px 0 26px; text-align:center; }
+  footer p{ color:rgba(239,227,201,0.55); font-size:13px; margin:0; }
+  footer a{ color:var(--gold); font-weight:600; }
+
+  @media (max-width:900px){ .shop-grid{ grid-template-columns:1fr 1fr; } }
+  @media (max-width:640px){
+    .nav-links{ display:none; }
+    .shop-grid{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav class="nav">
+    <a href="index.html#top" class="logo">
+      <img class="logo-mark" src="logo.svg" alt="Valor Africa logo">
+      <span>Valor Africa<small>BRAND STUDIO &amp; MERCH HOUSE</small></span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html#pillars">What We Do</a></li>
+      <li><a href="index.html#merch">Merchandise</a></li>
+      <li><a href="shop.html">Shop</a></li>
+      <li><a href="index.html#community">Community</a></li>
+      <li><a href="contact.html" class="nav-cta">Start a Project</a></li>
+    </ul>
+  </nav>
+</header>
+
+<section class="shop-hero">
+  <div class="wrap">
+    <span class="eyebrow">Merch House</span>
+    <h1>Shop the Valor Africa collection</h1>
+    <p>Branded merchandise made for founders, teams, and communities building across Africa.</p>
+    <div id="offer-banner" class="offer-banner"></div>
+  </div>
+</section>
+
+<main class="shop-main">
+  <div class="wrap">
+    <div id="shop-grid" class="shop-grid">
+      <p class="state-text">Loading products…</p>
+    </div>
+    <div id="pagination" class="pagination"></div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>© 2026 Valor Africa. All rights reserved. · <a href="index.html#contact">Get in touch</a></p>
+  </div>
+</footer>
+
+<script>
+  // Point this at your deployed backend once it's live, e.g.:
+  // const API_BASE = 'https://your-backend.onrender.com';
+  const API_BASE = window.VALOR_SHOP_API || 'http://localhost:4000';
+  const PER_PAGE = 6;
+
+  const grid = document.getElementById('shop-grid');
+  const pagination = document.getElementById('pagination');
+  const offerBanner = document.getElementById('offer-banner');
+
+  function money(cents, currency) {
+    return (currency || 'KES') + ' ' + (cents / 100).toLocaleString();
+  }
+
+  function renderOfferBanner(offers) {
+    if (!offers || offers.length === 0) { offerBanner.classList.remove('show'); return; }
+    const sitewide = offers.find((o) => o.applies_to === 'all');
+    if (!sitewide) { offerBanner.classList.remove('show'); return; }
+    const label = sitewide.type === 'percent'
+      ? `${sitewide.value}% off everything`
+      : `KES ${(sitewide.value / 100).toLocaleString()} off everything`;
+    offerBanner.textContent = `🎉 ${sitewide.name}: ${label} — applied automatically at checkout.`;
+    offerBanner.classList.add('show');
+  }
+
+  function renderProducts(products) {
+    if (!products || products.length === 0) {
+      grid.innerHTML = '<p class="state-text">No products available right now — check back soon.</p>';
+      return;
+    }
+    grid.innerHTML = products.map((p) => {
+      const hasDiscount = p.applied_offer && p.final_price_cents < p.original_price_cents;
+      return `
+        <article class="shop-card">
+          <img src="${p.image_url || 'images/one.jpg'}" alt="${escapeHtml(p.name)}" loading="lazy">
+          <div class="shop-card-body">
+            ${hasDiscount ? `<span class="offer-tag">${escapeHtml(p.applied_offer.name)}</span>` : ''}
+            <h3>${escapeHtml(p.name)}</h3>
+            <p class="desc">${escapeHtml(p.description || '')}</p>
+            <div class="price-row">
+              <span class="price-now">${money(p.final_price_cents, p.currency)}</span>
+              ${hasDiscount ? `<span class="price-was">${money(p.original_price_cents, p.currency)}</span>` : ''}
+            </div>
+            <a class="reserve-link" href="contact.html">Reserve</a>
+          </div>
+        </article>`;
+    }).join('');
+  }
+
+  function renderPagination(pageInfo, onPageClick) {
+    const { page, totalPages } = pageInfo;
+    if (totalPages <= 1) { pagination.innerHTML = ''; return; }
+
+    let html = `<button class="page-btn" data-page="${page - 1}" ${page === 1 ? 'disabled' : ''}>‹ Prev</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+      html += `<button class="page-btn ${i === page ? 'active' : ''}" data-page="${i}">${i}</button>`;
+    }
+    html += `<button class="page-btn" data-page="${page + 1}" ${page === totalPages ? 'disabled' : ''}>Next ›</button>`;
+    pagination.innerHTML = html;
+
+    pagination.querySelectorAll('.page-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const p = parseInt(btn.dataset.page, 10);
+        if (p >= 1 && p <= totalPages) onPageClick(p);
+      });
+    });
+  }
+
+  async function loadPage(page) {
+    grid.innerHTML = '<p class="state-text">Loading products…</p>';
+    try {
+      const res = await fetch(`${API_BASE}/api/products?page=${page}&limit=${PER_PAGE}`);
+      if (!res.ok) throw new Error('Failed to load products.');
+      const data = await res.json();
+      renderProducts(data.products);
+      renderPagination(data.pagination, loadPage);
+      window.scrollTo({ top: document.querySelector('.shop-main').offsetTop - 90, behavior: 'smooth' });
+    } catch (err) {
+      grid.innerHTML = '<p class="state-text">Couldn\u2019t load the shop right now. Please try again shortly.</p>';
+    }
+  }
+
+  async function loadOffers() {
+    try {
+      const res = await fetch(`${API_BASE}/api/offers/active`);
+      if (!res.ok) return;
+      const data = await res.json();
+      renderOfferBanner(data.offers);
+    } catch (err) { /* fail silently — banner is non-critical */ }
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  }
+
+  loadPage(1);
+  loadOffers();
+</script>
+</body>
+</html>

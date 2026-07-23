@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Valor Africa — Shop Dashboard</title>
+<link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+
+  <!-- LOGIN VIEW -->
+  <div id="login-view" class="screen">
+    <form id="login-form" class="login-card">
+      <h1>Valor Africa</h1>
+      <p class="subtitle">Shop Dashboard</p>
+      <label>Username
+        <input type="text" id="login-username" autocomplete="username" required />
+      </label>
+      <label>Password
+        <input type="password" id="login-password" autocomplete="current-password" required />
+      </label>
+      <button type="submit">Log in</button>
+      <p id="login-error" class="error-text"></p>
+    </form>
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div id="dashboard-view" class="screen hidden">
+    <header class="topbar">
+      <h1>Shop Dashboard</h1>
+      <button id="logout-btn" class="ghost-btn">Log out</button>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="products">Merchandise</button>
+      <button class="tab-btn" data-tab="offers">Offers</button>
+    </nav>
+
+    <!-- PRODUCTS TAB -->
+    <section id="tab-products" class="tab-panel">
+      <div class="panel-head">
+        <h2>Merchandise</h2>
+        <button id="new-product-btn" class="primary-btn">+ Add product</button>
+      </div>
+      <table class="data-table" id="products-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Price</th>
+            <th>Stock</th>
+            <th>Visible</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="products-tbody"></tbody>
+      </table>
+      <p id="products-empty" class="empty-text hidden">No products yet — add your first one.</p>
+    </section>
+
+    <!-- OFFERS TAB -->
+    <section id="tab-offers" class="tab-panel hidden">
+      <div class="panel-head">
+        <h2>Offers</h2>
+        <button id="new-offer-btn" class="primary-btn">+ Create offer</button>
+      </div>
+      <table class="data-table" id="offers-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Discount</th>
+            <th>Applies to</th>
+            <th>Active</th>
+            <th>Window</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="offers-tbody"></tbody>
+      </table>
+      <p id="offers-empty" class="empty-text hidden">No offers yet — create one, e.g. "10% off everything".</p>
+    </section>
+  </div>
+
+  <!-- PRODUCT MODAL -->
+  <div id="product-modal" class="modal hidden">
+    <div class="modal-card">
+      <h3 id="product-modal-title">Add product</h3>
+      <form id="product-form">
+        <input type="hidden" id="product-id" />
+        <label>Name
+          <input type="text" id="product-name" required />
+        </label>
+        <label>Description
+          <textarea id="product-description" rows="3"></textarea>
+        </label>
+        <label>Price (KES)
+          <input type="number" id="product-price" min="0" step="0.01" required />
+        </label>
+        <label>Image URL
+          <input type="text" id="product-image" placeholder="/images/one.jpg" />
+        </label>
+        <label>Stock (leave blank for unlimited)
+          <input type="number" id="product-stock" min="0" />
+        </label>
+        <label class="checkbox-row">
+          <input type="checkbox" id="product-active" checked />
+          Visible in shop
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="ghost-btn" data-close-modal="product-modal">Cancel</button>
+          <button type="submit" class="primary-btn">Save</button>
+        </div>
+        <p id="product-form-error" class="error-text"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- OFFER MODAL -->
+  <div id="offer-modal" class="modal hidden">
+    <div class="modal-card">
+      <h3 id="offer-modal-title">Create offer</h3>
+      <form id="offer-form">
+        <input type="hidden" id="offer-id" />
+        <label>Offer name
+          <input type="text" id="offer-name" placeholder="e.g. Spring Sale" required />
+        </label>
+        <label>Discount type
+          <select id="offer-type">
+            <option value="percent">Percent off (%)</option>
+            <option value="fixed">Fixed amount off (KES)</option>
+          </select>
+        </label>
+        <label>Value
+          <input type="number" id="offer-value" min="0" step="0.01" required placeholder="e.g. 10" />
+        </label>
+        <label>Applies to
+          <select id="offer-applies-to">
+            <option value="all">All products</option>
+          </select>
+        </label>
+        <label>Start date (optional)
+          <input type="datetime-local" id="offer-starts" />
+        </label>
+        <label>End date (optional)
+          <input type="datetime-local" id="offer-ends" />
+        </label>
+        <label class="checkbox-row">
+          <input type="checkbox" id="offer-active" checked />
+          Active
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="ghost-btn" data-close-modal="offer-modal">Cancel</button>
+          <button type="submit" class="primary-btn">Save</button>
+        </div>
+        <p id="offer-form-error" class="error-text"></p>
+      </form>
+    </div>
+  </div>
+
+<script src="admin.js"></script>
+</body>
+</html>

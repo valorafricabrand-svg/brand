@@ -1,0 +1,102 @@
+:root{
+  --ink:#120f0b;
+  --ink-soft:#5c554c;
+  --parchment:#faf6ee;
+  --rust:#b5502f;
+  --rust-dark:#8f3d22;
+  --line:rgba(18,15,11,0.12);
+  --ok:#2f7d4f;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+  background:var(--parchment);
+  color:var(--ink);
+}
+.hidden{display:none !important;}
+
+/* Login */
+.screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+.login-card{
+  background:#fff;border:1px solid var(--line);border-radius:16px;
+  padding:36px 32px;max-width:360px;width:100%;box-shadow:0 20px 40px rgba(18,15,11,0.08);
+}
+.login-card h1{margin:0 0 2px;font-size:22px;}
+.login-card .subtitle{margin:0 0 20px;color:var(--ink-soft);font-size:14px;}
+.login-card label{display:block;margin-bottom:14px;font-size:13px;font-weight:600;color:var(--ink-soft);}
+.login-card input{
+  display:block;width:100%;margin-top:6px;padding:10px 12px;border:1px solid var(--line);
+  border-radius:8px;font-size:14px;
+}
+.login-card button{
+  width:100%;padding:11px;background:var(--rust);color:#fff;border:none;border-radius:8px;
+  font-weight:700;font-size:14px;cursor:pointer;margin-top:6px;
+}
+.login-card button:hover{background:var(--rust-dark);}
+.error-text{color:#b3261e;font-size:13px;margin:10px 0 0;min-height:1em;}
+
+/* Dashboard shell */
+#dashboard-view{display:block;min-height:100vh;padding:0;align-items:initial;justify-content:initial;}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 28px;border-bottom:1px solid var(--line);background:#fff;
+}
+.topbar h1{font-size:19px;margin:0;}
+.tabs{display:flex;gap:6px;padding:16px 28px 0;}
+.tab-btn{
+  padding:9px 16px;border:1px solid var(--line);background:#fff;border-radius:8px 8px 0 0;
+  font-weight:600;font-size:13px;cursor:pointer;color:var(--ink-soft);border-bottom:none;
+}
+.tab-btn.active{color:var(--rust);background:var(--parchment);}
+.tab-panel{padding:22px 28px 48px;}
+.panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.panel-head h2{margin:0;font-size:18px;}
+
+.primary-btn{
+  background:var(--rust);color:#fff;border:none;border-radius:8px;padding:9px 16px;
+  font-weight:700;font-size:13px;cursor:pointer;
+}
+.primary-btn:hover{background:var(--rust-dark);}
+.ghost-btn{
+  background:transparent;color:var(--ink-soft);border:1px solid var(--line);border-radius:8px;
+  padding:9px 14px;font-weight:600;font-size:13px;cursor:pointer;
+}
+.ghost-btn:hover{background:rgba(18,15,11,0.05);}
+.link-btn{background:none;border:none;color:var(--rust);font-weight:700;font-size:13px;cursor:pointer;padding:4px 6px;}
+.link-btn.danger{color:#b3261e;}
+
+/* Table */
+.data-table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 8px 20px rgba(18,15,11,0.05);}
+.data-table th,.data-table td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);font-size:13.5px;}
+.data-table th{background:#f3ede1;color:var(--ink-soft);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.03em;}
+.data-table tr:last-child td{border-bottom:none;}
+.badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;}
+.badge.on{background:rgba(47,125,79,0.12);color:var(--ok);}
+.badge.off{background:rgba(18,15,11,0.08);color:var(--ink-soft);}
+.empty-text{color:var(--ink-soft);font-size:13.5px;padding:20px 4px;}
+
+/* Modal */
+.modal{
+  position:fixed;inset:0;background:rgba(18,15,11,0.45);display:flex;
+  align-items:center;justify-content:center;padding:20px;z-index:50;
+}
+.modal-card{
+  background:#fff;border-radius:14px;padding:28px;max-width:440px;width:100%;
+  max-height:90vh;overflow-y:auto;
+}
+.modal-card h3{margin:0 0 16px;font-size:17px;}
+.modal-card label{display:block;margin-bottom:12px;font-size:13px;font-weight:600;color:var(--ink-soft);}
+.modal-card input,.modal-card textarea,.modal-card select{
+  display:block;width:100%;margin-top:6px;padding:9px 11px;border:1px solid var(--line);
+  border-radius:8px;font-size:13.5px;font-family:inherit;
+}
+.checkbox-row{display:flex;align-items:center;gap:8px;font-weight:600;}
+.checkbox-row input{width:auto;margin:0;}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+
+@media (max-width:640px){
+  .topbar,.tabs,.tab-panel{padding-left:16px;padding-right:16px;}
+  .data-table{font-size:12px;}
+  .data-table th,.data-table td{padding:9px 8px;}
+}

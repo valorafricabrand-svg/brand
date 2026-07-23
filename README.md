@@ -20,7 +20,7 @@ To publish this site on GitHub Pages, use the repository root as the publishing 
 ## Contact
 
 - Email: `hello@valorafrica.co.ke`
-- Phone: `+254 712 345 678`
+- Phone: `+254 113 665 283`
 - Visit: `https://valorafrica.co.ke/contact`
 
 ## Image optimization (local)
@@ -40,7 +40,14 @@ npm run optimize-images
 Notes:
 - The optimizer uses `sharp`. Installing `sharp` will build native binaries for your platform.
 - If you prefer ImageMagick, use the `mogrify` CLI or another tool — the Node script is provided for convenience.
+## Shop backend & admin dashboard
 
+The `backend-shop/` folder now contains a Node.js/Express API + admin dashboard
+for managing merchandise and offers, plus a new `shop.html` page at the repo root
+that shows a paginated product catalog pulling live from that API.
+
+See `backend-shop/README.md` for setup, deployment, and how to connect
+`shop.html` to your deployed backend.
 ## Laravel backend (scaffold helper)
 
 We keep the frontend static site at the repository root. If you want a Laravel backend in the same workspace, follow these steps.
