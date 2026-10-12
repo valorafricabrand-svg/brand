@@ -817,6 +817,46 @@
         organizerEmail: data.get('organizerEmail'),
         organizerPhone: data.get('organizerPhone')
       };
+      if (!apiBase) {
+        const subject = `Event submission: ${fields.title}`;
+        const body = [
+          'Please review this event for listing on Valor Africa.',
+          '',
+          `Event: ${fields.title}`,
+          `Category: ${fields.category}`,
+          `Format: ${fields.format}`,
+          `Starts: ${startsAt.toLocaleString()}`,
+          `Ends: ${endsAt.toLocaleString()}`,
+          `Timezone: ${fields.timezone}`,
+          `Venue: ${fields.venueName || 'Not provided'}`,
+          `City: ${fields.city}`,
+          `Capacity: ${fields.capacity || 'Not specified'}`,
+          `Regular ticket price: KES ${fields.regularPrice}`,
+          `Early-bird ticket price: ${fields.earlyBirdPrice || 'Not offered'}`,
+          `VIP ticket price: ${fields.vipPrice || 'Not offered'}`,
+          `Organizer: ${fields.organizerName}`,
+          `Organizer email: ${fields.organizerEmail}`,
+          `Organizer phone: ${fields.organizerPhone}`,
+          '',
+          'Description:',
+          String(fields.description || '').slice(0, 1500),
+          '',
+          'Please attach the event poster to this email before sending.'
+        ].join('\n');
+        const mailto = `mailto:hello@valorafrica.co.ke?${new URLSearchParams({ subject, body })}`;
+        const emailLink = document.createElement('a');
+        emailLink.href = mailto;
+        emailLink.textContent = 'Open email if your mail app did not open';
+        emailLink.style.display = 'inline-block';
+        emailLink.style.marginTop = '8px';
+        feedback.replaceChildren(
+          document.createTextNode('Your email app should open with the event details. Attach the event poster and send the email; Valor Africa will review it manually. '),
+          emailLink
+        );
+        feedback.classList.remove('error');
+        window.location.href = mailto;
+        return;
+      }
       Object.entries(fields).forEach(([key, value]) => submission.append(key, value == null ? '' : String(value)));
       const poster = data.get('eventImages');
       if (poster && poster.size > 0) submission.append('eventImage', poster);
