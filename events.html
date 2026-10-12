@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upcoming Events & Tickets | Valor Africa</title>
+  <meta name="description" content="Browse upcoming concerts, festivals, community gatherings, and more. Find your next event with Valor Africa.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://valorafrica.co.ke/events.html">
+  <meta property="og:title" content="Upcoming Events & Tickets | Valor Africa">
+  <meta property="og:description" content="Browse upcoming concerts, festivals, community gatherings, and more. Find your next event with Valor Africa.">
+  <meta property="og:url" content="https://valorafrica.co.ke/events.html">
+  <meta property="og:image" content="https://valorafrica.co.ke/images/og-image.svg">
+  <meta name="theme-color" content="#087f5b">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/events.css">
+  <script src="scripts/events.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <nav class="nav wrap" aria-label="Main navigation">
+      <a href="index.html" class="brand" aria-label="Valor Africa Events home"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a>
+      <button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Open navigation"><span></span><span></span><span></span></button>
+      <div class="nav-links" id="navLinks">
+        <a href="events.html" aria-current="page">Events</a>
+        <a href="index.html#events">Discover</a>
+        <a href="index.html#how-it-works">For organizers</a>
+        <a href="contact.html">Help</a>
+        <a class="nav-host" href="host.html">Sell your event <span aria-hidden="true">↗</span></a>
+      </div>
+    </nav>
+  </header>
+  <main id="main" class="wrap">
+    <section class="page-intro">
+      <p class="eyebrow"><span class="live-dot" aria-hidden="true"></span> MAKE ROOM FOR A GOOD TIME</p>
+      <h1>Find your next event.</h1>
+      <p>From live music to community meetups, find something worth getting out for.</p>
+    </section>
+    <section class="events-page" aria-label="Upcoming events">
+      <div class="events-toolbar">
+        <label class="search-box"><span aria-hidden="true">⌕</span><span class="sr-only">Search events</span><input id="eventSearch" type="search" placeholder="Search by event, place, or category"></label>
+        <div class="category-list" id="allCategories" aria-label="Filter events by category">
+          <button class="category-chip is-active" type="button" data-category="All" aria-pressed="true">All events</button>
+          <button class="category-chip" type="button" data-category="Festivals" aria-pressed="false">Festivals</button>
+          <button class="category-chip" type="button" data-category="Community" aria-pressed="false">Community</button>
+        </div>
+      </div>
+      <div class="event-grid" id="allEvents" aria-live="polite"></div>
+      <p class="no-results" id="noResults" hidden>No events match that search. Try another name or category.</p>
+      <p class="listing-disclaimer" style="color:#758397;">Preview listings — confirm event dates, availability, and ticket prices before purchase.</p>
+    </section>
+  </main>
+  <footer class="site-footer"><div class="wrap footer-inner">
+    <a href="index.html" class="brand footer-brand"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a>
+    <div class="footer-links"><a href="events.html">Browse events</a><a href="host.html">Host an event</a><a href="mailto:hello@valorafrica.co.ke">Contact support</a></div>
+    <p>© 2026 Valor Africa Events</p>
+  </div></footer>
+  <dialog class="ticket-dialog" id="ticketDialog" aria-labelledby="ticketDialogTitle">
+    <form method="dialog"><button class="dialog-close" aria-label="Close ticket window">×</button></form>
+    <div class="dialog-content">
+      <p class="eyebrow">TICKETS</p><h2 id="ticketDialogTitle">Get tickets</h2><p id="ticketEventName" class="dialog-event-name"></p>
+      <form id="ticketRequestForm">
+        <label for="ticketType">Ticket type</label><select id="ticketType" name="ticketType" required></select>
+        <label for="ticketQuantity">Number of tickets</label><input id="ticketQuantity" name="quantity" type="number" min="1" max="10" value="1" required>
+        <label for="buyerName">Your name</label><input id="buyerName" name="name" autocomplete="name" required>
+        <label for="buyerPhone">WhatsApp number</label><input id="buyerPhone" name="phone" type="tel" autocomplete="tel" required>
+        <p class="checkout-note">We’ll open WhatsApp to send a ticket request to the event team. Your booking is confirmed only after the organizer confirms availability and payment.</p>
+        <button type="submit" class="button button-primary">Continue on WhatsApp <span aria-hidden="true">→</span></button>
+      </form>
+    </div>
+  </dialog>
+</body>
+</html>

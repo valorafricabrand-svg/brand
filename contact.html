@@ -3,121 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Contact Valor Africa | Start a Project</title>
-  <meta name="description" content="Start a project with Valor Africa for branding, merchandise, and community engagement support.">
+  <title>Contact Valor Africa Events</title>
+  <meta name="description" content="Contact Valor Africa Events for help with events, ticket requests, or organizer questions.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://valorafrica.co.ke/contact.html">
-  <meta property="og:title" content="Contact Valor Africa | Start a Project">
-  <meta property="og:description" content="Start a project with Valor Africa for branding, merchandise, and community engagement support.">
-  <meta property="og:url" content="https://valorafrica.co.ke/contact.html">
-  <meta property="og:image" content="https://valorafrica.co.ke/images/og-image.svg">
-  <meta property="og:type" content="website">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Contact Valor Africa | Start a Project">
-  <meta name="twitter:description" content="Start a project with Valor Africa for branding, merchandise, and community engagement support.">
-  <meta name="twitter:image" content="https://valorafrica.co.ke/images/og-image.svg">
-  <meta name="theme-color" content="#1c160f">
+  <meta name="theme-color" content="#087f5b">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles/site.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/events.css">
 </head>
 <body>
-  <a class="skip-link" href="#content">Skip to content</a>
+  <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
-    <nav class="nav wrap">
-      <a href="index.html" class="logo">
-        <img class="logo-mark" src="logo.svg" alt="Valor Africa logo">
-        <span>Valor Africa<small>Brand Studio & Merch House</small></span>
-      </a>
-      <div class="nav-links">
-        <a href="about.html">About</a>
-        <a href="work.html">Work</a>
-        <a href="contact.html" class="nav-cta">Start a Project</a>
-      </div>
+    <nav class="nav wrap" aria-label="Main navigation">
+      <a href="index.html" class="brand" aria-label="Valor Africa Events home"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a>
+      <div class="nav-links nav-links-static"><a href="events.html">Events</a><a href="host.html">For organizers</a><a class="nav-host" href="mailto:hello@valorafrica.co.ke">Help</a></div>
     </nav>
   </header>
-
-  <main id="content">
-    <section class="page-hero">
-      <div class="wrap">
-        <span class="eyebrow">Contact us</span>
-        <h1>Tell us what you’re building and we’ll shape the next step with you.</h1>
-        <p>Whether you need a new brand system, a merch drop, or a community program, we’d love to hear from you.</p>
-      </div>
-    </section>
-
-    <section class="page-section">
-      <div class="wrap two-col">
-        <div class="card">
-          <h2>Send an enquiry</h2>
-          <form id="contactForm" class="form-grid">
-            <label>
-              Name
-              <input type="text" name="name" required>
-            </label>
-            <label>
-              Email
-              <input type="email" name="email" required>
-            </label>
-            <label>
-              Company or brand
-              <input type="text" name="company">
-            </label>
-            <label>
-              What do you need help with?
-              <select name="project">
-                <option>Brand identity</option>
-                <option>Merchandise</option>
-                <option>Community program</option>
-                <option>Something else</option>
-              </select>
-            </label>
-            <label>
-              Project details
-              <textarea name="details" required></textarea>
-            </label>
-            <button type="submit">Send enquiry</button>
-          </form>
-          <p class="form-note" id="formFeedback">This opens your email app with a pre-filled message so you can send it immediately.</p>
-        </div>
-        <div class="card">
-          <h3>Direct contact</h3>
-          <ul class="list">
-            <li>Email: <a href="mailto:hello@valorafrica.co.ke">hello@valorafrica.co.ke</a></li>
-            <li>Phone: <a href="tel:+254113665283">+254 113 665 283</a></li>
-            <li>Location: Nairobi · Lagos · Accra</li>
-          </ul>
-          <div class="cta-box" style="margin-top: 20px;">
-            <h3>Prefer WhatsApp?</h3>
-            <p>Share your idea and we’ll follow up with a tailored proposal.</p>
-          </div>
-        </div>
-      </div>
-    </section>
+  <main id="main" class="wrap page-intro" style="min-height:55vh;">
+    <p class="eyebrow">EVENT &amp; TICKET SUPPORT</p>
+    <h1>How can we help?</h1>
+    <p>For help with event listings, organizer drafts, or ticket requests, contact Valor Africa Events. Include the event name and date so we can point you in the right direction.</p>
+    <p style="margin-top:22px;"><a class="nav-host" href="mailto:hello@valorafrica.co.ke?subject=Valor%20Africa%20Events%20support">Email event support →</a></p>
   </main>
-
-  <footer class="site-footer">
-    <div class="wrap">
-      <p>© 2026 Valor Africa. All rights reserved.</p>
-      <p><a href="mailto:hello@valorafrica.co.ke">hello@valorafrica.co.ke</a></p>
-    </div>
-  </footer>
-
-  <script>
-    const form = document.getElementById('contactForm');
-    const feedback = document.getElementById('formFeedback');
-    form.addEventListener('submit', function (event) {
-      event.preventDefault();
-      const data = new FormData(form);
-      const name = data.get('name') || 'A potential partner';
-      const email = data.get('email') || 'hello@valorafrica.co.ke';
-      const company = data.get('company') || 'Not provided';
-      const project = data.get('project') || 'Not specified';
-      const details = data.get('details') || 'No details provided';
-      const subject = encodeURIComponent(`New enquiry from ${name}`);
-      const body = encodeURIComponent(`Name: ${name}\nEmail: ${email}\nCompany: ${company}\nProject type: ${project}\n\nDetails:\n${details}`);
-      window.location.href = `mailto:hello@valorafrica.co.ke?subject=${subject}&body=${body}`;
-      feedback.textContent = 'Your email app should open with the enquiry pre-filled. If not, email hello@valorafrica.co.ke directly.';
-    });
-  </script>
+  <footer class="site-footer"><div class="wrap footer-inner">
+    <a href="index.html" class="brand footer-brand"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a>
+    <div class="footer-links"><a href="events.html">Browse events</a><a href="host.html">Host an event</a><a href="mailto:hello@valorafrica.co.ke">Contact support</a></div>
+    <p>© 2026 Valor Africa Events</p>
+  </div></footer>
 </body>
 </html>

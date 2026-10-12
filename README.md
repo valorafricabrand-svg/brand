@@ -1,88 +1,45 @@
-# Valor Africa Brand Studio
+# Valor Africa Events
 
-Static landing page for Valor Africa, a brand studio, merch house, and community partner for African businesses.
+Valor Africa is focused on event discovery, ticket requests, and event hosting.
+The static site contains:
 
-## About
+- `index.html` — event discovery homepage with a rotating Valor Ads showcase, location and category search, and featured events.
+- `events.html` — searchable and filterable event listing.
+- `host.html` — organizer form with local draft save, edit, and delete.
+- `about.html` and `contact.html` — event-platform information and support.
+- `styles/events.css` and `scripts/events.js` — event platform UI and interactions.
 
-This site showcases Valor Africa's services in branding, merchandise, and community engagement.
+## Current demo limitations
 
-## Files
+The event listings in `scripts/events.js` are sample content. Update the `events`
+array with approved live event information before publishing the site.
 
-- `index.html` — main landing page
-- `404.html` — custom GitHub Pages fallback page
-- `README.md` — project overview
-- `favicon.svg` — site icon
+The Valor Ads carousel uses the animated concert artwork as its visual fallback.
+To show an event video, add an `adVideo` path (for example,
+`images/events/my-promo.mp4`) to that event in the `events` array in
+`scripts/events.js`; optionally set `adPoster` to a still image for its loading
+poster. Clips autoplay muted and loop; viewers can enable sound. The carousel
+supports pause, manual navigation, reduced-motion preferences, and poster
+fallback. The advertise links currently start a WhatsApp inquiry only; no ad
+inventory, booking, impressions reporting, or payment is processed by this
+static demo.
 
-## GitHub Pages
+The hosting form currently saves drafts to the current browser's local storage.
+Drafts are not uploaded, shared between devices, or published. The ticket form
+creates a WhatsApp ticket request; it does not process payment or issue a ticket.
+Before offering public event publishing or ticket sales, connect a server-side
+event service, organizer accounts, order records, and a payment provider. The
+user must receive explicit confirmation only after payment has been verified.
 
-To publish this site on GitHub Pages, use the repository root as the publishing source.
+## Static hosting
 
-## Contact
+The current site can be published as static files. Static hosting does not
+provide shared organizer drafts, secure checkout, or ticket issuance. Keep the
+limitations above visible until the related backend and payment integration are
+implemented.
 
-- Email: `hello@valorafrica.co.ke`
-- Phone: `+254 113 665 283`
-- Visit: `https://valorafrica.co.ke/contact`
+## Legacy shop backend
 
-## Image optimization (local)
-
-This repo includes a Node-based image optimizer that resizes and writes WebP variants for faster loading.
-
-1. Install Node (v16+) and `npm`.
-2. From the project root run:
-
-```powershell
-npm install
-npm run optimize-images
-```
-
-3. Optimized images are written to `images/optimized/w_<width>/` (e.g. `images/optimized/w_1024/`).
-
-Notes:
-- The optimizer uses `sharp`. Installing `sharp` will build native binaries for your platform.
-- If you prefer ImageMagick, use the `mogrify` CLI or another tool — the Node script is provided for convenience.
-## Shop backend & admin dashboard
-
-The `backend-shop/` folder now contains a Node.js/Express API + admin dashboard
-for managing merchandise and offers, plus a new `shop.html` page at the repo root
-that shows a paginated product catalog pulling live from that API.
-
-See `backend-shop/README.md` for setup, deployment, and how to connect
-`shop.html` to your deployed backend.
-## Laravel backend (scaffold helper)
-
-We keep the frontend static site at the repository root. If you want a Laravel backend in the same workspace, follow these steps.
-
-Prerequisites:
-- PHP 8.1+ with common extensions (OpenSSL, PDO, Mbstring, Tokenizer, XML, Ctype, JSON, BCMath).
-- Composer (https://getcomposer.org/)
-
-Automated helper (PowerShell):
-
-```powershell
-# from the repository root
-.\setup-laravel.ps1
-```
-
-Or use the Windows batch helper:
-
-```bat
-install-laravel.bat
-```
-
-What the helper does:
-- Creates a new Laravel project in `backend/` using `composer create-project`.
-- After creation, run the following inside `backend/`:
-
-```powershell
-copy .env.example .env
-php artisan key:generate
-# set APP_URL in .env (e.g. APP_URL=http://localhost:8000)
-php artisan migrate --seed
-php artisan serve --host=127.0.0.1 --port=8000
-```
-
-Security & VCS:
-- The helper writes a `backend.gitignore` file at repository root. After Laravel scaffolding, move or copy it into `backend/.gitignore` before committing.
-
-If you'd like, I can run these steps for you (requires Composer and PHP available in the environment). I can also scaffold a minimal API endpoint and a CORS configuration so the static frontend can call the Laravel API.
-
+`backend-shop/` is the repository's earlier merchandise-store service. It is
+not connected to the event site. Do not use it to process event tickets or
+payments.

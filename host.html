@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Host an Event | Valor Africa</title>
+  <meta name="description" content="Create an event draft for a concert, workshop, launch, webinar, or community meetup on Valor Africa.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://valorafrica.co.ke/host.html">
+  <meta property="og:title" content="Host an Event | Valor Africa">
+  <meta property="og:description" content="Create a draft for your next event and set up your ticket types.">
+  <meta property="og:url" content="https://valorafrica.co.ke/host.html">
+  <meta property="og:image" content="https://valorafrica.co.ke/images/og-image.svg">
+  <meta name="theme-color" content="#087f5b">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/events.css">
+  <script src="scripts/events.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <nav class="nav wrap" aria-label="Main navigation">
+      <a href="index.html" class="brand" aria-label="Valor Africa Events home"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a>
+      <button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Open navigation"><span></span><span></span><span></span></button>
+      <div class="nav-links" id="navLinks">
+        <a href="events.html">Events</a>
+        <a href="index.html#events">Discover</a>
+        <a href="index.html#how-it-works">For organizers</a>
+        <a href="contact.html">Help</a>
+        <a class="nav-host" href="host.html" aria-current="page">Sell your event</a>
+      </div>
+    </nav>
+  </header>
+  <main id="main" class="wrap host-page">
+    <div class="host-page-heading">
+      <p class="eyebrow">ORGANIZER TOOLS</p>
+      <h1>Host an event on Valor Africa</h1>
+      <p>Create a draft for a concert, workshop, launch, webinar, or community meetup.</p>
+    </div>
+    <div class="host-layout">
+      <form class="host-form" id="hostEventForm">
+        <div class="form-field">
+          <label for="eventTitle">Event title</label>
+          <input id="eventTitle" name="eventTitle" type="text" maxlength="120" required>
+        </div>
+        <div class="form-field" style="margin-top:22px;">
+          <label for="eventDescription">Description</label>
+          <textarea id="eventDescription" name="eventDescription" maxlength="5000" required></textarea>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label for="eventFormat">Format</label>
+            <select id="eventFormat" name="eventFormat" required>
+              <option value="Physical">Physical</option>
+              <option value="Virtual">Virtual</option>
+              <option value="Hybrid">Hybrid</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="eventTimezone">Timezone</label>
+            <select id="eventTimezone" name="eventTimezone" required>
+              <option value="Africa/Nairobi" selected>Africa/Nairobi (EAT, UTC+3)</option>
+              <option value="UTC">UTC</option>
+              <option value="Africa/Lagos">Africa/Lagos (WAT, UTC+1)</option>
+              <option value="Africa/Accra">Africa/Accra (GMT)</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="eventStarts">Starts at</label>
+            <input id="eventStarts" name="eventStarts" type="datetime-local" required>
+          </div>
+          <div class="form-field">
+            <label for="eventEnds">Ends at</label>
+            <input id="eventEnds" name="eventEnds" type="datetime-local" required>
+          </div>
+          <div class="form-field">
+            <label for="venueName">Venue name</label>
+            <input id="venueName" name="venueName" type="text" maxlength="180" placeholder="Venue or meeting platform">
+            <input id="meetingUrl" name="meetingUrl" type="url" placeholder="https://... for virtual events" style="margin-top:9px;">
+          </div>
+          <div class="form-field">
+            <label for="eventCity">City</label>
+            <input id="eventCity" name="eventCity" type="text" maxlength="100">
+            <label for="eventCapacity" style="margin-top:15px;">Capacity</label>
+            <input id="eventCapacity" name="eventCapacity" type="number" min="1" step="1">
+          </div>
+          <div class="form-field">
+            <label for="ticketPrice">Regular ticket price</label>
+            <input id="ticketPrice" name="ticketPrice" type="number" min="0" step="0.01" value="0" required>
+          </div>
+          <div class="form-field">
+            <label for="ticketCurrency">Currency</label>
+            <select id="ticketCurrency" name="ticketCurrency">
+              <option value="KES">KES</option>
+              <option value="USD">USD</option>
+              <option value="NGN">NGN</option>
+              <option value="GHS">GHS</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+            </select>
+          </div>
+        </div>
+
+        <section class="ticket-types" aria-labelledby="ticketTypesHeading">
+          <h2 id="ticketTypesHeading"><span aria-hidden="true">▣</span> Ticket types <span style="font-weight:500;">(optional)</span></h2>
+          <p>The ticket price above is your <strong>Regular</strong> ticket. Add an early-bird deal to sell early, and a VIP ticket for premium access. Use the same currency.</p>
+          <div class="form-grid-3">
+            <div class="form-field">
+              <label for="earlyBirdPrice">Early-bird price</label>
+              <input id="earlyBirdPrice" name="earlyBirdPrice" type="number" min="0" step="0.01" placeholder="Lower than regular">
+            </div>
+            <div class="form-field">
+              <label for="earlyBirdEnds">Early bird ends</label>
+              <input id="earlyBirdEnds" name="earlyBirdEnds" type="datetime-local">
+            </div>
+            <div class="form-field">
+              <label for="vipPrice">VIP price</label>
+              <input id="vipPrice" name="vipPrice" type="number" min="0" step="0.01" placeholder="Higher than regular">
+            </div>
+          </div>
+          <p class="field-hint">Early-bird buyers get the lower price until the end date, then the regular price applies automatically after ticketing is enabled.</p>
+        </section>
+
+        <section class="form-section">
+          <h2>Premium &amp; marketing options</h2>
+          <div class="form-grid-2" style="margin-top:0;">
+            <div class="form-field">
+              <label for="eventSlug">Event URL slug <span style="font-weight:500;color:#8995a5;">(optional)</span></label>
+              <input id="eventSlug" name="eventSlug" type="text" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="90" placeholder="my-awesome-event">
+              <p class="field-hint">Lowercase letters, numbers, and hyphens only.</p>
+            </div>
+            <div class="form-field">
+              <label for="campaignTags">Campaign tags <span style="font-weight:500;color:#8995a5;">(comma-separated)</span></label>
+              <input id="campaignTags" name="campaignTags" type="text" maxlength="250" placeholder="music, launch, workshop">
+              <p class="field-hint">Optional labels for your event.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="form-field">
+            <label for="eventImages">Event images <span style="font-weight:500;color:#8995a5;">(optional, up to 10 MB each)</span></label>
+            <input class="file-picker" id="eventImages" name="eventImages" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple>
+            <p class="field-hint">Choose JPEG, PNG, GIF, or WebP images. Image names are saved with this local draft.</p>
+            <p class="file-list" id="imageNames">No images selected.</p>
+          </div>
+        </section>
+
+        <p class="draft-disclaimer">This demo saves drafts only in this browser on this device. Drafts are not published, shared with an organizer account, or accepting ticket payments.</p>
+        <div class="form-actions">
+          <button class="button button-primary" type="submit">Save event draft</button>
+          <button class="button" type="reset" style="color:#46576a;background:#f0f4f7;">New draft</button>
+          <p class="form-feedback" id="draftFeedback" aria-live="polite"></p>
+        </div>
+      </form>
+      <aside class="host-sidebar" aria-labelledby="draftsHeading">
+        <h2 id="draftsHeading">Your saved drafts</h2>
+        <p>Drafts saved in this browser will appear here.</p>
+        <div class="draft-list" id="draftList"><p class="draft-empty">Loading drafts…</p></div>
+        <p class="sidebar-note">To publish events, manage ticket sales, or accept payments, connect a shared event service and payment provider.</p>
+      </aside>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="wrap footer-inner">
+    <a href="index.html" class="brand footer-brand"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a>
+    <div class="footer-links"><a href="events.html">Browse events</a><a href="host.html">Host an event</a><a href="mailto:hello@valorafrica.co.ke">Contact support</a></div>
+    <p>© 2026 Valor Africa Events</p>
+  </div></footer>
+</body>
+</html>

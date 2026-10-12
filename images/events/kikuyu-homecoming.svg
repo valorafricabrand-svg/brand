@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620">
+  <defs>
+    <linearGradient id="night" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#1e2925"/>
+      <stop offset=".52" stop-color="#79502e"/>
+      <stop offset="1" stop-color="#d88a34"/>
+    </linearGradient>
+    <pattern id="woven" width="72" height="72" patternUnits="userSpaceOnUse">
+      <path d="M0 18h72M0 54h72M18 0v72M54 0v72" stroke="#f4d08e" stroke-opacity=".18" stroke-width="5"/>
+      <path d="m0 0 72 72m0-72L0 72" stroke="#142e29" stroke-opacity=".26" stroke-width="7"/>
+    </pattern>
+    <radialGradient id="fire">
+      <stop stop-color="#ffe894" stop-opacity=".92"/>
+      <stop offset="1" stop-color="#ff941d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="620" fill="url(#night)"/>
+  <rect width="1200" height="620" fill="url(#woven)"/>
+  <circle cx="610" cy="475" r="290" fill="url(#fire)"/>
+  <path d="M0 492q133-89 270 0 130-92 273 0 138-96 281 0 179-112 376 0v128H0z" fill="#132923"/>
+  <g fill="#20221e">
+    <circle cx="260" cy="330" r="42"/><path d="M204 383q56-42 112 0l37 176H170z"/>
+    <circle cx="480" cy="285" r="47"/><path d="M418 346q62-46 124 0l42 213H376z"/>
+    <circle cx="738" cy="319" r="44"/><path d="M680 376q58-42 116 0l40 183H640z"/>
+    <circle cx="966" cy="290" r="46"/><path d="M906 351q60-46 120 0l44 208H862z"/>
+  </g>
+  <path d="m586 487 28-105 29 105 48-63-19 77h52l-69 21-14 69-18-69-76-21h56l-16-77z" fill="#ffb630"/>
+  <g fill="#fff2d2" font-family="Arial,sans-serif" font-weight="800" text-anchor="middle">
+    <text x="600" y="103" font-size="26" letter-spacing="8">CULTURE • COMMUNITY • HOMECOMING</text>
+    <text x="600" y="202" font-size="67" letter-spacing="1">KIKUYU</text>
+    <text x="600" y="270" font-size="52" letter-spacing="8">HOMECOMING</text>
+    <text x="600" y="582" font-size="21" letter-spacing="6">LIMURU  •  NOVEMBER 20</text>
+  </g>
+</svg>
