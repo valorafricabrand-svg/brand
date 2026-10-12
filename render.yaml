@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: valor-events-api
+    runtime: node
+    plan: starter
+    rootDir: backend-events
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    disk:
+      name: valor-events-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 24.20.0
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /var/data/events.db
+      - key: UPLOAD_DIR
+        value: /var/data/uploads/events
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://valorafrica.co.ke,https://valorafricabrand-svg.github.io
+      - key: PUBLIC_SITE_URL
+        value: https://valorafrica.co.ke
+      - key: MPESA_ENV
+        value: sandbox

@@ -38,6 +38,19 @@ Use the admin dashboard to review event submissions and manage advertising-packa
 
 With the API configured, the Valor Ads carousel displays events with active paid bookings. The static-only preview still contains sample artwork/listings and cannot publish events, accept checkout, or issue tickets. Existing animated artwork and configured video previews can be used; campaign-video upload management and impression analytics are not included yet.
 
+### Render setup
+
+This repository includes a Render Blueprint in `render.yaml`. To deploy the event API:
+
+1. Push the Blueprint to the `main` branch on GitHub, then create a Blueprint instance in Render using the `valorafricabrand-svg/brand` repository.
+2. Review Render's current pricing before confirming. The Blueprint uses a paid web-service plan and a 1 GB persistent disk; the disk is required to retain the SQLite database and uploaded event posters across deploys.
+3. Set `ADMIN_USERNAME` and a unique `ADMIN_PASSWORD` of at least 16 characters when prompted, or in the service's Environment settings before the first deploy. Do not put the password in GitHub.
+4. Wait for the service to deploy, then open `https://<your-render-service-host>/api/health`. It should return JSON with `"ok": true` and `"paymentsConfigured": false` until Daraja is configured. Open `https://<your-render-service-host>/admin` to sign in.
+5. In `scripts/events-api.js`, set `window.VALOR_EVENTS_API` to the Render service's HTTPS origin (no trailing slash), then push that frontend change to `main`. GitHub Pages will publish it; verify event submission, admin review, and approved listings.
+6. Configure Daraja sandbox credentials and set `MPESA_CALLBACK_URL` to `https://<your-render-service-host>/api/mpesa/callback`. Test ticket and ad checkout before enabling production Daraja credentials.
+
+Render assigns the service host during creation, so the website API URL and M-Pesa callback URL cannot be filled in until then. Event publishing and review can be tested before payments are configured. The persistent disk must remain attached to the service; back it up regularly.
+
 ## Legacy shop backend
 
 `backend-shop/` is the existing merchandise-store service. Keep it separate; it is not used to publish events or process event payments.
