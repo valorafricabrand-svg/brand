@@ -1,7 +1,7 @@
-(function () {
+(async function () {
   'use strict';
 
-  const events = [
+  let events = [
     {
       id: 'baminto-festival',
       title: 'Baminto Festival at KICC',
@@ -29,6 +29,65 @@
       ]
     }
   ];
+  let adEvents = events;
+  let checkoutEnabled = false;
+  const apiBase = window.valorEventsApiBase;
+  if (apiBase) {
+    try {
+      const [listing, featured, health] = await Promise.all([
+        window.valorEventsApi('/api/events'),
+        window.valorEventsApi('/api/ads/featured'),
+        window.valorEventsApi('/api/health')
+      ]);
+      const toEvent = (event) => ({
+        ...event,
+        location: event.location || [event.venueName, event.city].filter(Boolean).join(', '),
+        poster: event.poster ? new URL(event.poster, apiBase).href : 'images/events/concert-crowd.svg',
+        earlyBirdEnds: event.tickets.find((ticket) => ticket.name === 'Early bird')?.saleEnds || '',
+        tickets: event.tickets.map((ticket) => ({ ...ticket, currency: 'KES' }))
+      });
+      events = listing.events.map(toEvent);
+      adEvents = featured.events.map(toEvent);
+      checkoutEnabled = Boolean(health.paymentsConfigured);
+      const status = document.querySelector('.listing-disclaimer, .hub-bottom p');
+      if (status) {
+        status.textContent = !events.length
+          ? 'No approved upcoming events are listed right now. Check back soon or submit an event for review.'
+          : checkoutEnabled
+            ? 'Tickets are purchased securely through M-Pesa. A ticket is issued only after payment is confirmed.'
+            : 'Paid ticket checkout is temporarily unavailable. Free-event registrations remain open.';
+      }
+      const adNote = document.querySelector('.ad-note');
+      if (adNote) adNote.textContent = adEvents.length ? 'Sponsored event placements' : 'No paid event placements are live right now.';
+      const sponsoredBadge = document.querySelector('.sponsored-badge');
+      if (sponsoredBadge) {
+        sponsoredBadge.textContent = adEvents.length ? '✦ PAID PROMOTION' : 'VALOR ADS';
+        sponsoredBadge.hidden = !adEvents.length;
+      }
+      if (!adEvents.length) {
+        const stage = document.getElementById('adStage');
+        const controls = document.querySelector('.ad-controls');
+        if (stage) stage.hidden = true;
+        if (controls) controls.hidden = true;
+        const sponsoredBadge = document.querySelector('.sponsored-badge');
+        if (sponsoredBadge) sponsoredBadge.hidden = true;
+      }
+    } catch (error) {
+      events = [];
+      adEvents = [];
+      const stage = document.getElementById('adStage');
+      const controls = document.querySelector('.ad-controls');
+      if (stage) stage.hidden = true;
+      if (controls) controls.hidden = true;
+      const status = document.querySelector('.listing-disclaimer');
+      if (status) status.textContent = error.message;
+      const empty = document.getElementById('homeEmpty');
+      if (empty) {
+        empty.hidden = false;
+        empty.textContent = 'Events are temporarily unavailable. Please try again later.';
+      }
+    }
+  }
 
   const formatMoney = (amount, currency) => {
     const formatted = new Intl.NumberFormat('en-KE', {
@@ -122,7 +181,14 @@
     const body = document.createElement('div');
     body.className = 'event-card-body';
     const heading = document.createElement('h3');
-    heading.textContent = event.title;
+    if (event.slug) {
+      const eventLink = document.createElement('a');
+      eventLink.href = `event.html?slug=${encodeURIComponent(event.slug)}`;
+      eventLink.textContent = event.title;
+      heading.appendChild(eventLink);
+    } else {
+      heading.textContent = event.title;
+    }
     heading.title = event.title;
     body.appendChild(heading);
 
@@ -178,6 +244,17 @@
   renderEvents(featured, events);
   const allEvents = document.getElementById('allEvents');
   renderEvents(allEvents, events);
+  if (allEvents && !events.length) {
+    const noResults = document.getElementById('noResults');
+    if (noResults) noResults.hidden = false;
+  }
+  if (featured && !events.length) {
+    const empty = document.getElementById('homeEmpty');
+    if (empty) {
+      empty.hidden = false;
+      if (apiBase) empty.textContent = 'No approved upcoming events are listed right now. Check back soon or host one with Valor Africa.';
+    }
+  }
 
   const adSlides = document.getElementById('adSlides');
   const adDots = document.getElementById('adDots');
@@ -197,7 +274,7 @@
     slide.dataset.eventId = event.id;
     slide.setAttribute('role', 'group');
     slide.setAttribute('aria-roledescription', 'slide');
-    slide.setAttribute('aria-label', `${index + 1} of ${events.length}: ${event.title}`);
+    slide.setAttribute('aria-label', `${index + 1} of ${adEvents.length}: ${event.title}`);
     slide.hidden = index !== 0;
 
     const visual = document.createElement('div');
@@ -256,8 +333,8 @@
   }
 
   function showAd(index) {
-    if (!adSlides || !adDots || !events.length) return;
-    activeAdIndex = (index + events.length) % events.length;
+    if (!adSlides || !adDots || !adEvents.length) return;
+    activeAdIndex = (index + adEvents.length) % adEvents.length;
     adSlides.querySelectorAll('.ad-slide').forEach((slide, slideIndex) => {
       const active = slideIndex === activeAdIndex;
       slide.hidden = !active;
@@ -278,7 +355,7 @@
       const active = dotIndex === activeAdIndex;
       dot.classList.toggle('is-active', active);
       dot.setAttribute('aria-current', active ? 'true' : 'false');
-      dot.setAttribute('aria-label', `Show advertisement ${dotIndex + 1}: ${events[dotIndex].title}`);
+      dot.setAttribute('aria-label', `Show advertisement ${dotIndex + 1}: ${adEvents[dotIndex].title}`);
     });
     if (adSoundToggle) {
       const video = adSlides.querySelector('.ad-slide:not([hidden]) video');
@@ -297,13 +374,13 @@
 
   function startAdRotation() {
     stopAdRotation();
-    if (!adPaused && !adPointerInside && !adHasFocus && events.length > 1) {
+    if (!adPaused && !adPointerInside && !adHasFocus && adEvents.length > 1) {
       adTimer = window.setInterval(() => showAd(activeAdIndex + 1), 7000);
     }
   }
 
   if (adSlides && adDots && adStage) {
-    events.forEach((event, index) => {
+    adEvents.forEach((event, index) => {
       adSlides.appendChild(createAdSlide(event, index));
       const dot = document.createElement('button');
       dot.type = 'button';
@@ -481,35 +558,61 @@
     document.getElementById('ticketEventName').textContent = `${activeEvent.title} · ${locationLine(activeEvent)}`;
     const availableTickets = activeEvent.tickets.filter((ticket) =>
       !ticket.regularPrice || !ticket.saleEnds || new Date(ticket.saleEnds).getTime() > Date.now()
-    );
+    ).filter((ticket) => checkoutEnabled || Number(ticket.price) === 0);
     ticketSelect.replaceChildren(...availableTickets.map((ticket) => {
       const option = document.createElement('option');
       option.value = ticket.name;
       option.textContent = `${ticket.name} — ${formatMoney(ticket.price, ticket.currency)}`;
       return option;
     }));
+    const ticketSubmit = ticketForm.querySelector('[type=submit]');
+    const ticketFeedback = document.getElementById('ticketFeedback');
+    ticketSubmit.disabled = availableTickets.length === 0;
+    ticketFeedback.textContent = availableTickets.length
+      ? checkoutEnabled ? '' : 'M-Pesa is unavailable; only free ticket registrations are open.'
+      : 'Paid ticket checkout is not available right now.';
+    ticketFeedback.classList.toggle('error', availableTickets.length === 0);
     ticketDialog.showModal();
   });
 
   const ticketForm = document.getElementById('ticketRequestForm');
   if (ticketForm) {
-    ticketForm.addEventListener('submit', (event) => {
+    ticketForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!activeEvent) return;
       const data = new FormData(ticketForm);
       const ticket = activeEvent.tickets.find((item) => item.name === data.get('ticketType'));
       if (!ticket) return;
-      const message = [
-        'Hello Valor Africa, I would like to request event tickets.',
-        `Event: ${activeEvent.title}`,
-        `Ticket: ${ticket.name} (${formatMoney(ticket.price, ticket.currency)} each)`,
-        `Quantity: ${data.get('quantity')}`,
-        `Name: ${data.get('name')}`,
-        `WhatsApp: ${data.get('phone')}`
-      ].join('\n');
-      const whatsappUrl = `https://wa.me/254113665283?text=${encodeURIComponent(message)}`;
-      window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-      ticketDialog.close();
+      const ticketFeedback = document.getElementById('ticketFeedback');
+      const submitButton = ticketForm.querySelector('[type=submit]');
+      if (!checkoutEnabled && Number(ticket.price) > 0) {
+        ticketFeedback.textContent = apiBase
+          ? 'M-Pesa checkout is not available right now. Please try again later.'
+          : 'Secure ticket checkout is not connected on this preview website yet.';
+        ticketFeedback.classList.add('error');
+        return;
+      }
+      submitButton.disabled = true;
+      ticketFeedback.classList.remove('error');
+      ticketFeedback.textContent = Number(ticket.price) === 0 ? 'Confirming your free registration…' : 'Sending an M-Pesa payment prompt…';
+      try {
+        const order = await window.valorEventsApi('/api/orders/tickets', {
+          method: 'POST',
+          body: JSON.stringify({
+            eventId: activeEvent.id,
+            ticketType: ticket.name,
+            quantity: Number(data.get('quantity')),
+            buyerName: data.get('name'),
+            phone: data.get('phone')
+          })
+        });
+        window.sessionStorage.setItem(`valor-order-${order.orderId}`, order.accessToken);
+        window.location.assign(`order.html?orderId=${encodeURIComponent(order.orderId)}`);
+      } catch (error) {
+        ticketFeedback.textContent = error.message;
+        ticketFeedback.classList.add('error');
+        submitButton.disabled = false;
+      }
     });
   }
 
@@ -668,12 +771,66 @@
         else drafts[currentIndex] = draft;
         window.localStorage.setItem(storageKey, JSON.stringify(drafts));
         editingId = draft.id;
-        feedback.textContent = 'Event draft saved on this device. It is not published or accepting payments.';
+        feedback.textContent = 'Event draft saved on this device. Submit it for review when you are ready to publish.';
         feedback.classList.remove('error');
         renderDrafts();
       } catch (error) {
         feedback.textContent = `Could not save this draft: ${error.message}`;
         feedback.classList.add('error');
+      }
+    });
+
+    document.getElementById('publishEventButton').addEventListener('click', async (event) => {
+      feedback.classList.remove('error');
+      if (!hostForm.reportValidity()) return;
+      const button = event.currentTarget;
+      const data = new FormData(hostForm);
+      const startsAt = new Date(data.get('eventStarts'));
+      const endsAt = new Date(data.get('eventEnds'));
+      const earlyBirdEnds = data.get('earlyBirdEnds') ? new Date(data.get('earlyBirdEnds')) : null;
+      if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || endsAt <= startsAt) {
+        feedback.textContent = 'Choose a valid end time after the event start.';
+        feedback.classList.add('error');
+        endsInput.focus();
+        return;
+      }
+      const submission = new FormData();
+      const fields = {
+        title: data.get('eventTitle'),
+        description: data.get('eventDescription'),
+        category: data.get('eventCategory'),
+        format: data.get('eventFormat'),
+        timezone: data.get('eventTimezone'),
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        venueName: data.get('venueName'),
+        meetingUrl: data.get('meetingUrl'),
+        city: data.get('eventCity'),
+        capacity: data.get('eventCapacity'),
+        regularPrice: data.get('ticketPrice'),
+        earlyBirdPrice: data.get('earlyBirdPrice'),
+        earlyBirdEnds: earlyBirdEnds ? earlyBirdEnds.toISOString() : '',
+        vipPrice: data.get('vipPrice'),
+        slug: data.get('eventSlug'),
+        tags: data.get('campaignTags'),
+        organizerName: data.get('organizerName'),
+        organizerEmail: data.get('organizerEmail'),
+        organizerPhone: data.get('organizerPhone')
+      };
+      Object.entries(fields).forEach(([key, value]) => submission.append(key, value == null ? '' : String(value)));
+      const poster = data.get('eventImages');
+      if (poster && poster.size > 0) submission.append('eventImage', poster);
+      button.disabled = true;
+      feedback.textContent = 'Submitting your event for review…';
+      try {
+        const result = await window.valorEventsApi('/api/events/submissions', { method: 'POST', body: submission });
+        feedback.textContent = `${result.message} Your event page will be /event.html?slug=${result.slug}`;
+        feedback.classList.remove('error');
+      } catch (error) {
+        feedback.textContent = error.message;
+        feedback.classList.add('error');
+      } finally {
+        button.disabled = false;
       }
     });
 

@@ -17,6 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/events.css">
+  <script src="scripts/events-api.js" defer></script>
   <script src="scripts/events.js" defer></script>
 </head>
 <body>
@@ -53,6 +54,19 @@
 
         <div class="form-grid-2">
           <div class="form-field">
+            <label for="eventCategory">Category</label>
+            <select id="eventCategory" name="eventCategory" required>
+              <option value="Concerts">Concerts</option>
+              <option value="Festivals">Festivals</option>
+              <option value="Community">Community</option>
+              <option value="Food &amp; Drink">Food &amp; Drink</option>
+              <option value="Arts &amp; Culture">Arts &amp; Culture</option>
+              <option value="Sports">Sports</option>
+              <option value="Business">Business</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="form-field">
             <label for="eventFormat">Format</label>
             <select id="eventFormat" name="eventFormat" required>
               <option value="Physical">Physical</option>
@@ -84,24 +98,17 @@
           </div>
           <div class="form-field">
             <label for="eventCity">City</label>
-            <input id="eventCity" name="eventCity" type="text" maxlength="100">
+            <input id="eventCity" name="eventCity" type="text" maxlength="100" required>
             <label for="eventCapacity" style="margin-top:15px;">Capacity</label>
             <input id="eventCapacity" name="eventCapacity" type="number" min="1" step="1">
           </div>
           <div class="form-field">
             <label for="ticketPrice">Regular ticket price</label>
-            <input id="ticketPrice" name="ticketPrice" type="number" min="0" step="0.01" value="0" required>
+            <input id="ticketPrice" name="ticketPrice" type="number" min="0" step="1" value="0" required>
           </div>
           <div class="form-field">
             <label for="ticketCurrency">Currency</label>
-            <select id="ticketCurrency" name="ticketCurrency">
-              <option value="KES">KES</option>
-              <option value="USD">USD</option>
-              <option value="NGN">NGN</option>
-              <option value="GHS">GHS</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-            </select>
+            <select id="ticketCurrency" name="ticketCurrency" disabled><option value="KES">KES</option></select>
           </div>
         </div>
 
@@ -111,7 +118,7 @@
           <div class="form-grid-3">
             <div class="form-field">
               <label for="earlyBirdPrice">Early-bird price</label>
-              <input id="earlyBirdPrice" name="earlyBirdPrice" type="number" min="0" step="0.01" placeholder="Lower than regular">
+              <input id="earlyBirdPrice" name="earlyBirdPrice" type="number" min="0" step="1" placeholder="Lower than regular">
             </div>
             <div class="form-field">
               <label for="earlyBirdEnds">Early bird ends</label>
@@ -119,10 +126,10 @@
             </div>
             <div class="form-field">
               <label for="vipPrice">VIP price</label>
-              <input id="vipPrice" name="vipPrice" type="number" min="0" step="0.01" placeholder="Higher than regular">
+              <input id="vipPrice" name="vipPrice" type="number" min="0" step="1" placeholder="Higher than regular">
             </div>
           </div>
-          <p class="field-hint">Early-bird buyers get the lower price until the end date, then the regular price applies automatically after ticketing is enabled.</p>
+          <p class="field-hint">Early-bird tickets use the discounted price until the specified end date; the regular price applies afterward.</p>
         </section>
 
         <section class="form-section">
@@ -143,16 +150,26 @@
 
         <section class="form-section">
           <div class="form-field">
-            <label for="eventImages">Event images <span style="font-weight:500;color:#8995a5;">(optional, up to 10 MB each)</span></label>
-            <input class="file-picker" id="eventImages" name="eventImages" type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple>
-            <p class="field-hint">Choose JPEG, PNG, GIF, or WebP images. Image names are saved with this local draft.</p>
+            <label for="eventImages">Event poster <span style="font-weight:500;color:#8995a5;">(optional, up to 10 MB)</span></label>
+            <input class="file-picker" id="eventImages" name="eventImages" type="file" accept="image/jpeg,image/png,image/gif,image/webp">
+            <p class="field-hint">Choose a JPEG, PNG, GIF, or WebP image. This poster appears with your event after approval.</p>
             <p class="file-list" id="imageNames">No images selected.</p>
           </div>
         </section>
 
-        <p class="draft-disclaimer">This demo saves drafts only in this browser on this device. Drafts are not published, shared with an organizer account, or accepting ticket payments.</p>
+        <section class="form-section">
+          <h2>Organizer contact</h2>
+          <p>Valor Africa uses these details to review your event. Your contact information is not shown on the public listing.</p>
+          <div class="form-grid-2">
+            <div class="form-field"><label for="organizerName">Your name</label><input id="organizerName" name="organizerName" maxlength="120" required></div>
+            <div class="form-field"><label for="organizerEmail">Email</label><input id="organizerEmail" name="organizerEmail" type="email" maxlength="254" required></div>
+            <div class="form-field"><label for="organizerPhone">WhatsApp / Safaricom number</label><input id="organizerPhone" name="organizerPhone" type="tel" placeholder="0712345678" required></div>
+          </div>
+        </section>
+        <p class="draft-disclaimer">Save drafts on this device, or submit your event for Valor Africa’s review. Approved listings can sell tickets once M-Pesa is enabled for checkout.</p>
         <div class="form-actions">
           <button class="button button-primary" type="submit">Save event draft</button>
+          <button class="button button-primary" id="publishEventButton" type="button">Submit for review</button>
           <button class="button" type="reset" style="color:#46576a;background:#f0f4f7;">New draft</button>
           <p class="form-feedback" id="draftFeedback" aria-live="polite"></p>
         </div>
@@ -161,7 +178,7 @@
         <h2 id="draftsHeading">Your saved drafts</h2>
         <p>Drafts saved in this browser will appear here.</p>
         <div class="draft-list" id="draftList"><p class="draft-empty">Loading drafts…</p></div>
-        <p class="sidebar-note">To publish events, manage ticket sales, or accept payments, connect a shared event service and payment provider.</p>
+        <p class="sidebar-note">Submitted events are reviewed before they appear publicly. M-Pesa checkout availability depends on Valor Africa’s live Daraja configuration.</p>
       </aside>
     </div>
   </main>

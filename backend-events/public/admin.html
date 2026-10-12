@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Event admin | Valor Africa</title>
+  <link rel="stylesheet" href="/admin-assets/admin.css">
+  <script src="/admin-assets/admin.js" defer></script>
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-header">
+      <a class="admin-brand" href="/" aria-label="Valor Africa admin">
+        <span class="brand-mark">V</span>
+        <span>Valor Africa<small>EVENT ADMIN</small></span>
+      </a>
+      <button class="button secondary" id="logoutButton" type="button" hidden>Sign out</button>
+    </header>
+    <section class="card login-card" id="loginPanel">
+      <p class="kicker">SECURE ORGANIZER TOOLS</p>
+      <h1>Review event submissions</h1>
+      <p>Sign in to approve events, manage ad packages, and view paid ticket orders.</p>
+      <form id="loginForm">
+        <label for="username">Admin username</label>
+        <input id="username" name="username" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button class="button primary" type="submit">Sign in</button>
+      </form>
+      <p class="feedback" id="loginFeedback" aria-live="polite"></p>
+    </section>
+    <section id="dashboard" hidden>
+      <div class="dashboard-heading">
+        <p class="kicker">VALOR AFRICA EVENTS</p>
+        <h1>Organizer dashboard</h1>
+        <p>Review and publish submitted event listings. Only approved events appear on the public website.</p>
+      </div>
+      <nav class="tabs" aria-label="Admin sections">
+        <button class="tab is-active" type="button" data-admin-tab="submissions">Event submissions</button>
+        <button class="tab" type="button" data-admin-tab="packages">Ad packages</button>
+        <button class="tab" type="button" data-admin-tab="orders">Ticket &amp; ad orders</button>
+      </nav>
+      <section class="card admin-section" id="submissionsSection">
+        <div class="section-heading">
+          <div><h2>Event submissions</h2><p>Check event details before publishing.</p></div>
+          <select id="submissionStatus" aria-label="Filter submissions by status">
+            <option value="pending">Awaiting review</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Not approved</option>
+            <option value="">All submissions</option>
+          </select>
+        </div>
+        <div class="record-list" id="submissionsList"></div>
+      </section>
+      <section class="card admin-section" id="packagesSection" hidden>
+        <div class="section-heading"><div><h2>Paid ad packages</h2><p>Set the exact KES prices and exposure duration organizers can book.</p></div></div>
+        <form class="package-form" id="packageForm">
+          <label>Package name<input name="name" maxlength="80" placeholder="Homepage spotlight" required></label>
+          <label>Description<input name="description" maxlength="500" placeholder="Featured in the Valor Ads carousel"></label>
+          <label>Duration (days)<input name="durationDays" type="number" min="1" max="90" step="1" required></label>
+          <label>Price (KES)<input name="priceKes" type="number" min="1" step="1" required></label>
+          <button class="button primary" type="submit">Add package</button>
+        </form>
+        <div class="record-list" id="packagesList"></div>
+      </section>
+      <section class="card admin-section" id="ordersSection" hidden>
+        <div class="section-heading"><div><h2>Ticket &amp; ad orders</h2><p>Only M-Pesa-confirmed orders issue tickets or activate advertisements.</p></div></div>
+        <div class="record-list" id="ordersList"></div>
+      </section>
+      <p class="feedback" id="dashboardFeedback" aria-live="polite"></p>
+    </section>
+  </main>
+</body>
+</html>

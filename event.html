@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#087f5b">
+  <title>Event details | Valor Africa</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles/events.css">
+  <script src="scripts/events-api.js" defer></script>
+  <script src="scripts/event-pages.js" defer></script>
+</head>
+<body>
+  <header class="site-header"><nav class="nav wrap"><a href="index.html" class="brand"><span class="brand-mark">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a><a class="nav-host" href="events.html">Browse events</a></nav></header>
+  <main class="wrap service-page">
+    <p class="eyebrow">VALOR AFRICA EVENTS</p>
+    <div id="eventDetails" class="service-card"><p>Loading event details…</p></div>
+    <form id="eventTicketForm" class="service-form" hidden>
+      <h2>Get your tickets</h2>
+      <label>Ticket type<select name="ticketType" required></select></label>
+      <label>Quantity<input name="quantity" type="number" min="1" max="10" value="1" required></label>
+      <label>Your name<input name="buyerName" maxlength="120" autocomplete="name" required></label>
+      <label>Safaricom M-Pesa number<input name="phone" type="tel" autocomplete="tel" placeholder="0712345678" required></label>
+      <button class="button button-primary" type="submit">Pay with M-Pesa</button>
+    </form>
+    <p class="page-feedback" id="pageFeedback" aria-live="polite"></p>
+  </main>
+</body>
+</html>

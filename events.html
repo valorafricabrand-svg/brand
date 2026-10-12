@@ -17,6 +17,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/events.css">
+  <script src="scripts/events-api.js" defer></script>
   <script src="scripts/events.js" defer></script>
 </head>
 <body>
@@ -46,7 +47,12 @@
         <div class="category-list" id="allCategories" aria-label="Filter events by category">
           <button class="category-chip is-active" type="button" data-category="All" aria-pressed="true">All events</button>
           <button class="category-chip" type="button" data-category="Festivals" aria-pressed="false">Festivals</button>
+          <button class="category-chip" type="button" data-category="Concerts" aria-pressed="false">Concerts</button>
           <button class="category-chip" type="button" data-category="Community" aria-pressed="false">Community</button>
+          <button class="category-chip" type="button" data-category="Food & Drink" aria-pressed="false">Food &amp; drink</button>
+          <button class="category-chip" type="button" data-category="Arts & Culture" aria-pressed="false">Arts &amp; culture</button>
+          <button class="category-chip" type="button" data-category="Sports" aria-pressed="false">Sports</button>
+          <button class="category-chip" type="button" data-category="Business" aria-pressed="false">Business</button>
         </div>
       </div>
       <div class="event-grid" id="allEvents" aria-live="polite"></div>
@@ -68,8 +74,9 @@
         <label for="ticketQuantity">Number of tickets</label><input id="ticketQuantity" name="quantity" type="number" min="1" max="10" value="1" required>
         <label for="buyerName">Your name</label><input id="buyerName" name="name" autocomplete="name" required>
         <label for="buyerPhone">WhatsApp number</label><input id="buyerPhone" name="phone" type="tel" autocomplete="tel" required>
-        <p class="checkout-note">We’ll open WhatsApp to send a ticket request to the event team. Your booking is confirmed only after the organizer confirms availability and payment.</p>
-        <button type="submit" class="button button-primary">Continue on WhatsApp <span aria-hidden="true">→</span></button>
+        <p class="checkout-note">You will receive an M-Pesa payment prompt. Your ticket is issued only after payment is confirmed.</p>
+        <p class="form-feedback" id="ticketFeedback" aria-live="polite"></p>
+        <button type="submit" class="button button-primary">Pay with M-Pesa <span aria-hidden="true">→</span></button>
       </form>
     </div>
   </dialog>

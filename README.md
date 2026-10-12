@@ -1,45 +1,43 @@
 # Valor Africa Events
 
-Valor Africa is focused on event discovery, ticket requests, and event hosting.
-The static site contains:
+Valor Africa is an event discovery, publishing, ticketing, and event-promotion platform.
 
-- `index.html` — event discovery homepage with a rotating Valor Ads showcase, location and category search, and featured events.
-- `events.html` — searchable and filterable event listing.
-- `host.html` — organizer form with local draft save, edit, and delete.
-- `about.html` and `contact.html` — event-platform information and support.
-- `styles/events.css` and `scripts/events.js` — event platform UI and interactions.
+## Website
 
-## Current demo limitations
+- `index.html` — event discovery, approved event listings, and the paid Valor Ads carousel.
+- `events.html` — searchable and filterable event listings with M-Pesa checkout.
+- `host.html` — organizer event submission and local draft saving.
+- `event.html`, `order.html`, `ticket.html`, and `advertise.html` — public event details, payment status and ticket confirmations, ticket verification, and paid ad booking.
+- `backend-events/` — separate API and admin dashboard for publishing, review, orders, tickets, and ad packages. It is not connected to the merchandise shop backend.
 
-The event listings in `scripts/events.js` are sample content. Update the `events`
-array with approved live event information before publishing the site.
+## Run locally
 
-The Valor Ads carousel uses the animated concert artwork as its visual fallback.
-To show an event video, add an `adVideo` path (for example,
-`images/events/my-promo.mp4`) to that event in the `events` array in
-`scripts/events.js`; optionally set `adPoster` to a still image for its loading
-poster. Clips autoplay muted and loop; viewers can enable sound. The carousel
-supports pause, manual navigation, reduced-motion preferences, and poster
-fallback. The advertise links currently start a WhatsApp inquiry only; no ad
-inventory, booking, impressions reporting, or payment is processed by this
-static demo.
+Use Node.js 22.13 or later. In `backend-events/`, install dependencies, copy `.env.example` to `.env`, set a unique admin password (at least 16 characters) and a random `JWT_SECRET` (at least 32 characters), then run:
 
-The hosting form currently saves drafts to the current browser's local storage.
-Drafts are not uploaded, shared between devices, or published. The ticket form
-creates a WhatsApp ticket request; it does not process payment or issue a ticket.
-Before offering public event publishing or ticket sales, connect a server-side
-event service, organizer accounts, order records, and a payment provider. The
-user must receive explicit confirmation only after payment has been verified.
+```powershell
+cd backend-events
+npm install
+npm start
+```
 
-## Static hosting
+Serve the repository root on port 8765 (for example, `python -m http.server 8765`) and open `http://localhost:8765`. The local site connects to `http://localhost:4001`; the admin dashboard is at `http://localhost:4001/admin`.
 
-The current site can be published as static files. Static hosting does not
-provide shared organizer drafts, secure checkout, or ticket issuance. Keep the
-limitations above visible until the related backend and payment integration are
-implemented.
+## Production deployment
+
+The public website is static. Deploy `backend-events/` separately as a Node service and attach persistent storage for its SQLite database and event posters. Set environment variables in the hosting provider; do not commit production secrets:
+
+- `JWT_SECRET`, `ADMIN_USERNAME`, and `ADMIN_PASSWORD`.
+- `DB_PATH` and `UPLOAD_DIR` on the persistent disk.
+- `ALLOWED_ORIGINS` to only the public site origin(s), without URL paths. The API also permits its own same-origin admin dashboard.
+- `PUBLIC_SITE_URL` to the public website base URL (include `/brand` if using a GitHub Pages project site).
+- `MPESA_ENV`, `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET`, `MPESA_SHORTCODE`, `MPESA_PASSKEY`, and `MPESA_CALLBACK_URL`.
+
+Set the Daraja callback to a public HTTPS URL ending in `/api/mpesa/callback`. Update `scripts/events-api.js` on the static site to set `window.VALOR_EVENTS_API` to the deployed API HTTPS origin. Verify `/api/health` reports `paymentsConfigured: true`, test checkout against the Daraja sandbox, and only then configure production credentials. Event submissions and review work without Daraja, but ticket and ad payments remain unavailable until it is configured. A ticket or ad placement is activated only after backend M-Pesa verification.
+
+Use the admin dashboard to review event submissions and manage advertising-package names, durations, and KES prices. Back up the SQLite database and uploaded-poster directory together.
+
+With the API configured, the Valor Ads carousel displays events with active paid bookings. The static-only preview still contains sample artwork/listings and cannot publish events, accept checkout, or issue tickets. Existing animated artwork and configured video previews can be used; campaign-video upload management and impression analytics are not included yet.
 
 ## Legacy shop backend
 
-`backend-shop/` is the repository's earlier merchandise-store service. It is
-not connected to the event site. Do not use it to process event tickets or
-payments.
+`backend-shop/` is the existing merchandise-store service. Keep it separate; it is not used to publish events or process event payments.
