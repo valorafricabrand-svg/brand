@@ -8,10 +8,11 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles/events.css">
   <script src="scripts/events-api.js" defer></script>
+  <script src="scripts/account.js" defer></script>
   <script src="scripts/wallet.js" defer></script>
 </head>
 <body>
-  <header class="site-header"><nav class="nav wrap"><a href="index.html" class="brand"><span class="brand-mark">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a><a class="nav-host" href="events.html">Browse events</a></nav></header>
+  <header class="site-header"><nav class="nav wrap"><a href="index.html" class="brand"><span class="brand-mark">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a><div class="service-nav"><a href="account.html">Account</a><a class="nav-host" href="events.html">Browse events</a></div></nav></header>
   <main class="wrap service-page wallet-page">
     <p class="eyebrow">BUYER &amp; ORGANIZER WALLET</p>
     <h1>Your Valor Wallet</h1>
@@ -64,6 +65,7 @@
         </form>
         <p class="page-feedback" id="walletSignInFeedback" aria-live="polite"></p>
         <p class="service-meta" id="walletLinkedPhone" hidden></p>
+        <p class="page-feedback" id="accountEmailFeedbackSignedIn" aria-live="polite"></p>
         <button class="button secondary" id="accountSignOut" type="button">Sign out</button>
       </div>
     </section>

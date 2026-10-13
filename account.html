@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#087f5b">
+  <meta name="description" content="Sign in securely to your Valor Africa account to manage your event tickets and wallet.">
+  <title>My account | Valor Africa</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/events.css">
+  <script src="scripts/events-api.js" defer></script>
+  <script src="scripts/account.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <nav class="nav wrap" aria-label="Main navigation">
+      <a href="index.html" class="brand" aria-label="Valor Africa Events home"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a>
+      <div class="service-nav"><a href="wallet.html">Wallet</a><a class="nav-host" href="events.html">Browse events</a></div>
+    </nav>
+  </header>
+  <main id="main" class="wrap service-page">
+    <p class="eyebrow">YOUR VALOR AFRICA ACCOUNT</p>
+    <h1>Account sign-in</h1>
+    <p>Sign in to manage your account. Access to wallet balances and payments is tied to your account session.</p>
+    <section class="service-card account-card" id="accountAuth">
+      <div id="accountSignedOut">
+        <h2>Sign in to your Valor Africa account</h2>
+        <div id="googleSignInButton" class="google-sign-in"></div>
+        <p class="page-feedback" id="googleFeedback" aria-live="polite"></p>
+        <div class="auth-divider"><span>or continue with email</span></div>
+        <div class="account-auth-actions" id="emailAuthActions">
+          <button class="button button-primary" id="showEmailLogin" type="button">Sign in with email</button>
+          <button class="button secondary" id="showEmailRegister" type="button">Create an account</button>
+        </div>
+        <form id="accountEmailForm" class="service-form" hidden>
+          <h3 id="accountEmailHeading"></h3>
+          <label id="accountNameField" hidden>Your name<input name="displayName" type="text" maxlength="120" autocomplete="name"></label>
+          <label>Email address<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
+          <label id="accountPasswordField">Password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="current-password" required></label>
+          <label id="accountCodeField" hidden>Six-digit email code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"></label>
+          <button class="button button-primary" id="accountEmailSubmit" type="submit"></button>
+          <button class="text-button" id="accountForgotPassword" type="button" hidden>Forgot password?</button>
+          <button class="text-button" id="accountResendCode" type="button" hidden>Resend verification code</button>
+          <button class="text-button" id="accountBackToOptions" type="button">Back to sign-in options</button>
+        </form>
+        <p class="page-feedback" id="accountEmailFeedback" aria-live="polite"></p>
+      </div>
+      <div id="accountSignedIn" hidden>
+        <p class="eyebrow">SIGNED IN</p>
+        <h2 id="accountDisplayName"></h2>
+        <p id="accountEmailAddress" class="service-meta"></p>
+        <p>Your account session is active. Wallet details and balances are only available after you sign in.</p>
+        <div class="account-auth-actions">
+          <a class="button button-primary" href="wallet.html">Open your wallet</a>
+          <a class="button secondary" href="events.html">Browse events</a>
+        </div>
+        <p class="page-feedback" id="accountEmailFeedbackSignedIn" aria-live="polite"></p>
+        <button class="button secondary" id="accountSignOut" type="button">Sign out</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
