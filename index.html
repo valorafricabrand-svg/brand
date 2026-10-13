@@ -38,6 +38,7 @@
         <a href="events.html">Events</a>
         <a href="#events">Discover</a>
         <a href="#how-it-works">For organizers</a>
+        <a href="wallet.html">Wallet</a>
         <a href="contact.html">Help</a>
         <a class="nav-host" href="host.html">Sell your event <span aria-hidden="true">↗</span></a>
       </div>
@@ -162,6 +163,7 @@
       <div class="footer-links">
         <a href="events.html">Browse events</a>
         <a href="host.html">Host an event</a>
+        <a href="wallet.html">Wallet</a>
         <a href="mailto:hello@valorafrica.co.ke">Contact support</a>
       </div>
       <p>© 2026 Valor Africa Events</p>
@@ -181,10 +183,13 @@
         <input id="ticketQuantity" name="quantity" type="number" min="1" max="10" value="1" required>
         <label for="buyerName">Your name</label>
         <input id="buyerName" name="name" autocomplete="name" required>
+        <label for="ticketPaymentMethod">Payment method</label>
+        <select id="ticketPaymentMethod" name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option></select>
         <label for="buyerPhone">WhatsApp number</label>
         <input id="buyerPhone" name="phone" type="tel" autocomplete="tel" required>
-        <p class="checkout-note">We’ll open WhatsApp to send a ticket request to the event team. Your booking is confirmed only after the organizer confirms availability and payment.</p>
-        <button type="submit" class="button button-primary">Continue on WhatsApp <span aria-hidden="true">→</span></button>
+        <p class="checkout-note" id="ticketPaymentNote">You will receive an M-Pesa payment prompt. Your ticket is issued only after payment is confirmed.</p>
+        <p class="checkout-note">Need to sign in or add funds? <a href="wallet.html">Open your Valor Wallet</a>.</p>
+        <button type="submit" class="button button-primary">Pay with M-Pesa <span aria-hidden="true">→</span></button>
       </form>
     </div>
   </dialog>

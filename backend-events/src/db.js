@@ -120,6 +120,45 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS orders_capacity ON orders(event_id, status, created_at);
 
+  CREATE TABLE IF NOT EXISTS wallets (
+    id TEXT PRIMARY KEY,
+    phone TEXT NOT NULL UNIQUE,
+    account_type TEXT NOT NULL CHECK (account_type IN ('buyer','organizer','both')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS wallet_otps (
+    phone TEXT PRIMARY KEY,
+    code_hash TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS wallet_sessions (
+    token_hash TEXT PRIMARY KEY,
+    wallet_id TEXT NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS wallet_transactions (
+    id TEXT PRIMARY KEY,
+    wallet_id TEXT NOT NULL REFERENCES wallets(id),
+    order_id TEXT UNIQUE REFERENCES orders(id),
+    transaction_type TEXT NOT NULL CHECK (transaction_type IN ('deposit','ticket_purchase','ad_purchase')),
+    amount_kes INTEGER NOT NULL CHECK (amount_kes != 0),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','completed','failed','review')),
+    checkout_request_id TEXT UNIQUE,
+    merchant_request_id TEXT,
+    receipt TEXT UNIQUE,
+    description TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    completed_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS wallet_transactions_history ON wallet_transactions(wallet_id, created_at DESC);
+
   CREATE TABLE IF NOT EXISTS tickets (
     code TEXT PRIMARY KEY,
     order_id TEXT NOT NULL REFERENCES orders(id),

@@ -8,6 +8,7 @@ const QRCode = require('qrcode');
 const db = require('./db');
 const { createLoginLimiter, initializeAdmin, login, requireAdmin } = require('./auth');
 const mpesa = require('./mpesa');
+const walletSms = require('./wallet-sms');
 
 const allowedCategories = new Set(['Concerts','Festivals','Community','Food & Drink','Arts & Culture','Sports','Business','Other']);
 const allowedTimezones = new Set(['Africa/Nairobi','UTC','Africa/Lagos','Africa/Accra']);
@@ -156,6 +157,7 @@ function safeOrderAccess(order, suppliedToken) {
 
 function createApp(options = {}) {
   const paymentGateway = options.mpesa || mpesa;
+  const smsGateway = options.sms || walletSms;
   const publicSiteUrl = (options.publicSiteUrl || process.env.PUBLIC_SITE_URL || 'http://localhost:8765').replace(/\/+$/, '');
   const app = express();
   app.disable('x-powered-by');
@@ -187,6 +189,59 @@ function createApp(options = {}) {
 
   const loginLimiter = createLoginLimiter();
   const submissionLimiter = createSubmissionLimiter();
+  const walletOtpAttempts = new Map();
+  function requireWallet(req, res, next) {
+    const header = req.headers.authorization || '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+    if (!token) return res.status(401).json({ error: 'Sign in to your wallet to continue.' });
+    const session = db.prepare(`
+      SELECT w.id,w.phone,w.account_type AS accountType
+      FROM wallet_sessions s JOIN wallets w ON w.id=s.wallet_id
+      WHERE s.token_hash=? AND s.expires_at > datetime('now')
+    `).get(sha256(token));
+    if (!session) return res.status(401).json({ error: 'Your wallet session has expired. Request a new sign-in code.' });
+    session.sessionTokenHash = sha256(token);
+    req.wallet = session;
+    next();
+  }
+
+  function walletOtpLimiter(req, res, next) {
+    const phone = normalizePhone(req.body && req.body.phone);
+    if (!phone) return res.status(400).json({ error: 'Enter a valid Kenyan mobile number.' });
+    const now = Date.now();
+    for (const [key, entry] of walletOtpAttempts) {
+      if (now - entry.startedAt >= 15 * 60 * 1000) walletOtpAttempts.delete(key);
+    }
+    const limits = [
+      { key: `phone:${phone}`, maximum: 3 },
+      { key: `ip:${req.ip}`, maximum: 20 }
+    ];
+    for (const limit of limits) {
+      const entry = walletOtpAttempts.get(limit.key);
+      if (entry && entry.count >= limit.maximum) {
+        return res.status(429).json({ error: 'Too many wallet code requests. Try again in 15 minutes.' });
+      }
+    }
+    for (const limit of limits) {
+      const entry = walletOtpAttempts.get(limit.key);
+      walletOtpAttempts.set(limit.key, entry
+        ? { startedAt: entry.startedAt, count: entry.count + 1 }
+        : { startedAt: now, count: 1 });
+    }
+    req.walletPhone = phone;
+    next();
+  }
+
+  function walletSnapshot(walletId) {
+    const wallet = db.prepare('SELECT id,phone,account_type AS accountType,created_at AS createdAt FROM wallets WHERE id=?').get(walletId);
+    const balance = db.prepare("SELECT COALESCE(SUM(amount_kes),0) AS balance FROM wallet_transactions WHERE wallet_id=? AND status='completed'").get(walletId).balance;
+    const transactions = db.prepare(`
+      SELECT id,transaction_type AS type,amount_kes AS amountKes,status,receipt,description,created_at AS createdAt
+      FROM wallet_transactions WHERE wallet_id=? ORDER BY created_at DESC,id DESC LIMIT 30
+    `).all(walletId);
+    return { wallet, balanceKes: balance, transactions };
+  }
+
   const imageUpload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 22, parts: 23, fieldSize: 10000 },
@@ -200,7 +255,113 @@ function createApp(options = {}) {
   }).single('eventImage');
 
   app.get('/api/health', (req, res) => {
-    res.json({ ok: true, paymentsConfigured: paymentGateway.isConfigured() });
+    res.json({
+      ok: true,
+      paymentsConfigured: paymentGateway.isConfigured(),
+      walletSmsConfigured: smsGateway.isConfigured()
+    });
+  });
+
+  app.post('/api/wallet/otp', walletOtpLimiter, async (req, res) => {
+    if (!smsGateway.isConfigured()) {
+      return res.status(503).json({ error: "Wallet sign-in is unavailable until Africa's Talking SMS is configured." });
+    }
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+    const codeHash = sha256(`${process.env.JWT_SECRET}:${req.walletPhone}:${code}`);
+    db.prepare(`
+      INSERT INTO wallet_otps (phone,code_hash,attempts,expires_at)
+      VALUES (?,?,0,datetime('now','+5 minutes'))
+      ON CONFLICT(phone) DO UPDATE SET code_hash=excluded.code_hash,attempts=0,
+        expires_at=excluded.expires_at,created_at=datetime('now')
+    `).run(req.walletPhone, codeHash);
+    try {
+      await smsGateway.sendOtp(req.walletPhone, code);
+    } catch (error) {
+      db.prepare('DELETE FROM wallet_otps WHERE phone=? AND code_hash=?').run(req.walletPhone, codeHash);
+      console.error('Wallet sign-in code could not be sent:', error.message);
+      return res.status(502).json({ error: 'Could not send a sign-in code. Check the phone number and try again.' });
+    }
+    return res.status(202).json({ message: 'A sign-in code has been sent to your phone.' });
+  });
+
+  app.post('/api/wallet/verify', async (req, res) => {
+    const phone = normalizePhone(req.body && req.body.phone);
+    const code = req.body && req.body.code;
+    const accountType = req.body && req.body.accountType || 'buyer';
+    if (!phone || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: 'Enter your Kenyan mobile number and the six-digit code.' });
+    }
+    if (!['buyer','organizer','both'].includes(accountType)) {
+      return res.status(400).json({ error: 'Choose buyer, organizer, or both as your account type.' });
+    }
+    const otp = db.prepare('SELECT code_hash,attempts FROM wallet_otps WHERE phone=? AND expires_at > datetime(\'now\')').get(phone);
+    if (!otp) return res.status(401).json({ error: 'That sign-in code has expired. Request a new one.' });
+    const expectedHash = sha256(`${process.env.JWT_SECRET}:${phone}:${code}`);
+    const actual = Buffer.from(otp.code_hash);
+    const expected = Buffer.from(expectedHash);
+    if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) {
+      db.prepare('UPDATE wallet_otps SET attempts=attempts+1 WHERE phone=?').run(phone);
+      if (otp.attempts + 1 >= 5) db.prepare('DELETE FROM wallet_otps WHERE phone=?').run(phone);
+      return res.status(401).json({ error: 'That sign-in code is incorrect or expired.' });
+    }
+    const token = crypto.randomBytes(32).toString('base64url');
+    const tokenHash = sha256(token);
+    const walletId = crypto.randomUUID();
+    const wallet = db.transaction(() => {
+      db.prepare('DELETE FROM wallet_otps WHERE phone=?').run(phone);
+      db.prepare("INSERT INTO wallets (id,phone,account_type) VALUES (?,?,?) ON CONFLICT(phone) DO UPDATE SET account_type=excluded.account_type")
+        .run(walletId, phone, accountType);
+      const account = db.prepare('SELECT id FROM wallets WHERE phone=?').get(phone);
+      db.prepare('DELETE FROM wallet_sessions WHERE expires_at <= datetime(\'now\')').run();
+      db.prepare("INSERT INTO wallet_sessions (token_hash,wallet_id,expires_at) VALUES (?,?,datetime('now','+12 hours'))")
+        .run(tokenHash, account.id);
+      return account;
+    })();
+    res.json({
+      accessToken: token,
+      expiresIn: '12h',
+      ...walletSnapshot(wallet.id)
+    });
+  });
+
+  app.get('/api/wallet', requireWallet, (req, res) => res.json(walletSnapshot(req.wallet.id)));
+
+  app.post('/api/wallet/logout', requireWallet, (req, res) => {
+    db.prepare('DELETE FROM wallet_sessions WHERE token_hash=?').run(req.wallet.sessionTokenHash);
+    res.json({ signedOut: true });
+  });
+
+  app.post('/api/wallet/deposits', requireWallet, async (req, res) => {
+    const amountKes = req.body && req.body.amountKes;
+    if (!Number.isSafeInteger(amountKes) || amountKes < 100 || amountKes > 150000) {
+      return res.status(400).json({ error: 'Deposit an amount from KES 100 to KES 150,000.' });
+    }
+    if (paymentsUnavailable(res)) return;
+    const id = crypto.randomUUID();
+    db.prepare(`
+      INSERT INTO wallet_transactions (id,wallet_id,transaction_type,amount_kes,status,description)
+      VALUES (?,?, 'deposit', ?, 'pending', 'M-Pesa wallet deposit')
+    `).run(id, req.wallet.id, amountKes);
+    try {
+      const checkout = await paymentGateway.initiateStkPush({
+        id,
+        amountKes,
+        phone: req.wallet.phone,
+        orderType: 'wallet'
+      });
+      db.prepare('UPDATE wallet_transactions SET checkout_request_id=?,merchant_request_id=? WHERE id=?')
+        .run(checkout.checkoutRequestId, checkout.merchantRequestId, id);
+      res.status(201).json({
+        transactionId: id,
+        status: 'pending',
+        message: checkout.customerMessage
+      });
+    } catch (error) {
+      db.prepare("UPDATE wallet_transactions SET status='failed',description=? WHERE id=? AND status='pending'")
+        .run('M-Pesa could not start the wallet deposit.', id);
+      console.error('M-Pesa wallet deposit could not be started:', error.message);
+      res.status(502).json({ error: 'M-Pesa could not start the deposit prompt. Try again shortly.' });
+    }
   });
 
   app.post('/api/auth/login', loginLimiter, (req, res) => {
@@ -461,10 +622,15 @@ function createApp(options = {}) {
     }
   }
 
-  app.post('/api/orders/tickets', async (req, res, next) => {
+  app.post('/api/orders/tickets', (req, res, next) => {
+    if (req.body && req.body.paymentMethod === 'wallet') return requireWallet(req, res, next);
+    next();
+  }, async (req, res, next) => {
     try {
       const { eventId, ticketType, buyerName, phone: inputPhone, quantity = 1 } = req.body || {};
-      const phone = normalizePhone(inputPhone);
+      const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
+      if (!['mpesa','wallet'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa or Valor Wallet as the payment method.' });
+      const phone = paymentMethod === 'wallet' ? req.wallet.phone : normalizePhone(inputPhone);
       if (typeof eventId !== 'string' || !eventId || typeof ticketType !== 'string' || !ticketType) return res.status(400).json({ error: 'Choose a published event and ticket type.' });
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the ticket buyer’s name.' });
       if (!phone) return res.status(400).json({ error: 'Enter a valid Safaricom number, for example 0712345678.' });
@@ -502,6 +668,23 @@ function createApp(options = {}) {
             for (let ticket = 0; ticket < quantity; ticket += 1) {
               insertTicket.run(crypto.randomUUID(), created.id, eventId, ticketType);
             }
+          } else if (paymentMethod === 'wallet') {
+            const total = price * quantity;
+            const balance = db.prepare("SELECT COALESCE(SUM(amount_kes),0) AS balance FROM wallet_transactions WHERE wallet_id=? AND status='completed'")
+              .get(req.wallet.id).balance;
+            if (balance < total) {
+              throw Object.assign(new Error('Your wallet balance is too low. Add funds and try again.'), { statusCode: 402 });
+            }
+            db.prepare("UPDATE orders SET status='paid',result_description=?,paid_at=datetime('now') WHERE id=?")
+              .run('Ticket order paid from Valor Wallet.', created.id);
+            db.prepare(`
+              INSERT INTO wallet_transactions (id,wallet_id,order_id,transaction_type,amount_kes,status,description,completed_at)
+              VALUES (?,?,?,'ticket_purchase',?,'completed',?,datetime('now'))
+            `).run(crypto.randomUUID(), req.wallet.id, created.id, -total, `${quantity} ${ticketType} ticket(s)`);
+            const insertTicket = db.prepare('INSERT INTO tickets (code,order_id,event_id,ticket_type) VALUES (?,?,?,?)');
+            for (let ticket = 0; ticket < quantity; ticket += 1) {
+              insertTicket.run(crypto.randomUUID(), created.id, eventId, ticketType);
+            }
           }
           return created;
         })();
@@ -517,6 +700,14 @@ function createApp(options = {}) {
           message: 'Your free event registration is confirmed.'
         });
       }
+      if (paymentMethod === 'wallet') {
+        return res.status(201).json({
+          orderId: order.id,
+          accessToken: order.accessToken,
+          status: 'paid',
+          message: 'Your ticket order was paid using Valor Wallet.'
+        });
+      }
       if (paymentsUnavailable(res)) return;
       return startCheckout(res, order, price * quantity, phone);
     } catch (error) {
@@ -524,11 +715,16 @@ function createApp(options = {}) {
     }
   });
 
-  app.post('/api/orders/ads', async (req, res, next) => {
+  app.post('/api/orders/ads', (req, res, next) => {
+    if (req.body && req.body.paymentMethod === 'wallet') return requireWallet(req, res, next);
+    next();
+  }, async (req, res, next) => {
     try {
-      if (paymentsUnavailable(res)) return;
+      const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
+      if (!['mpesa','wallet'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa or Valor Wallet as the payment method.' });
+      if (paymentMethod === 'mpesa' && paymentsUnavailable(res)) return;
       const { eventId, packageId, buyerName, phone: inputPhone } = req.body || {};
-      const phone = normalizePhone(inputPhone);
+      const phone = paymentMethod === 'wallet' ? req.wallet.phone : normalizePhone(inputPhone);
       if (typeof eventId !== 'string' || !eventId || typeof packageId !== 'string' || !packageId) return res.status(400).json({ error: 'Choose an approved event and advertising package.' });
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the advertiser’s name.' });
       if (!phone) return res.status(400).json({ error: 'Enter a valid Safaricom number, for example 0712345678.' });
@@ -541,13 +737,40 @@ function createApp(options = {}) {
       try {
         order = db.transaction(() => {
           db.prepare('INSERT INTO ad_bookings (id,event_id,package_id) VALUES (?,?,?)').run(bookingId, eventId, packageId);
-          return createPendingOrder({
+          const created = createPendingOrder({
             orderType: 'ad', eventId, adBookingId: bookingId, buyerName, phone,
             amountKes: packageRow.price_kes
           });
+          if (paymentMethod === 'wallet') {
+            const balance = db.prepare("SELECT COALESCE(SUM(amount_kes),0) AS balance FROM wallet_transactions WHERE wallet_id=? AND status='completed'")
+              .get(req.wallet.id).balance;
+            if (balance < packageRow.price_kes) {
+              throw Object.assign(new Error('Your wallet balance is too low. Add funds and try again.'), { statusCode: 402 });
+            }
+            const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+            const endsAt = new Date(beginsAt.getTime() + packageRow.duration_days * 86400000);
+            db.prepare("UPDATE orders SET status='paid',result_description=?,paid_at=datetime('now') WHERE id=?")
+              .run('Advertising order paid from Valor Wallet.', created.id);
+            db.prepare("UPDATE ad_bookings SET status='active',starts_at=?,ends_at=? WHERE id=?")
+              .run(beginsAt.toISOString(), endsAt.toISOString(), bookingId);
+            db.prepare(`
+              INSERT INTO wallet_transactions (id,wallet_id,order_id,transaction_type,amount_kes,status,description,completed_at)
+              VALUES (?,?,?,'ad_purchase',?,'completed',?,datetime('now'))
+            `).run(crypto.randomUUID(), req.wallet.id, created.id, -packageRow.price_kes, `${packageRow.name} event promotion`);
+          }
+          return created;
         })();
       } catch (error) {
+        if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
         throw error;
+      }
+      if (paymentMethod === 'wallet') {
+        return res.status(201).json({
+          orderId: order.id,
+          accessToken: order.accessToken,
+          status: 'paid',
+          message: 'Your event promotion was paid using Valor Wallet.'
+        });
       }
       return startCheckout(res, order, packageRow.price_kes, phone);
     } catch (error) {
@@ -600,6 +823,37 @@ function createApp(options = {}) {
     if (!callback || typeof callback.CheckoutRequestID !== 'string' || typeof callback.MerchantRequestID !== 'string') {
       console.error('Received an invalid M-Pesa callback payload.');
       return res.status(400).json({ ResultCode: 1, ResultDesc: 'Invalid callback payload.' });
+    }
+    const walletDeposit = db.prepare(`
+      SELECT * FROM wallet_transactions WHERE checkout_request_id=? AND merchant_request_id=?
+    `).get(callback.CheckoutRequestID, callback.MerchantRequestID);
+    if (walletDeposit) {
+      if (walletDeposit.status !== 'pending') return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
+      if (Number(callback.ResultCode) !== 0) {
+        db.prepare("UPDATE wallet_transactions SET status='failed',description=? WHERE id=? AND status='pending'")
+          .run(String(callback.ResultDesc || 'M-Pesa deposit was not completed.').slice(0, 250), walletDeposit.id);
+        return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
+      }
+      try {
+        const query = await paymentGateway.queryStkPush(walletDeposit.checkout_request_id);
+        if (String(query.CheckoutRequestID) !== walletDeposit.checkout_request_id || String(query.ResultCode) !== '0') {
+          return res.json({ ResultCode: 0, ResultDesc: 'Payment verification is pending.' });
+        }
+        const metadata = callback.CallbackMetadata && callback.CallbackMetadata.Item;
+        const values = Array.isArray(metadata) ? Object.fromEntries(metadata.map((item) => [item.Name, item.Value])) : {};
+        if (Number(values.Amount) !== walletDeposit.amount_kes || typeof values.MpesaReceiptNumber !== 'string' || !values.MpesaReceiptNumber) {
+          db.prepare("UPDATE wallet_transactions SET status='review',description=? WHERE id=? AND status='pending'")
+            .run('Deposit details did not match M-Pesa; support review is required.', walletDeposit.id);
+          return res.json({ ResultCode: 0, ResultDesc: 'Payment requires review.' });
+        }
+        db.prepare(`
+          UPDATE wallet_transactions SET status='completed',receipt=?,description=?,completed_at=datetime('now')
+          WHERE id=? AND status='pending'
+        `).run(values.MpesaReceiptNumber, 'M-Pesa deposit confirmed.', walletDeposit.id);
+      } catch (error) {
+        console.error('M-Pesa wallet deposit verification failed; balance remains unchanged:', error.message);
+      }
+      return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
     }
     const order = db.prepare(`
       SELECT * FROM orders WHERE checkout_request_id = ? AND merchant_request_id = ?

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#087f5b">
+  <title>Your wallet | Valor Africa</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles/events.css">
+  <script src="scripts/events-api.js" defer></script>
+  <script src="scripts/wallet.js" defer></script>
+</head>
+<body>
+  <header class="site-header"><nav class="nav wrap"><a href="index.html" class="brand"><span class="brand-mark">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a><a class="nav-host" href="events.html">Browse events</a></nav></header>
+  <main class="wrap service-page wallet-page">
+    <p class="eyebrow">BUYER &amp; ORGANIZER WALLET</p>
+    <h1>Your Valor Wallet</h1>
+    <p>Top up securely with M-Pesa, then use your wallet balance to pay for event tickets and organizer promotions.</p>
+    <section class="service-card" id="walletSignIn">
+      <h2>Sign in with your phone</h2>
+      <form id="walletPhoneForm" class="service-form">
+        <label>Kenyan mobile number<input name="phone" type="tel" autocomplete="tel" placeholder="0712345678" required></label>
+        <button class="button button-primary" type="submit">Send sign-in code</button>
+      </form>
+      <form id="walletVerifyForm" class="service-form" hidden>
+        <p id="walletPhoneMessage"></p>
+        <label>Six-digit SMS code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
+        <label>I am a
+          <select name="accountType">
+            <option value="buyer">Ticket buyer</option>
+            <option value="organizer">Event organizer</option>
+            <option value="both">Buyer and organizer</option>
+          </select>
+        </label>
+        <button class="button button-primary" type="submit">Verify and open wallet</button>
+        <button class="button secondary" id="walletChangePhone" type="button">Use a different number</button>
+      </form>
+      <p class="page-feedback" id="walletSignInFeedback" aria-live="polite"></p>
+    </section>
+    <section class="service-card wallet-dashboard" id="walletDashboard" hidden>
+      <div class="wallet-heading">
+        <div><p class="eyebrow">AVAILABLE BALANCE</p><h2 id="walletBalance">KES 0</h2><p class="service-meta" id="walletAccount"></p></div>
+        <button class="button secondary" id="walletSignOut" type="button">Sign out</button>
+      </div>
+      <form id="walletDepositForm" class="service-form wallet-deposit">
+        <h2>Add money with M-Pesa</h2>
+        <p>A secure payment prompt will be sent to your verified wallet phone. Funds are added only after M-Pesa confirms the deposit.</p>
+        <label>Amount (KES)<input name="amountKes" type="number" min="100" max="150000" step="1" value="500" required></label>
+        <button class="button button-primary" type="submit">Deposit with M-Pesa</button>
+        <p class="page-feedback" id="walletDepositFeedback" aria-live="polite"></p>
+      </form>
+      <div class="wallet-transactions">
+        <h2>Recent activity</h2>
+        <div id="walletTransactions" class="wallet-transaction-list"></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -36,7 +36,17 @@ const paymentGateway = {
     return { CheckoutRequestID: checkoutRequestId, ResultCode: '0' };
   }
 };
-const app = createApp({ mpesa: paymentGateway, publicSiteUrl: 'https://valorafrica.co.ke' });
+const smsCodes = new Map();
+const smsGateway = {
+  enabled: true,
+  isConfigured() {
+    return this.enabled;
+  },
+  async sendOtp(phone, code) {
+    smsCodes.set(phone, code);
+  }
+};
+const app = createApp({ mpesa: paymentGateway, sms: smsGateway, publicSiteUrl: 'https://valorafrica.co.ke' });
 const adminToken = login(process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD);
 const admin = { Authorization: `Bearer ${adminToken}` };
 
@@ -263,6 +273,76 @@ test('free registrations issue admission tickets without requiring M-Pesa', asyn
   const verification = await request(app).get(`/api/tickets/${order.body.tickets[0].code}/verify`);
   assert.equal(verification.body.valid, true);
   paymentGateway.enabled = true;
+});
+
+test('wallet sign-in, verified M-Pesa deposits, ticket payments, and organizer promotion payments', async () => {
+  const otp = await request(app).post('/api/wallet/otp').send({ phone: '0712345678' });
+  assert.equal(otp.status, 202);
+  const code = smsCodes.get('254712345678');
+  assert.match(code, /^\d{6}$/);
+  assert.equal((await request(app).get('/api/wallet')).status, 401);
+
+  const signIn = await request(app).post('/api/wallet/verify').send({
+    phone: '0712345678',
+    code,
+    accountType: 'organizer'
+  });
+  assert.equal(signIn.status, 200);
+  assert.equal(signIn.body.wallet.accountType, 'organizer');
+  const walletAuth = { Authorization: `Bearer ${signIn.body.accessToken}` };
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 0);
+
+  const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
+  const insufficient = await request(app).post('/api/orders/tickets').set(walletAuth).send({
+    eventId: event.id,
+    ticketType: 'Early bird',
+    buyerName: 'Organizer Buyer',
+    quantity: 2,
+    paymentMethod: 'wallet'
+  });
+  assert.equal(insufficient.status, 402);
+
+  const deposit = await request(app).post('/api/wallet/deposits').set(walletAuth).send({ amountKes: 5000 });
+  assert.equal(deposit.status, 201);
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 0);
+  await completePayment('checkout-6', 'merchant-6', 5000, 'WALLET1234');
+  const funded = await request(app).get('/api/wallet').set(walletAuth);
+  assert.equal(funded.body.balanceKes, 5000);
+  await completePayment('checkout-6', 'merchant-6', 5000, 'WALLET1234');
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 5000);
+
+  const ticketOrder = await request(app).post('/api/orders/tickets').set(walletAuth).send({
+    eventId: event.id,
+    ticketType: 'Early bird',
+    buyerName: 'Organizer Buyer',
+    quantity: 2,
+    paymentMethod: 'wallet'
+  });
+  assert.equal(ticketOrder.status, 201);
+  assert.equal(ticketOrder.body.status, 'paid');
+  const paidTickets = await request(app).get(`/api/orders/${ticketOrder.body.orderId}`)
+    .set('X-Order-Access', ticketOrder.body.accessToken);
+  assert.equal(paidTickets.body.tickets.length, 2);
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 3400);
+
+  const secondDeposit = await request(app).post('/api/wallet/deposits').set(walletAuth).send({ amountKes: 10000 });
+  assert.equal(secondDeposit.status, 201);
+  await completePayment('checkout-7', 'merchant-7', 10000, 'WALLET5678');
+  const packageRow = db.prepare("SELECT id FROM ad_packages WHERE name='Homepage feature'").get();
+  const adOrder = await request(app).post('/api/orders/ads').set(walletAuth).send({
+    eventId: event.id,
+    packageId: packageRow.id,
+    buyerName: 'Event Organizer',
+    paymentMethod: 'wallet'
+  });
+  assert.equal(adOrder.status, 201);
+  const paidAd = await request(app).get(`/api/orders/${adOrder.body.orderId}`)
+    .set('X-Order-Access', adOrder.body.accessToken);
+  assert.equal(paidAd.body.campaign.campaignStatus, 'active');
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 5900);
+
+  assert.equal((await request(app).post('/api/wallet/logout').set(walletAuth)).status, 200);
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).status, 401);
 });
 
 after(() => {

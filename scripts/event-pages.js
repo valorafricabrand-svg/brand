@@ -44,9 +44,10 @@
       form.hidden = false;
       const health = await api('/api/health');
       const hasFreeTickets = event.tickets.some((ticket) => Number(ticket.price) === 0);
+      const walletToken = window.sessionStorage.getItem('valor-wallet-token');
       if (!health.paymentsConfigured) {
         event.tickets.forEach((ticket) => {
-          if (Number(ticket.price) > 0) {
+          if (Number(ticket.price) > 0 && !walletToken) {
             const option = Array.from(select.options).find((entry) => entry.value === ticket.name);
             if (option) option.disabled = true;
           }
@@ -54,24 +55,42 @@
         const freeTicket = event.tickets.find((ticket) => Number(ticket.price) === 0);
         if (freeTicket) select.value = freeTicket.name;
       }
-      if (!health.paymentsConfigured && !hasFreeTickets) {
+      if (!health.paymentsConfigured && !hasFreeTickets && !walletToken) {
         const button = form.querySelector('[type=submit]');
         button.disabled = true;
-        showError(document.getElementById('pageFeedback'), 'M-Pesa checkout is not available yet. Valor Africa must configure Daraja and a public HTTPS callback.');
+        showError(document.getElementById('pageFeedback'), 'Paid checkout is not available yet. Sign in to a funded wallet or try again later.');
       } else if (!health.paymentsConfigured) {
         document.getElementById('pageFeedback').textContent = 'M-Pesa is unavailable; free ticket registration remains open.';
       }
+      const paymentMethod = form.elements.paymentMethod;
+      const phoneInput = form.elements.phone;
+      const updatePaymentFields = () => {
+        const usesWallet = paymentMethod.value === 'wallet';
+        phoneInput.required = !usesWallet;
+        phoneInput.disabled = usesWallet;
+        form.querySelector('[type=submit]').textContent = `Pay with ${usesWallet ? 'Valor Wallet' : 'M-Pesa'}`;
+      };
+      paymentMethod.addEventListener('change', updatePaymentFields);
+      updatePaymentFields();
       form.addEventListener('submit', async (submitEvent) => {
         submitEvent.preventDefault();
         const button = form.querySelector('[type=submit]');
         button.disabled = true;
+        const selectedMethod = paymentMethod.value;
+        const currentWalletToken = window.sessionStorage.getItem('valor-wallet-token');
+        if (selectedMethod === 'wallet' && !currentWalletToken) {
+          showError(document.getElementById('pageFeedback'), 'Sign in to your wallet first, then return here to pay.');
+          button.disabled = false;
+          return;
+        }
         await startCheckout('/api/orders/tickets', {
           eventId: event.id,
           ticketType: select.value,
           quantity: Number(form.elements.quantity.value),
           buyerName: form.elements.buyerName.value,
-          phone: form.elements.phone.value
-        }, document.getElementById('pageFeedback'));
+          phone: form.elements.phone.value,
+          paymentMethod: selectedMethod
+        }, document.getElementById('pageFeedback'), currentWalletToken);
         button.disabled = false;
       });
     } catch (error) {
@@ -80,9 +99,12 @@
     }
   }
 
-  async function startCheckout(url, values, feedback) {
+  async function startCheckout(url, values, feedback, walletToken = '') {
     try {
-      const order = await api(url, { method: 'POST', body: JSON.stringify(values) });
+      const headers = walletToken && values.paymentMethod === 'wallet'
+        ? { Authorization: `Bearer ${walletToken}` }
+        : {};
+      const order = await api(url, { method: 'POST', headers, body: JSON.stringify(values) });
       saveAccess(order);
       window.location.assign(`order.html?orderId=${encodeURIComponent(order.orderId)}`);
     } catch (error) {
@@ -96,27 +118,54 @@
     const feedback = document.getElementById('pageFeedback');
     const eventSelect = form.elements.eventId;
     const packageSelect = form.elements.packageId;
+    const paymentMethod = form.elements.paymentMethod;
+    const phoneInput = form.elements.phone;
+    let paymentsConfigured = false;
+    const updatePaymentFields = () => {
+      const usesWallet = paymentMethod.value === 'wallet';
+      phoneInput.required = !usesWallet;
+      phoneInput.disabled = usesWallet;
+      form.querySelector('button[type=submit]').textContent = `Pay with ${usesWallet ? 'Valor Wallet' : 'M-Pesa'}`;
+    };
+    paymentMethod.addEventListener('change', updatePaymentFields);
+    updatePaymentFields();
     (async () => {
       const [eventResponse, packageResponse, health] = await Promise.all([
         api('/api/events'),
         api('/api/ads/packages'),
         api('/api/health')
       ]);
+      paymentsConfigured = Boolean(health.paymentsConfigured);
       eventSelect.replaceChildren(new Option('Choose your approved event', ''));
       eventResponse.events.forEach((event) => eventSelect.add(new Option(event.title, event.id)));
       packageSelect.replaceChildren(new Option('Choose an ad package', ''));
       packageResponse.packages.forEach((item) => packageSelect.add(
         new Option(`${item.name} · ${item.durationDays} days · KES ${Number(item.priceKes).toLocaleString('en-KE')}`, item.id)
       ));
-      if (!health.paymentsConfigured) {
-        form.querySelector('button[type=submit]').disabled = true;
-        showError(feedback, 'Ad checkout is not available yet. Valor Africa must configure M-Pesa Daraja and a public HTTPS callback.');
+      if (!paymentsConfigured) {
+        feedback.textContent = 'M-Pesa is unavailable. You can still pay from an existing funded wallet.';
       }
     })().catch((error) => showError(feedback, error.message));
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       feedback.classList.remove('error');
-      startCheckout('/api/orders/ads', Object.fromEntries(new FormData(form)), feedback);
+      const values = Object.fromEntries(new FormData(form));
+      const token = window.sessionStorage.getItem('valor-wallet-token');
+      if (values.paymentMethod === 'wallet' && !token) {
+        showError(feedback, 'Sign in to your wallet first, then return here to pay.');
+        return;
+      }
+      if (values.paymentMethod === 'mpesa' && !paymentsConfigured) {
+        showError(feedback, 'M-Pesa checkout is not available yet. Choose Valor Wallet or try again later.');
+        return;
+      }
+      if (values.paymentMethod === 'mpesa' && !window.valorEventsApiBase) {
+        showError(feedback, 'Ad checkout is not connected to the Valor Africa event service yet.');
+        return;
+      }
+      const button = form.querySelector('button[type=submit]');
+      button.disabled = true;
+      startCheckout('/api/orders/ads', values, feedback, token).finally(() => { button.disabled = false; });
     });
   }
 

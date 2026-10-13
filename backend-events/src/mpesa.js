@@ -84,7 +84,9 @@ async function initiateStkPush(order) {
       PhoneNumber: order.phone,
       CallBackURL: config.callbackUrl,
       AccountReference: order.id.slice(0, 12),
-      TransactionDesc: order.orderType === 'ticket' ? 'Valor event tickets' : 'Valor event promotion'
+      TransactionDesc: order.orderType === 'ticket'
+        ? 'Valor event tickets'
+        : order.orderType === 'wallet' ? 'Valor wallet deposit' : 'Valor event promotion'
     })
   });
   if (!data.CheckoutRequestID || !data.MerchantRequestID) {

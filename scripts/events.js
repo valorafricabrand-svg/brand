@@ -549,6 +549,20 @@
 
   const ticketDialog = document.getElementById('ticketDialog');
   const ticketSelect = document.getElementById('ticketType');
+  const paymentMethodSelect = document.getElementById('ticketPaymentMethod');
+  const buyerPhoneInput = document.getElementById('buyerPhone');
+  const ticketPaymentNote = document.getElementById('ticketPaymentNote');
+  function updateTicketPaymentMethod() {
+    const usesWallet = paymentMethodSelect.value === 'wallet';
+    buyerPhoneInput.required = !usesWallet;
+    buyerPhoneInput.disabled = usesWallet;
+    document.querySelector('label[for="buyerPhone"]').textContent = usesWallet ? 'M-Pesa number (not needed for wallet)' : 'WhatsApp number';
+    ticketPaymentNote.textContent = usesWallet
+      ? 'Your verified wallet balance will be charged immediately. Tickets are issued as soon as payment succeeds.'
+      : 'You will receive an M-Pesa payment prompt. Your ticket is issued only after payment is confirmed.';
+    ticketForm.querySelector('[type=submit]').innerHTML = `Pay with ${usesWallet ? 'Valor Wallet' : 'M-Pesa'} <span aria-hidden="true">→</span>`;
+  }
+  paymentMethodSelect.addEventListener('change', updateTicketPaymentMethod);
   let activeEvent = null;
   document.addEventListener('click', (event) => {
     const button = event.target.closest('[data-buy-event]');
@@ -558,7 +572,7 @@
     document.getElementById('ticketEventName').textContent = `${activeEvent.title} · ${locationLine(activeEvent)}`;
     const availableTickets = activeEvent.tickets.filter((ticket) =>
       !ticket.regularPrice || !ticket.saleEnds || new Date(ticket.saleEnds).getTime() > Date.now()
-    ).filter((ticket) => checkoutEnabled || Number(ticket.price) === 0);
+    );
     ticketSelect.replaceChildren(...availableTickets.map((ticket) => {
       const option = document.createElement('option');
       option.value = ticket.name;
@@ -568,10 +582,10 @@
     const ticketSubmit = ticketForm.querySelector('[type=submit]');
     const ticketFeedback = document.getElementById('ticketFeedback');
     ticketSubmit.disabled = availableTickets.length === 0;
-    ticketFeedback.textContent = availableTickets.length
-      ? checkoutEnabled ? '' : 'M-Pesa is unavailable; only free ticket registrations are open.'
-      : 'Paid ticket checkout is not available right now.';
+    ticketFeedback.textContent = availableTickets.length ? '' : 'Ticket sales are not available right now.';
     ticketFeedback.classList.toggle('error', availableTickets.length === 0);
+    paymentMethodSelect.value = 'mpesa';
+    updateTicketPaymentMethod();
     ticketDialog.showModal();
   });
 
@@ -585,25 +599,36 @@
       if (!ticket) return;
       const ticketFeedback = document.getElementById('ticketFeedback');
       const submitButton = ticketForm.querySelector('[type=submit]');
-      if (!checkoutEnabled && Number(ticket.price) > 0) {
+      const paymentMethod = data.get('paymentMethod');
+      if (!checkoutEnabled && Number(ticket.price) > 0 && paymentMethod === 'mpesa') {
         ticketFeedback.textContent = apiBase
-          ? 'M-Pesa checkout is not available right now. Please try again later.'
+          ? 'M-Pesa checkout is not available right now. Choose Valor Wallet or try again later.'
           : 'Secure ticket checkout is not connected on this preview website yet.';
+        ticketFeedback.classList.add('error');
+        return;
+      }
+      const walletToken = window.sessionStorage.getItem('valor-wallet-token');
+      if (paymentMethod === 'wallet' && !walletToken) {
+        ticketFeedback.textContent = 'Sign in to your wallet first, then return here to pay.';
         ticketFeedback.classList.add('error');
         return;
       }
       submitButton.disabled = true;
       ticketFeedback.classList.remove('error');
-      ticketFeedback.textContent = Number(ticket.price) === 0 ? 'Confirming your free registration…' : 'Sending an M-Pesa payment prompt…';
+      ticketFeedback.textContent = Number(ticket.price) === 0
+        ? 'Confirming your free registration…'
+        : paymentMethod === 'wallet' ? 'Paying with your Valor Wallet…' : 'Sending an M-Pesa payment prompt…';
       try {
         const order = await window.valorEventsApi('/api/orders/tickets', {
           method: 'POST',
+          headers: paymentMethod === 'wallet' ? { Authorization: `Bearer ${walletToken}` } : {},
           body: JSON.stringify({
             eventId: activeEvent.id,
             ticketType: ticket.name,
             quantity: Number(data.get('quantity')),
             buyerName: data.get('name'),
-            phone: data.get('phone')
+            phone: data.get('phone'),
+            paymentMethod
           })
         });
         window.sessionStorage.setItem(`valor-order-${order.orderId}`, order.accessToken);
