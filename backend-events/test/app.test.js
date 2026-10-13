@@ -74,6 +74,12 @@ const app = createApp({
 const adminToken = login(process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD);
 const admin = { Authorization: `Bearer ${adminToken}` };
 
+async function ticketAccountAuth(idToken = 'valid-google-token') {
+  const response = await request(app).post('/api/auth/google').send({ idToken });
+  assert.equal(response.status, 200);
+  return { Authorization: `Bearer ${response.body.accessToken}` };
+}
+
 function submitEvent(title = 'Test Live Festival') {
   const future = Date.now() + 7 * 86400000;
   const starts = new Date(future).toISOString();
@@ -174,8 +180,12 @@ test('event posters require valid image signatures', async () => {
 test('ticket checkout is unavailable until Daraja is configured', async () => {
   paymentGateway.enabled = false;
   const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
-  const response = await request(app).post('/api/orders/tickets')
-    .send({ eventId: event.id, ticketType: 'Early bird', buyerName: 'Buyer', phone: '0712345678', quantity: 1 });
+  const payload = { eventId: event.id, ticketType: 'Early bird', buyerName: 'Buyer', phone: '0712345678', quantity: 1 };
+  const anonymous = await request(app).post('/api/orders/tickets').send(payload);
+  assert.equal(anonymous.status, 401);
+  assert.match(anonymous.body.error, /sign in/i);
+  const response = await request(app).post('/api/orders/tickets').set(await ticketAccountAuth())
+    .send(payload);
   assert.equal(response.status, 503);
   assert.equal(response.body.error.includes('Daraja'), true);
   paymentGateway.enabled = true;
@@ -183,17 +193,25 @@ test('ticket checkout is unavailable until Daraja is configured', async () => {
 
 test('paid ticket order issues only after Daraja verifies the callback', async () => {
   const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
-  const checkout = await request(app).post('/api/orders/tickets')
+  const accountAuth = await ticketAccountAuth();
+  const checkout = await request(app).post('/api/orders/tickets').set(accountAuth)
     .send({ eventId: event.id, ticketType: 'Early bird', buyerName: 'Buyer', phone: '0712345678', quantity: 2 });
   assert.equal(checkout.status, 201);
+  assert.equal(db.prepare('SELECT account_id FROM orders WHERE id=?').get(checkout.body.orderId).account_id,
+    (await request(app).get('/api/auth/account').set(accountAuth)).body.account.id);
+  assert.equal((await request(app).get(`/api/orders/${checkout.body.orderId}`)
+    .set('X-Order-Access', checkout.body.accessToken)).status, 401);
+  const otherAccountAuth = await ticketAccountAuth('another-google-token');
+  assert.equal((await request(app).get(`/api/orders/${checkout.body.orderId}`)
+    .set(otherAccountAuth).set('X-Order-Access', checkout.body.accessToken)).status, 404);
   const order = await request(app).get(`/api/orders/${checkout.body.orderId}`)
-    .set('X-Order-Access', checkout.body.accessToken);
+    .set(accountAuth).set('X-Order-Access', checkout.body.accessToken);
   assert.equal(order.body.status, 'pending');
 
   const verified = await completePayment('checkout-1', 'merchant-1', 1600, 'TEST123456');
   assert.equal(verified.status, 200);
   const paid = await request(app).get(`/api/orders/${checkout.body.orderId}`)
-    .set('X-Order-Access', checkout.body.accessToken);
+    .set(accountAuth).set('X-Order-Access', checkout.body.accessToken);
   assert.equal(paid.body.status, 'paid');
   assert.equal(paid.body.receipt, 'TEST123456');
   assert.equal(paid.body.tickets.length, 2);
@@ -205,7 +223,8 @@ test('paid ticket order issues only after Daraja verifies the callback', async (
 
 test('forged success callbacks do not issue tickets without Daraja verification', async () => {
   const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
-  const checkout = await request(app).post('/api/orders/tickets')
+  const accountAuth = await ticketAccountAuth();
+  const checkout = await request(app).post('/api/orders/tickets').set(accountAuth)
     .send({ eventId: event.id, ticketType: 'Early bird', buyerName: 'Buyer', phone: '0712345678', quantity: 1 });
   paymentGateway.queryStkPush = async (checkoutRequestId) => ({
     CheckoutRequestID: checkoutRequestId,
@@ -214,7 +233,7 @@ test('forged success callbacks do not issue tickets without Daraja verification'
   });
   await completePayment('checkout-2', 'merchant-2', 800, 'FORGED1');
   const unpaid = await request(app).get(`/api/orders/${checkout.body.orderId}`)
-    .set('X-Order-Access', checkout.body.accessToken);
+    .set(accountAuth).set('X-Order-Access', checkout.body.accessToken);
   assert.equal(unpaid.body.status, 'pending');
   assert.equal(unpaid.body.tickets, undefined);
   paymentGateway.queryStkPush = async (checkoutRequestId) => ({ CheckoutRequestID: checkoutRequestId, ResultCode: '0' });
@@ -260,7 +279,7 @@ test('paid event ads do not consume ticket capacity', async () => {
   });
   assert.equal(ad.status, 201);
   await completePayment('checkout-4', 'merchant-4', 7500, 'ADCAP12345');
-  const ticket = await request(app).post('/api/orders/tickets').send({
+  const ticket = await request(app).post('/api/orders/tickets').set(await ticketAccountAuth()).send({
     eventId: submitted.body.id,
     ticketType: 'Early bird',
     buyerName: 'Ticket Buyer',
@@ -270,7 +289,7 @@ test('paid event ads do not consume ticket capacity', async () => {
   assert.equal(ticket.status, 201);
 });
 
-test('free registrations issue admission tickets without requiring M-Pesa', async () => {
+test('free registrations require an account but do not require M-Pesa', async () => {
   const submitted = await submitEvent('Free Ticket Registration');
   assert.equal(submitted.status, 202);
   db.prepare(`
@@ -279,7 +298,16 @@ test('free registrations issue admission tickets without requiring M-Pesa', asyn
   `).run(submitted.body.id);
   assert.equal((await approveEvent(submitted.body.id)).status, 200);
   paymentGateway.enabled = false;
-  const registration = await request(app).post('/api/orders/tickets').send({
+  const accountAuth = await ticketAccountAuth();
+  const anonymous = await request(app).post('/api/orders/tickets').send({
+    eventId: submitted.body.id,
+    ticketType: 'Regular',
+    buyerName: 'Free Ticket Buyer',
+    phone: '0712345678',
+    quantity: 1
+  });
+  assert.equal(anonymous.status, 401);
+  const registration = await request(app).post('/api/orders/tickets').set(accountAuth).send({
     eventId: submitted.body.id,
     ticketType: 'Regular',
     buyerName: 'Free Ticket Buyer',
@@ -289,7 +317,7 @@ test('free registrations issue admission tickets without requiring M-Pesa', asyn
   assert.equal(registration.status, 201);
   assert.equal(registration.body.status, 'confirmed');
   const order = await request(app).get(`/api/orders/${registration.body.orderId}`)
-    .set('X-Order-Access', registration.body.accessToken);
+    .set(accountAuth).set('X-Order-Access', registration.body.accessToken);
   assert.equal(order.body.status, 'confirmed');
   assert.equal(order.body.amountKes, 0);
   assert.equal(order.body.tickets.length, 1);
@@ -367,7 +395,7 @@ test('account sign-in links existing phone wallet and pays verified deposits, ti
   assert.equal(ticketOrder.status, 201);
   assert.equal(ticketOrder.body.status, 'paid');
   const paidTickets = await request(app).get(`/api/orders/${ticketOrder.body.orderId}`)
-    .set('X-Order-Access', ticketOrder.body.accessToken);
+    .set(walletAuth).set('X-Order-Access', ticketOrder.body.accessToken);
   assert.equal(paidTickets.body.tickets.length, 2);
   assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 4600);
 

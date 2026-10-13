@@ -552,6 +552,15 @@
   const paymentMethodSelect = document.getElementById('ticketPaymentMethod');
   const buyerPhoneInput = document.getElementById('buyerPhone');
   const ticketPaymentNote = document.getElementById('ticketPaymentNote');
+  function showAccountSignIn(feedback) {
+    feedback.replaceChildren(document.createTextNode('Sign in to your account before getting tickets. '));
+    const link = document.createElement('a');
+    const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    link.href = `account.html?returnTo=${encodeURIComponent(returnTo)}`;
+    link.textContent = 'Sign in to continue';
+    feedback.appendChild(link);
+    feedback.classList.add('error');
+  }
   function updateTicketPaymentMethod() {
     const usesWallet = paymentMethodSelect.value === 'wallet';
     buyerPhoneInput.required = !usesWallet;
@@ -600,16 +609,15 @@
       const ticketFeedback = document.getElementById('ticketFeedback');
       const submitButton = ticketForm.querySelector('[type=submit]');
       const paymentMethod = data.get('paymentMethod');
+      const accountToken = window.sessionStorage.getItem('valor-account-token');
+      if (!accountToken) {
+        showAccountSignIn(ticketFeedback);
+        return;
+      }
       if (!checkoutEnabled && Number(ticket.price) > 0 && paymentMethod === 'mpesa') {
         ticketFeedback.textContent = apiBase
           ? 'M-Pesa checkout is not available right now. Choose Valor Wallet or try again later.'
           : 'Secure ticket checkout is not connected on this preview website yet.';
-        ticketFeedback.classList.add('error');
-        return;
-      }
-      const walletToken = window.sessionStorage.getItem('valor-account-token');
-      if (paymentMethod === 'wallet' && !walletToken) {
-        ticketFeedback.textContent = 'Sign in to your account and link a phone wallet before paying with your balance.';
         ticketFeedback.classList.add('error');
         return;
       }
@@ -621,7 +629,7 @@
       try {
         const order = await window.valorEventsApi('/api/orders/tickets', {
           method: 'POST',
-          headers: paymentMethod === 'wallet' ? { Authorization: `Bearer ${walletToken}` } : {},
+          headers: { Authorization: `Bearer ${accountToken}` },
           body: JSON.stringify({
             eventId: activeEvent.id,
             ticketType: ticket.name,

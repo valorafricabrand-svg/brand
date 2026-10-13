@@ -896,13 +896,13 @@ function createApp(options = {}) {
     return true;
   }
 
-  function createPendingOrder({ orderType, eventId = null, adBookingId = null, buyerName, phone, ticketType = '', quantity = 1, amountKes }) {
+  function createPendingOrder({ orderType, eventId = null, adBookingId = null, accountId = null, buyerName, phone, ticketType = '', quantity = 1, amountKes }) {
     const id = crypto.randomUUID();
     const accessToken = crypto.randomBytes(32).toString('base64url');
     db.prepare(`
-      INSERT INTO orders (id,access_token_hash,order_type,event_id,ad_booking_id,buyer_name,phone,ticket_type,quantity,amount_kes)
-      VALUES (?,?,?,?,?,?,?,?,?,?)
-    `).run(id, sha256(accessToken), orderType, eventId, adBookingId, buyerName.trim(), phone, ticketType, quantity, amountKes);
+      INSERT INTO orders (id,access_token_hash,order_type,event_id,ad_booking_id,account_id,buyer_name,phone,ticket_type,quantity,amount_kes)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)
+    `).run(id, sha256(accessToken), orderType, eventId, adBookingId, accountId, buyerName.trim(), phone, ticketType, quantity, amountKes);
     return { id, accessToken };
   }
 
@@ -931,10 +931,7 @@ function createApp(options = {}) {
     }
   }
 
-  app.post('/api/orders/tickets', (req, res, next) => {
-    if (req.body && req.body.paymentMethod === 'wallet') return requireAccount(req, res, next);
-    next();
-  }, async (req, res, next) => {
+  app.post('/api/orders/tickets', requireAccount, async (req, res, next) => {
     try {
       const { eventId, ticketType, buyerName, phone: inputPhone, quantity = 1 } = req.body || {};
       const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
@@ -969,7 +966,7 @@ function createApp(options = {}) {
             if (reserved + quantity > event.capacity) throw Object.assign(new Error('There are not enough tickets remaining.'), { statusCode: 409 });
           }
           const created = createPendingOrder({
-            orderType: 'ticket', eventId, buyerName, phone, ticketType, quantity,
+            orderType: 'ticket', eventId, accountId: req.account.id, buyerName, phone, ticketType, quantity,
             amountKes: price * quantity
           });
           if (price === 0) {
@@ -1091,9 +1088,21 @@ function createApp(options = {}) {
     }
   });
 
-  app.get('/api/orders/:id', async (req, res, next) => {
+  app.get('/api/orders/:id', (req, res, next) => {
+    const order = db.prepare('SELECT * FROM orders WHERE id=?').get(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found.' });
+    if (order.order_type !== 'ticket' || !order.account_id) {
+      req.order = order;
+      return next();
+    }
+    return requireAccount(req, res, () => {
+      if (req.account.id !== order.account_id) return res.status(404).json({ error: 'Order not found.' });
+      req.order = order;
+      next();
+    });
+  }, async (req, res, next) => {
     try {
-      const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+      const order = req.order;
       if (!safeOrderAccess(order, req.get('X-Order-Access'))) return res.status(404).json({ error: 'Order not found.' });
       const result = {
         orderId: order.id,

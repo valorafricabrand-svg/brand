@@ -28,6 +28,15 @@
     document.dispatchEvent(new CustomEvent('valor:account-session', { detail: { account } }));
   }
 
+  function redirectAfterSignIn() {
+    const returnTo = new URLSearchParams(window.location.search).get('returnTo');
+    if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) return;
+    const target = new URL(returnTo, window.location.origin);
+    if (target.origin === window.location.origin && target.pathname !== '/account.html') {
+      window.location.assign(target.href);
+    }
+  }
+
   function setEmailMode(mode) {
     emailMode = mode;
     const options = mode === 'options';
@@ -83,6 +92,7 @@
     emailForm.reset();
     setEmailMode('options');
     await loadAccountSession();
+    redirectAfterSignIn();
   }
 
   async function handleGoogleCredential(idToken) {
@@ -95,6 +105,7 @@
       window.sessionStorage.setItem(accountTokenKey, result.accessToken);
       await loadAccountSession();
       setFeedback(document.getElementById('googleFeedback'), '');
+      redirectAfterSignIn();
     } catch (error) {
       setFeedback(document.getElementById('googleFeedback'), error.message, true);
     }

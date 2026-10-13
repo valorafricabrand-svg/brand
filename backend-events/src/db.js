@@ -104,6 +104,7 @@ db.exec(`
     order_type TEXT NOT NULL CHECK (order_type IN ('ticket','ad')),
     event_id TEXT REFERENCES events(id),
     ad_booking_id TEXT REFERENCES ad_bookings(id),
+    account_id TEXT REFERENCES accounts(id),
     buyer_name TEXT NOT NULL,
     phone TEXT NOT NULL,
     ticket_type TEXT NOT NULL DEFAULT '',
@@ -195,6 +196,10 @@ db.exec(`
 const walletColumns = db.prepare('PRAGMA table_info(wallets)').all();
 if (!walletColumns.some((column) => column.name === 'account_id')) {
   db.exec('ALTER TABLE wallets ADD COLUMN account_id TEXT REFERENCES accounts(id)');
+}
+const orderColumns = db.prepare('PRAGMA table_info(orders)').all();
+if (!orderColumns.some((column) => column.name === 'account_id')) {
+  db.exec('ALTER TABLE orders ADD COLUMN account_id TEXT REFERENCES accounts(id)');
 }
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS wallets_account ON wallets(account_id)');
 db.exec('DROP TABLE IF EXISTS wallet_sessions');

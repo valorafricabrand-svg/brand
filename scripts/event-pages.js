@@ -44,10 +44,10 @@
       form.hidden = false;
       const health = await api('/api/health');
       const hasFreeTickets = event.tickets.some((ticket) => Number(ticket.price) === 0);
-      const walletToken = window.sessionStorage.getItem('valor-account-token');
+      const accountToken = window.sessionStorage.getItem('valor-account-token');
       if (!health.paymentsConfigured) {
         event.tickets.forEach((ticket) => {
-          if (Number(ticket.price) > 0 && !walletToken) {
+          if (Number(ticket.price) > 0 && !accountToken) {
             const option = Array.from(select.options).find((entry) => entry.value === ticket.name);
             if (option) option.disabled = true;
           }
@@ -55,10 +55,10 @@
         const freeTicket = event.tickets.find((ticket) => Number(ticket.price) === 0);
         if (freeTicket) select.value = freeTicket.name;
       }
-      if (!health.paymentsConfigured && !hasFreeTickets && !walletToken) {
+      if (!health.paymentsConfigured && !hasFreeTickets && !accountToken) {
         const button = form.querySelector('[type=submit]');
         button.disabled = true;
-        showError(document.getElementById('pageFeedback'), 'Paid checkout is not available yet. Sign in to a funded wallet or try again later.');
+        showError(document.getElementById('pageFeedback'), 'Paid checkout is not available yet. Please try again later or use a funded wallet after signing in.');
       } else if (!health.paymentsConfigured) {
         document.getElementById('pageFeedback').textContent = 'M-Pesa is unavailable; free ticket registration remains open.';
       }
@@ -77,9 +77,16 @@
         const button = form.querySelector('[type=submit]');
         button.disabled = true;
         const selectedMethod = paymentMethod.value;
-        const currentWalletToken = window.sessionStorage.getItem('valor-account-token');
-        if (selectedMethod === 'wallet' && !currentWalletToken) {
-          showError(document.getElementById('pageFeedback'), 'Sign in to your account and link a phone wallet before paying with your balance.');
+        const currentAccountToken = window.sessionStorage.getItem('valor-account-token');
+        if (!currentAccountToken) {
+          const feedback = document.getElementById('pageFeedback');
+          feedback.replaceChildren(document.createTextNode('Sign in to your account before getting tickets. '));
+          const link = document.createElement('a');
+          const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+          link.href = `account.html?returnTo=${encodeURIComponent(returnTo)}`;
+          link.textContent = 'Sign in to continue';
+          feedback.appendChild(link);
+          feedback.classList.add('error');
           button.disabled = false;
           return;
         }
@@ -90,7 +97,7 @@
           buyerName: form.elements.buyerName.value,
           phone: form.elements.phone.value,
           paymentMethod: selectedMethod
-        }, document.getElementById('pageFeedback'), currentWalletToken);
+        }, document.getElementById('pageFeedback'), currentAccountToken);
         button.disabled = false;
       });
     } catch (error) {
@@ -101,9 +108,7 @@
 
   async function startCheckout(url, values, feedback, walletToken = '') {
     try {
-      const headers = walletToken && values.paymentMethod === 'wallet'
-        ? { Authorization: `Bearer ${walletToken}` }
-        : {};
+      const headers = walletToken ? { Authorization: `Bearer ${walletToken}` } : {};
       const order = await api(url, { method: 'POST', headers, body: JSON.stringify(values) });
       saveAccess(order);
       window.location.assign(`order.html?orderId=${encodeURIComponent(order.orderId)}`);
@@ -184,7 +189,10 @@
       return;
     }
     try {
-      const order = await api(`/api/orders/${encodeURIComponent(orderId)}`, { headers: { 'X-Order-Access': token } });
+      const headers = new Headers({ 'X-Order-Access': token });
+      const accountToken = window.sessionStorage.getItem('valor-account-token');
+      if (accountToken) headers.set('Authorization', `Bearer ${accountToken}`);
+      const order = await api(`/api/orders/${encodeURIComponent(orderId)}`, { headers });
       const heading = document.createElement('h1');
       heading.textContent = order.status === 'paid' ? 'Payment confirmed' : order.status === 'confirmed' ? 'Free registration confirmed' : order.status === 'failed' ? 'Payment not completed' : order.status === 'review' ? 'Payment needs support review' : 'Waiting for M-Pesa payment';
       const details = document.createElement('p');
