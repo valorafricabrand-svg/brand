@@ -24,7 +24,7 @@ async function sendOtp(phone, code) {
   const fields = new URLSearchParams({
     username: config.username,
     to: `+${phone}`,
-    message: `Your Valor Africa wallet sign-in code is ${code}. It expires in 5 minutes.`
+    message: `Your Valor Africa phone-link verification code is ${code}. It expires in 5 minutes.`
   });
   if (config.senderId) fields.set('from', config.senderId);
   const response = await fetch(`${config.baseUrl}/version1/messaging`, {

@@ -124,6 +124,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     phone TEXT NOT NULL UNIQUE,
     account_type TEXT NOT NULL CHECK (account_type IN ('buyer','organizer','both')),
+    account_id TEXT UNIQUE REFERENCES accounts(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -131,13 +132,6 @@ db.exec(`
     phone TEXT PRIMARY KEY,
     code_hash TEXT NOT NULL,
     attempts INTEGER NOT NULL DEFAULT 0,
-    expires_at TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS wallet_sessions (
-    token_hash TEXT PRIMARY KEY,
-    wallet_id TEXT NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
     expires_at TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -159,6 +153,35 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS wallet_transactions_history ON wallet_transactions(wallet_id, created_at DESC);
 
+  CREATE TABLE IF NOT EXISTS accounts (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    display_name TEXT NOT NULL DEFAULT '',
+    password_hash TEXT,
+    google_sub TEXT UNIQUE,
+    email_verified_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS account_email_codes (
+    email TEXT NOT NULL COLLATE NOCASE,
+    purpose TEXT NOT NULL CHECK (purpose IN ('verify','reset')),
+    code_hash TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (email,purpose)
+  );
+
+  CREATE TABLE IF NOT EXISTS account_sessions (
+    token_hash TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS account_sessions_expiry ON account_sessions(expires_at);
+
   CREATE TABLE IF NOT EXISTS tickets (
     code TEXT PRIMARY KEY,
     order_id TEXT NOT NULL REFERENCES orders(id),
@@ -168,5 +191,12 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+
+const walletColumns = db.prepare('PRAGMA table_info(wallets)').all();
+if (!walletColumns.some((column) => column.name === 'account_id')) {
+  db.exec('ALTER TABLE wallets ADD COLUMN account_id TEXT REFERENCES accounts(id)');
+}
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS wallets_account ON wallets(account_id)');
+db.exec('DROP TABLE IF EXISTS wallet_sessions');
 
 module.exports = db;

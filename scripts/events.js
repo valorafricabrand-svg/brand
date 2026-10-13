@@ -607,9 +607,9 @@
         ticketFeedback.classList.add('error');
         return;
       }
-      const walletToken = window.sessionStorage.getItem('valor-wallet-token');
+      const walletToken = window.sessionStorage.getItem('valor-account-token');
       if (paymentMethod === 'wallet' && !walletToken) {
-        ticketFeedback.textContent = 'Sign in to your wallet first, then return here to pay.';
+        ticketFeedback.textContent = 'Sign in to your account and link a phone wallet before paying with your balance.';
         ticketFeedback.classList.add('error');
         return;
       }

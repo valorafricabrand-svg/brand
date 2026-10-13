@@ -44,7 +44,7 @@
       form.hidden = false;
       const health = await api('/api/health');
       const hasFreeTickets = event.tickets.some((ticket) => Number(ticket.price) === 0);
-      const walletToken = window.sessionStorage.getItem('valor-wallet-token');
+      const walletToken = window.sessionStorage.getItem('valor-account-token');
       if (!health.paymentsConfigured) {
         event.tickets.forEach((ticket) => {
           if (Number(ticket.price) > 0 && !walletToken) {
@@ -77,9 +77,9 @@
         const button = form.querySelector('[type=submit]');
         button.disabled = true;
         const selectedMethod = paymentMethod.value;
-        const currentWalletToken = window.sessionStorage.getItem('valor-wallet-token');
+        const currentWalletToken = window.sessionStorage.getItem('valor-account-token');
         if (selectedMethod === 'wallet' && !currentWalletToken) {
-          showError(document.getElementById('pageFeedback'), 'Sign in to your wallet first, then return here to pay.');
+          showError(document.getElementById('pageFeedback'), 'Sign in to your account and link a phone wallet before paying with your balance.');
           button.disabled = false;
           return;
         }
@@ -150,9 +150,9 @@
       event.preventDefault();
       feedback.classList.remove('error');
       const values = Object.fromEntries(new FormData(form));
-      const token = window.sessionStorage.getItem('valor-wallet-token');
+      const token = window.sessionStorage.getItem('valor-account-token');
       if (values.paymentMethod === 'wallet' && !token) {
-        showError(feedback, 'Sign in to your wallet first, then return here to pay.');
+        showError(feedback, 'Sign in to your account and link a phone wallet before paying with your balance.');
         return;
       }
       if (values.paymentMethod === 'mpesa' && !paymentsConfigured) {

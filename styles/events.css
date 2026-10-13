@@ -66,6 +66,19 @@ img { display: block; max-width: 100%; }
 .wallet-status-completed { color: var(--green-dark) !important; background: var(--mint); }
 .wallet-status-failed, .wallet-status-review { color: #a3261a !important; background: #fff1ef; }
 .wallet-empty { padding: 18px; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); text-align: center; }
+.account-card h2 { margin: 0 0 18px; font: 800 22px Manrope, sans-serif; }
+.account-card h3 { margin: 0; font: 800 18px Manrope, sans-serif; }
+.google-sign-in { display: flex; min-height: 44px; justify-content: center; }
+.google-unavailable { color: var(--muted); font-size: 13px; }
+.auth-divider { display: flex; align-items: center; gap: 14px; margin: 22px 0; color: var(--muted); font-size: 12px; }
+.auth-divider::before, .auth-divider::after { height: 1px; flex: 1; content: ""; background: var(--border); }
+.account-auth-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.account-auth-actions .button { width: 100%; }
+.account-auth-actions .button:disabled { cursor: not-allowed; opacity: .55; }
+.account-card .service-form { margin-top: 18px; padding: 20px; box-shadow: none; }
+.text-button { justify-self: start; padding: 0; border: 0; color: var(--green-dark); background: transparent; font-size: 13px; font-weight: 800; text-decoration: underline; }
+.account-wallet-note { padding: 12px; border-radius: 9px; color: #53647a; background: var(--mint-light); font-size: 13px; }
+.account-card .page-feedback { margin-bottom: 0; }
 .page-feedback { color: var(--green-dark); }
 .page-feedback.error, .service-card.error { color: #a3261a; }
 .issued-ticket { display: grid; justify-items: center; gap: 8px; margin-top: 20px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; text-align: center; }
@@ -308,6 +321,7 @@ img { display: block; max-width: 100%; }
   .service-nav .nav-host { padding: 9px 10px; }
   .wallet-transaction { grid-template-columns: minmax(0,1fr) auto; gap: 8px 10px; }
   .wallet-status { grid-column: 2; }
+  .account-auth-actions { grid-template-columns: 1fr; }
   .menu-toggle { display: block; }
   .nav-links { position: absolute; top: calc(100% - 1px); right: 0; left: 0; display: none; align-items: stretch; gap: 0; padding: 10px 16px 17px; border-bottom: 1px solid var(--border); background: #fff; box-shadow: 0 12px 18px rgba(20,39,58,.08); }
   .nav-links.is-open { display: flex; flex-direction: column; }

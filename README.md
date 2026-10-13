@@ -6,7 +6,7 @@ Valor Africa is an event discovery, publishing, ticketing, and event-promotion p
 
 - `index.html` — event discovery, approved event listings, and the paid Valor Ads carousel.
 - `events.html` — searchable and filterable event listings with M-Pesa and wallet checkout.
-- `wallet.html` — buyer and organizer wallet sign-in, M-Pesa deposits, and transaction history.
+- `wallet.html` — Google/email account sign-in, one-time phone-wallet linking, M-Pesa deposits, and transaction history.
 - `host.html` — organizer event submission and local draft saving.
 - `event.html`, `order.html`, `ticket.html`, and `advertise.html` — public event details, payment status and ticket confirmations, ticket verification, and paid ad booking.
 - `backend-events/` — separate API and admin dashboard for publishing, review, orders, tickets, and ad packages. It is not connected to the merchandise shop backend.
@@ -32,11 +32,13 @@ The public website is static. Deploy `backend-events/` separately as a Node serv
 - `ALLOWED_ORIGINS` to only the public site origin(s), without URL paths. The API also permits its own same-origin admin dashboard.
 - `PUBLIC_SITE_URL` to the public website base URL (include `/brand` if using a GitHub Pages project site).
 - `MPESA_ENV`, `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET`, `MPESA_SHORTCODE`, `MPESA_PASSKEY`, and `MPESA_CALLBACK_URL`.
-- `AT_ENV`, `AT_USERNAME`, and `AT_API_KEY` for Africa's Talking wallet sign-in SMS; configure `AT_SENDER_ID` only if your account has an approved sender ID.
+- `AT_ENV`, `AT_USERNAME`, and `AT_API_KEY` for Africa's Talking one-time phone-wallet linking verification; configure `AT_SENDER_ID` only if your account has an approved sender ID.
+- `GOOGLE_CLIENT_ID` for Google Identity Services sign-in; register the public website origin in the Google OAuth client.
+- `RESEND_API_KEY` and `RESEND_FROM_EMAIL` for email verification and password-reset codes. Verify the sender domain in Resend before production use.
 
-Set the Daraja callback to a public HTTPS URL ending in `/api/mpesa/callback`. Update `scripts/events-api.js` on the static site to set `window.VALOR_EVENTS_API` to the deployed API HTTPS origin. Verify `/api/health` reports `paymentsConfigured: true` and `walletSmsConfigured: true`, test wallet SMS with Africa's Talking sandbox and payments against the Daraja sandbox, and only then configure production credentials. Event submissions and review work without Daraja, but M-Pesa deposits and checkout remain unavailable until it is configured. Wallets use verified Kenyan phone numbers; deposits are credited only after Daraja callback verification. Wallet balance changes are recorded in a transaction ledger, and ticket/ad purchases debit that balance atomically.
+Set the Daraja callback to a public HTTPS URL ending in `/api/mpesa/callback`. Update `scripts/events-api.js` on the static site to set `window.VALOR_EVENTS_API` to the deployed API HTTPS origin. Verify `/api/health` reports `paymentsConfigured: true`, `phoneLinkSmsConfigured: true`, `emailAuthConfigured: true`, and `googleAuthConfigured: true`; `/api/auth/config` provides the Google client ID and email/SMS configuration for the sign-in UI. Test email and phone verification with Resend and Africa's Talking sandboxes, and payments against the Daraja sandbox before configuring production credentials. Event submissions and review work without Daraja, but M-Pesa deposits and checkout remain unavailable until it is configured. Wallet deposits are credited only after Daraja callback verification. Wallet balance changes are recorded in a transaction ledger, and ticket/ad purchases debit that balance atomically.
 
-Buyers and organizers use the same phone-verified wallet. The first sign-in creates a wallet; the account type can be buyer, organizer, or both. Wallet sessions last 12 hours. Deposits are KES 100–150,000 per transaction. Users can sign in and fund their wallet at `wallet.html`, then choose Valor Wallet during ticket checkout or event promotion booking.
+Buyers and organizers sign in using a verified Google or email account. Email accounts require email verification; passwords must be at least 12 characters, and reset codes expire after 10 minutes. Google ID tokens are verified by the API against `GOOGLE_CLIENT_ID`. To access a wallet, users sign in first and verify their Kenyan phone number by SMS once. This links any existing phone wallet—including its balance and transaction history—to the account; if no wallet exists for that number, one is created. Phone numbers already linked to another account cannot be claimed. SMS is not used for sign-in. Deposits are KES 100–150,000 per transaction. Users can then deposit M-Pesa funds or choose Valor Wallet during ticket checkout or event promotion booking.
 
 Use the admin dashboard to review event submissions and manage advertising-package names, durations, and KES prices. Back up the SQLite database and uploaded-poster directory together.
 

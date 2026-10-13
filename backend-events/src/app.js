@@ -5,10 +5,12 @@ const cors = require('cors');
 const express = require('express');
 const multer = require('multer');
 const QRCode = require('qrcode');
+const { OAuth2Client } = require('google-auth-library');
 const db = require('./db');
 const { createLoginLimiter, initializeAdmin, login, requireAdmin } = require('./auth');
 const mpesa = require('./mpesa');
 const walletSms = require('./wallet-sms');
+const accountEmail = require('./account-email');
 
 const allowedCategories = new Set(['Concerts','Festivals','Community','Food & Drink','Arts & Culture','Sports','Business','Other']);
 const allowedTimezones = new Set(['Africa/Nairobi','UTC','Africa/Lagos','Africa/Accra']);
@@ -158,6 +160,14 @@ function safeOrderAccess(order, suppliedToken) {
 function createApp(options = {}) {
   const paymentGateway = options.mpesa || mpesa;
   const smsGateway = options.sms || walletSms;
+  const emailGateway = options.email || accountEmail;
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+  const googleClient = new OAuth2Client(googleClientId || undefined);
+  const verifyGoogleToken = options.verifyGoogleToken || (async (idToken) => {
+    if (!googleClientId) throw new Error('Google sign-in is not configured.');
+    const ticket = await googleClient.verifyIdToken({ idToken, audience: googleClientId });
+    return ticket.getPayload();
+  });
   const publicSiteUrl = (options.publicSiteUrl || process.env.PUBLIC_SITE_URL || 'http://localhost:8765').replace(/\/+$/, '');
   const app = express();
   app.disable('x-powered-by');
@@ -188,24 +198,104 @@ function createApp(options = {}) {
   }));
 
   const loginLimiter = createLoginLimiter();
+  const accountLoginLimiter = createLoginLimiter(20);
   const submissionLimiter = createSubmissionLimiter();
   const walletOtpAttempts = new Map();
-  function requireWallet(req, res, next) {
+  const accountCodeAttempts = new Map();
+  function normalizedEmail(value) {
+    if (typeof value !== 'string') return null;
+    const email = value.trim().toLowerCase();
+    return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
+  }
+
+  function createAccountSession(accountId) {
+    const token = crypto.randomBytes(32).toString('base64url');
+    db.prepare('DELETE FROM account_sessions WHERE expires_at <= datetime(\'now\')').run();
+    db.prepare(`
+      INSERT INTO account_sessions (token_hash,account_id,expires_at)
+      VALUES (?,?,datetime('now','+12 hours'))
+    `).run(sha256(token), accountId);
+    const account = db.prepare(`
+      SELECT id,email,display_name AS displayName,email_verified_at AS emailVerifiedAt
+      FROM accounts WHERE id=?
+    `).get(accountId);
+    return { accessToken: token, expiresIn: '12h', account };
+  }
+
+  function requireAccount(req, res, next) {
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-    if (!token) return res.status(401).json({ error: 'Sign in to your wallet to continue.' });
-    const session = db.prepare(`
-      SELECT w.id,w.phone,w.account_type AS accountType
-      FROM wallet_sessions s JOIN wallets w ON w.id=s.wallet_id
+    if (!token) return res.status(401).json({ error: 'Sign in to your Valor Africa account to continue.' });
+    const account = db.prepare(`
+      SELECT a.id,a.email,a.display_name AS displayName,a.email_verified_at AS emailVerifiedAt,
+        s.token_hash AS sessionTokenHash
+      FROM account_sessions s JOIN accounts a ON a.id=s.account_id
       WHERE s.token_hash=? AND s.expires_at > datetime('now')
     `).get(sha256(token));
-    if (!session) return res.status(401).json({ error: 'Your wallet session has expired. Request a new sign-in code.' });
-    session.sessionTokenHash = sha256(token);
-    req.wallet = session;
+    if (!account) return res.status(401).json({ error: 'Your session has expired. Please sign in again.' });
+    req.account = account;
     next();
   }
 
-  function walletOtpLimiter(req, res, next) {
+  function accountCodeLimiter(req, res, next) {
+    const email = normalizedEmail(req.body && req.body.email);
+    if (!email) return res.status(400).json({ error: 'Enter a valid email address.' });
+    const now = Date.now();
+    for (const [key, entry] of accountCodeAttempts) {
+      if (now - entry.startedAt >= 15 * 60 * 1000) accountCodeAttempts.delete(key);
+    }
+    const limits = [
+      { key: `email:${email}`, maximum: 3 },
+      { key: `ip:${req.ip}`, maximum: 20 }
+    ];
+    if (limits.some(({ key, maximum }) => accountCodeAttempts.get(key)?.count >= maximum)) {
+      return res.status(429).json({ error: 'Too many email code requests. Try again in 15 minutes.' });
+    }
+    for (const { key } of limits) {
+      const entry = accountCodeAttempts.get(key);
+      accountCodeAttempts.set(key, entry
+        ? { startedAt: entry.startedAt, count: entry.count + 1 }
+        : { startedAt: now, count: 1 });
+    }
+    req.accountEmail = email;
+    next();
+  }
+
+  async function issueAccountCode(email, purpose) {
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+    const codeHash = sha256(`${process.env.JWT_SECRET}:${email}:${purpose}:${code}`);
+    db.prepare(`
+      INSERT INTO account_email_codes (email,purpose,code_hash,attempts,expires_at)
+      VALUES (?,?,?,0,datetime('now','+10 minutes'))
+      ON CONFLICT(email,purpose) DO UPDATE SET code_hash=excluded.code_hash,attempts=0,
+        expires_at=excluded.expires_at,created_at=datetime('now')
+    `).run(email, purpose, codeHash);
+    try {
+      await emailGateway.sendCode(email, code, purpose);
+    } catch (error) {
+      db.prepare('DELETE FROM account_email_codes WHERE email=? AND purpose=? AND code_hash=?')
+        .run(email, purpose, codeHash);
+      throw error;
+    }
+  }
+
+  function verifyAccountCode(email, purpose, code) {
+    const record = db.prepare(`
+      SELECT code_hash,attempts FROM account_email_codes
+      WHERE email=? AND purpose=? AND expires_at > datetime('now')
+    `).get(email, purpose);
+    if (!record) return false;
+    const actual = Buffer.from(record.code_hash);
+    const expected = Buffer.from(sha256(`${process.env.JWT_SECRET}:${email}:${purpose}:${code}`));
+    if (actual.length === expected.length && crypto.timingSafeEqual(actual, expected)) return true;
+    db.prepare('UPDATE account_email_codes SET attempts=attempts+1 WHERE email=? AND purpose=?').run(email, purpose);
+    if (record.attempts + 1 >= 5) {
+      db.prepare('DELETE FROM account_email_codes WHERE email=? AND purpose=?').run(email, purpose);
+    }
+    return false;
+  }
+
+  function phoneLinkOtpLimiter(req, res, next) {
     const phone = normalizePhone(req.body && req.body.phone);
     if (!phone) return res.status(400).json({ error: 'Enter a valid Kenyan mobile number.' });
     const now = Date.now();
@@ -219,7 +309,7 @@ function createApp(options = {}) {
     for (const limit of limits) {
       const entry = walletOtpAttempts.get(limit.key);
       if (entry && entry.count >= limit.maximum) {
-        return res.status(429).json({ error: 'Too many wallet code requests. Try again in 15 minutes.' });
+        return res.status(429).json({ error: 'Too many phone verification code requests. Try again in 15 minutes.' });
       }
     }
     for (const limit of limits) {
@@ -228,11 +318,17 @@ function createApp(options = {}) {
         ? { startedAt: entry.startedAt, count: entry.count + 1 }
         : { startedAt: now, count: 1 });
     }
-    req.walletPhone = phone;
+    req.linkPhone = phone;
     next();
   }
 
+  function walletForAccount(accountId) {
+    return db.prepare('SELECT id,phone,account_type AS accountType,created_at AS createdAt FROM wallets WHERE account_id=?')
+      .get(accountId) || null;
+  }
+
   function walletSnapshot(walletId) {
+    if (!walletId) return { wallet: null, balanceKes: 0, transactions: [] };
     const wallet = db.prepare('SELECT id,phone,account_type AS accountType,created_at AS createdAt FROM wallets WHERE id=?').get(walletId);
     const balance = db.prepare("SELECT COALESCE(SUM(amount_kes),0) AS balance FROM wallet_transactions WHERE wallet_id=? AND status='completed'").get(walletId).balance;
     const transactions = db.prepare(`
@@ -258,33 +354,42 @@ function createApp(options = {}) {
     res.json({
       ok: true,
       paymentsConfigured: paymentGateway.isConfigured(),
-      walletSmsConfigured: smsGateway.isConfigured()
+      phoneLinkSmsConfigured: smsGateway.isConfigured(),
+      emailAuthConfigured: emailGateway.isConfigured(),
+      googleAuthConfigured: Boolean(googleClientId)
     });
   });
 
-  app.post('/api/wallet/otp', walletOtpLimiter, async (req, res) => {
+  app.post('/api/account/phone/otp', requireAccount, phoneLinkOtpLimiter, async (req, res) => {
+    if (walletForAccount(req.account.id)) {
+      return res.status(409).json({ error: 'A phone wallet is already linked to your account.' });
+    }
     if (!smsGateway.isConfigured()) {
-      return res.status(503).json({ error: "Wallet sign-in is unavailable until Africa's Talking SMS is configured." });
+      return res.status(503).json({ error: "Phone verification is unavailable until Africa's Talking SMS is configured." });
+    }
+    const existing = db.prepare('SELECT account_id FROM wallets WHERE phone=?').get(req.linkPhone);
+    if (existing && existing.account_id && existing.account_id !== req.account.id) {
+      return res.status(409).json({ error: 'This phone wallet is already linked to another account.' });
     }
     const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
-    const codeHash = sha256(`${process.env.JWT_SECRET}:${req.walletPhone}:${code}`);
+    const codeHash = sha256(`${process.env.JWT_SECRET}:${req.account.id}:${req.linkPhone}:${code}`);
     db.prepare(`
       INSERT INTO wallet_otps (phone,code_hash,attempts,expires_at)
       VALUES (?,?,0,datetime('now','+5 minutes'))
       ON CONFLICT(phone) DO UPDATE SET code_hash=excluded.code_hash,attempts=0,
         expires_at=excluded.expires_at,created_at=datetime('now')
-    `).run(req.walletPhone, codeHash);
+    `).run(req.linkPhone, codeHash);
     try {
-      await smsGateway.sendOtp(req.walletPhone, code);
+      await smsGateway.sendOtp(req.linkPhone, code);
     } catch (error) {
-      db.prepare('DELETE FROM wallet_otps WHERE phone=? AND code_hash=?').run(req.walletPhone, codeHash);
-      console.error('Wallet sign-in code could not be sent:', error.message);
-      return res.status(502).json({ error: 'Could not send a sign-in code. Check the phone number and try again.' });
+      db.prepare('DELETE FROM wallet_otps WHERE phone=? AND code_hash=?').run(req.linkPhone, codeHash);
+      console.error('Wallet phone verification code could not be sent:', error.message);
+      return res.status(502).json({ error: 'Could not send a verification code. Check the phone number and try again.' });
     }
-    return res.status(202).json({ message: 'A sign-in code has been sent to your phone.' });
+    return res.status(202).json({ message: 'A verification code has been sent to your phone.' });
   });
 
-  app.post('/api/wallet/verify', async (req, res) => {
+  app.post('/api/account/phone/verify', requireAccount, async (req, res) => {
     const phone = normalizePhone(req.body && req.body.phone);
     const code = req.body && req.body.code;
     const accountType = req.body && req.body.accountType || 'buyer';
@@ -294,44 +399,58 @@ function createApp(options = {}) {
     if (!['buyer','organizer','both'].includes(accountType)) {
       return res.status(400).json({ error: 'Choose buyer, organizer, or both as your account type.' });
     }
+    if (walletForAccount(req.account.id)) {
+      return res.status(409).json({ error: 'A phone wallet is already linked to your account.' });
+    }
+    const existing = db.prepare('SELECT id,account_id FROM wallets WHERE phone=?').get(phone);
+    if (existing && existing.account_id && existing.account_id !== req.account.id) {
+      return res.status(409).json({ error: 'This phone wallet is already linked to another account.' });
+    }
     const otp = db.prepare('SELECT code_hash,attempts FROM wallet_otps WHERE phone=? AND expires_at > datetime(\'now\')').get(phone);
-    if (!otp) return res.status(401).json({ error: 'That sign-in code has expired. Request a new one.' });
-    const expectedHash = sha256(`${process.env.JWT_SECRET}:${phone}:${code}`);
+    if (!otp) return res.status(401).json({ error: 'That verification code has expired. Request a new one.' });
+    const expectedHash = sha256(`${process.env.JWT_SECRET}:${req.account.id}:${phone}:${code}`);
     const actual = Buffer.from(otp.code_hash);
     const expected = Buffer.from(expectedHash);
     if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) {
       db.prepare('UPDATE wallet_otps SET attempts=attempts+1 WHERE phone=?').run(phone);
       if (otp.attempts + 1 >= 5) db.prepare('DELETE FROM wallet_otps WHERE phone=?').run(phone);
-      return res.status(401).json({ error: 'That sign-in code is incorrect or expired.' });
+      return res.status(401).json({ error: 'That verification code is incorrect or expired.' });
     }
-    const token = crypto.randomBytes(32).toString('base64url');
-    const tokenHash = sha256(token);
-    const walletId = crypto.randomUUID();
-    const wallet = db.transaction(() => {
-      db.prepare('DELETE FROM wallet_otps WHERE phone=?').run(phone);
-      db.prepare("INSERT INTO wallets (id,phone,account_type) VALUES (?,?,?) ON CONFLICT(phone) DO UPDATE SET account_type=excluded.account_type")
-        .run(walletId, phone, accountType);
-      const account = db.prepare('SELECT id FROM wallets WHERE phone=?').get(phone);
-      db.prepare('DELETE FROM wallet_sessions WHERE expires_at <= datetime(\'now\')').run();
-      db.prepare("INSERT INTO wallet_sessions (token_hash,wallet_id,expires_at) VALUES (?,?,datetime('now','+12 hours'))")
-        .run(tokenHash, account.id);
-      return account;
-    })();
-    res.json({
-      accessToken: token,
-      expiresIn: '12h',
-      ...walletSnapshot(wallet.id)
-    });
+    let wallet;
+    try {
+      wallet = db.transaction(() => {
+        const accountWallet = walletForAccount(req.account.id);
+        if (accountWallet) throw Object.assign(new Error('A phone wallet is already linked to your account.'), { statusCode: 409 });
+        const currentWallet = db.prepare('SELECT id,account_id FROM wallets WHERE phone=?').get(phone);
+        if (currentWallet && currentWallet.account_id && currentWallet.account_id !== req.account.id) {
+          throw Object.assign(new Error('This phone wallet is already linked to another account.'), { statusCode: 409 });
+        }
+        db.prepare('DELETE FROM wallet_otps WHERE phone=?').run(phone);
+        if (currentWallet) {
+          db.prepare('UPDATE wallets SET account_id=? WHERE id=? AND account_id IS NULL')
+            .run(req.account.id, currentWallet.id);
+          return db.prepare('SELECT id FROM wallets WHERE account_id=?').get(req.account.id);
+        }
+        const walletId = crypto.randomUUID();
+        db.prepare('INSERT INTO wallets (id,phone,account_type,account_id) VALUES (?,?,?,?)')
+          .run(walletId, phone, accountType, req.account.id);
+        return { id: walletId };
+      })();
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
+    return res.json({ linked: true, ...walletSnapshot(wallet.id) });
   });
 
-  app.get('/api/wallet', requireWallet, (req, res) => res.json(walletSnapshot(req.wallet.id)));
-
-  app.post('/api/wallet/logout', requireWallet, (req, res) => {
-    db.prepare('DELETE FROM wallet_sessions WHERE token_hash=?').run(req.wallet.sessionTokenHash);
-    res.json({ signedOut: true });
+  app.get('/api/wallet', requireAccount, (req, res) => {
+    const wallet = walletForAccount(req.account.id);
+    res.json({ linked: Boolean(wallet), ...walletSnapshot(wallet && wallet.id) });
   });
 
-  app.post('/api/wallet/deposits', requireWallet, async (req, res) => {
+  app.post('/api/wallet/deposits', requireAccount, async (req, res) => {
+    const wallet = walletForAccount(req.account.id);
+    if (!wallet) return res.status(409).json({ error: 'Verify and link your phone number before adding wallet funds.' });
     const amountKes = req.body && req.body.amountKes;
     if (!Number.isSafeInteger(amountKes) || amountKes < 100 || amountKes > 150000) {
       return res.status(400).json({ error: 'Deposit an amount from KES 100 to KES 150,000.' });
@@ -341,12 +460,12 @@ function createApp(options = {}) {
     db.prepare(`
       INSERT INTO wallet_transactions (id,wallet_id,transaction_type,amount_kes,status,description)
       VALUES (?,?, 'deposit', ?, 'pending', 'M-Pesa wallet deposit')
-    `).run(id, req.wallet.id, amountKes);
+    `).run(id, wallet.id, amountKes);
     try {
       const checkout = await paymentGateway.initiateStkPush({
         id,
         amountKes,
-        phone: req.wallet.phone,
+        phone: wallet.phone,
         orderType: 'wallet'
       });
       db.prepare('UPDATE wallet_transactions SET checkout_request_id=?,merchant_request_id=? WHERE id=?')
@@ -372,6 +491,196 @@ function createApp(options = {}) {
     const token = login(username, password);
     if (!token) return res.status(401).json({ error: 'Invalid admin credentials.' });
     res.json({ token, expiresIn: '8h' });
+  });
+
+  app.get('/api/auth/config', (req, res) => {
+    res.json({
+      googleClientId,
+      emailAuthConfigured: emailGateway.isConfigured(),
+      phoneLinkSmsConfigured: smsGateway.isConfigured()
+    });
+  });
+
+  app.post('/api/auth/email/register', accountLoginLimiter, accountCodeLimiter, async (req, res) => {
+    if (!emailGateway.isConfigured()) {
+      return res.status(503).json({ error: 'Email sign-up is not available until Resend is configured.' });
+    }
+    const { password, displayName = '' } = req.body || {};
+    if (typeof password !== 'string' || password.length < 12 || password.length > 128) {
+      return res.status(400).json({ error: 'Choose a password between 12 and 128 characters.' });
+    }
+    if (typeof displayName !== 'string' || displayName.trim().length > 120) {
+      return res.status(400).json({ error: 'Your name must be 120 characters or fewer.' });
+    }
+    const existing = db.prepare('SELECT email_verified_at AS emailVerifiedAt FROM accounts WHERE email=?').get(req.accountEmail);
+    if (existing && existing.emailVerifiedAt) {
+      return res.status(409).json({ error: 'An account already exists with this email. Please sign in instead.' });
+    }
+    const passwordHash = await require('bcryptjs').hash(password, 12);
+    if (existing) {
+      db.prepare('UPDATE accounts SET password_hash=?,display_name=? WHERE email=?')
+        .run(passwordHash, displayName.trim(), req.accountEmail);
+    } else {
+      db.prepare('INSERT INTO accounts (id,email,display_name,password_hash) VALUES (?,?,?,?)')
+        .run(crypto.randomUUID(), req.accountEmail, displayName.trim(), passwordHash);
+    }
+    try {
+      await issueAccountCode(req.accountEmail, 'verify');
+    } catch (error) {
+      console.error('Account verification email could not be sent:', error.message);
+      return res.status(502).json({ error: 'Could not send the verification email. Please try again shortly.' });
+    }
+    res.status(202).json({ message: 'Check your email for a six-digit verification code.' });
+  });
+
+  app.post('/api/auth/email/resend-verification', accountLoginLimiter, accountCodeLimiter, async (req, res) => {
+    if (!emailGateway.isConfigured()) {
+      return res.status(503).json({ error: 'Email verification is unavailable until Resend is configured.' });
+    }
+    const account = db.prepare('SELECT email_verified_at AS emailVerifiedAt FROM accounts WHERE email=?').get(req.accountEmail);
+    if (account && !account.emailVerifiedAt) {
+      try {
+        await issueAccountCode(req.accountEmail, 'verify');
+      } catch (error) {
+        console.error('Account verification email could not be resent:', error.message);
+        return res.status(502).json({ error: 'Could not send the verification email. Please try again shortly.' });
+      }
+    }
+    res.status(202).json({ message: 'If your account needs verification, a code has been sent.' });
+  });
+
+  app.post('/api/auth/email/verify', accountLoginLimiter, (req, res) => {
+    const email = normalizedEmail(req.body && req.body.email);
+    const code = req.body && req.body.code;
+    if (!email || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: 'Enter your email and six-digit verification code.' });
+    }
+    if (!verifyAccountCode(email, 'verify', code)) {
+      return res.status(401).json({ error: 'That verification code is incorrect or expired.' });
+    }
+    const account = db.prepare('SELECT id FROM accounts WHERE email=?').get(email);
+    if (!account) return res.status(401).json({ error: 'That verification code is incorrect or expired.' });
+    db.transaction(() => {
+      db.prepare("UPDATE accounts SET email_verified_at=datetime('now') WHERE id=?").run(account.id);
+      db.prepare('DELETE FROM account_email_codes WHERE email=? AND purpose=?').run(email, 'verify');
+    })();
+    res.json(createAccountSession(account.id));
+  });
+
+  app.post('/api/auth/email/login', accountLoginLimiter, async (req, res) => {
+    const email = normalizedEmail(req.body && req.body.email);
+    const password = req.body && req.body.password;
+    if (!email || typeof password !== 'string' || !password || password.length > 128) {
+      return res.status(400).json({ error: 'Enter a valid email and password.' });
+    }
+    const account = db.prepare('SELECT id,password_hash,email_verified_at FROM accounts WHERE email=?').get(email);
+    if (!account || !account.password_hash || !await require('bcryptjs').compare(password, account.password_hash)) {
+      return res.status(401).json({ error: 'Email or password is incorrect.' });
+    }
+    if (!account.email_verified_at) {
+      return res.status(403).json({ error: 'Verify your email address before signing in.' });
+    }
+    res.json(createAccountSession(account.id));
+  });
+
+  app.post('/api/auth/email/forgot-password', accountLoginLimiter, accountCodeLimiter, async (req, res) => {
+    if (!emailGateway.isConfigured()) {
+      return res.status(503).json({ error: 'Password recovery is unavailable until Resend is configured.' });
+    }
+    const account = db.prepare('SELECT id FROM accounts WHERE email=? AND email_verified_at IS NOT NULL').get(req.accountEmail);
+    if (account && db.prepare('SELECT password_hash FROM accounts WHERE id=?').get(account.id).password_hash) {
+      try {
+        await issueAccountCode(req.accountEmail, 'reset');
+      } catch (error) {
+        console.error('Password reset email could not be sent:', error.message);
+        return res.status(502).json({ error: 'Could not send the password reset email. Please try again shortly.' });
+      }
+    }
+    res.status(202).json({ message: 'If a password account exists for that email, a reset code has been sent.' });
+  });
+
+  app.post('/api/auth/email/reset-password', accountLoginLimiter, (req, res) => {
+    const email = normalizedEmail(req.body && req.body.email);
+    const code = req.body && req.body.code;
+    const password = req.body && req.body.password;
+    if (!email || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: 'Enter your email and six-digit password reset code.' });
+    }
+    if (typeof password !== 'string' || password.length < 12 || password.length > 128) {
+      return res.status(400).json({ error: 'Choose a password between 12 and 128 characters.' });
+    }
+    if (!verifyAccountCode(email, 'reset', code)) {
+      return res.status(401).json({ error: 'That password reset code is incorrect or expired.' });
+    }
+    const account = db.prepare('SELECT id FROM accounts WHERE email=? AND email_verified_at IS NOT NULL').get(email);
+    if (!account) return res.status(401).json({ error: 'That password reset code is incorrect or expired.' });
+    db.transaction(() => {
+      db.prepare('UPDATE accounts SET password_hash=? WHERE id=?')
+        .run(require('bcryptjs').hashSync(password, 12), account.id);
+      db.prepare('DELETE FROM account_email_codes WHERE email=? AND purpose=?').run(email, 'reset');
+      db.prepare('DELETE FROM account_sessions WHERE account_id=?').run(account.id);
+    })();
+    res.json({ passwordReset: true, message: 'Your password has been reset. Sign in with your new password.' });
+  });
+
+  app.post('/api/auth/google', accountLoginLimiter, async (req, res) => {
+    const idToken = req.body && req.body.idToken;
+    if (typeof idToken !== 'string' || !idToken || idToken.length > 10000) {
+      return res.status(400).json({ error: 'A valid Google sign-in credential is required.' });
+    }
+    let profile;
+    try {
+      profile = await verifyGoogleToken(idToken);
+    } catch (error) {
+      console.error('Google sign-in token verification failed:', error.message);
+      return res.status(401).json({ error: 'Google sign-in could not be verified. Please try again.' });
+    }
+    const email = normalizedEmail(profile && profile.email);
+    if (!email || profile.email_verified !== true || typeof profile.sub !== 'string' || !profile.sub) {
+      return res.status(401).json({ error: 'Google must confirm your email address before you can sign in.' });
+    }
+    const displayName = typeof profile.name === 'string' ? profile.name.slice(0, 120) : '';
+    let account = db.prepare('SELECT id,email_verified_at AS emailVerifiedAt,google_sub AS googleSub FROM accounts WHERE google_sub=?')
+      .get(profile.sub);
+    if (!account) {
+      const byEmail = db.prepare('SELECT id,email_verified_at AS emailVerifiedAt,google_sub AS googleSub FROM accounts WHERE email=?')
+        .get(email);
+      if (byEmail && !byEmail.emailVerifiedAt) {
+        return res.status(409).json({ error: 'Verify your existing email account before signing in with Google using this address.' });
+      }
+      if (byEmail && byEmail.googleSub && byEmail.googleSub !== profile.sub) {
+        return res.status(409).json({ error: 'This email is already connected to a different Google account.' });
+      }
+      if (byEmail) {
+        account = byEmail;
+        db.prepare('UPDATE accounts SET google_sub=?,display_name=CASE WHEN display_name=? THEN ? ELSE display_name END WHERE id=?')
+          .run(profile.sub, '', displayName, account.id);
+      } else {
+        const accountId = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO accounts (id,email,display_name,google_sub,email_verified_at)
+          VALUES (?,?,?,?,datetime('now'))
+        `).run(accountId, email, displayName, profile.sub);
+        account = { id: accountId };
+      }
+    }
+    res.json(createAccountSession(account.id));
+  });
+
+  app.get('/api/auth/account', requireAccount, (req, res) => {
+    res.json({
+      account: {
+        id: req.account.id,
+        email: req.account.email,
+        displayName: req.account.displayName,
+        emailVerifiedAt: req.account.emailVerifiedAt
+      }
+    });
+  });
+
+  app.post('/api/auth/account/logout', requireAccount, (req, res) => {
+    db.prepare('DELETE FROM account_sessions WHERE token_hash=?').run(req.account.sessionTokenHash);
+    res.json({ signedOut: true });
   });
 
   app.get('/api/events', (req, res) => {
@@ -623,13 +932,15 @@ function createApp(options = {}) {
   }
 
   app.post('/api/orders/tickets', (req, res, next) => {
-    if (req.body && req.body.paymentMethod === 'wallet') return requireWallet(req, res, next);
+    if (req.body && req.body.paymentMethod === 'wallet') return requireAccount(req, res, next);
     next();
   }, async (req, res, next) => {
     try {
       const { eventId, ticketType, buyerName, phone: inputPhone, quantity = 1 } = req.body || {};
       const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
       if (!['mpesa','wallet'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa or Valor Wallet as the payment method.' });
+      req.wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
+      if (paymentMethod === 'wallet' && !req.wallet) return res.status(409).json({ error: 'Verify and link your phone number before paying from your wallet.' });
       const phone = paymentMethod === 'wallet' ? req.wallet.phone : normalizePhone(inputPhone);
       if (typeof eventId !== 'string' || !eventId || typeof ticketType !== 'string' || !ticketType) return res.status(400).json({ error: 'Choose a published event and ticket type.' });
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the ticket buyer’s name.' });
@@ -716,7 +1027,7 @@ function createApp(options = {}) {
   });
 
   app.post('/api/orders/ads', (req, res, next) => {
-    if (req.body && req.body.paymentMethod === 'wallet') return requireWallet(req, res, next);
+    if (req.body && req.body.paymentMethod === 'wallet') return requireAccount(req, res, next);
     next();
   }, async (req, res, next) => {
     try {
@@ -724,6 +1035,8 @@ function createApp(options = {}) {
       if (!['mpesa','wallet'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa or Valor Wallet as the payment method.' });
       if (paymentMethod === 'mpesa' && paymentsUnavailable(res)) return;
       const { eventId, packageId, buyerName, phone: inputPhone } = req.body || {};
+      req.wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
+      if (paymentMethod === 'wallet' && !req.wallet) return res.status(409).json({ error: 'Verify and link your phone number before paying from your wallet.' });
       const phone = paymentMethod === 'wallet' ? req.wallet.phone : normalizePhone(inputPhone);
       if (typeof eventId !== 'string' || !eventId || typeof packageId !== 'string' || !packageId) return res.status(400).json({ error: 'Choose an approved event and advertising package.' });
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the advertiser’s name.' });

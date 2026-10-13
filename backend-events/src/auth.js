@@ -19,7 +19,7 @@ function initializeAdmin() {
   db.prepare('INSERT INTO admins (username, password_hash) VALUES (?, ?)').run(username, passwordHash);
 }
 
-function createLoginLimiter() {
+function createLoginLimiter(maximumAttempts = 8) {
   const attempts = new Map();
   const windowMs = 10 * 60 * 1000;
   return function loginLimiter(req, res, next) {
@@ -31,7 +31,7 @@ function createLoginLimiter() {
       attempts.set(key, entry);
     }
     entry.count += 1;
-    if (entry.count > 8) {
+    if (entry.count > maximumAttempts) {
       return res.status(429).json({ error: 'Too many login attempts. Try again in 10 minutes.' });
     }
     next();

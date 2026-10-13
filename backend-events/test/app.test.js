@@ -46,7 +46,31 @@ const smsGateway = {
     smsCodes.set(phone, code);
   }
 };
-const app = createApp({ mpesa: paymentGateway, sms: smsGateway, publicSiteUrl: 'https://valorafrica.co.ke' });
+const emailCodes = new Map();
+const emailGateway = {
+  enabled: true,
+  isConfigured() {
+    return this.enabled;
+  },
+  async sendCode(email, code, purpose) {
+    emailCodes.set(`${email}:${purpose}`, code);
+  }
+};
+const app = createApp({
+  mpesa: paymentGateway,
+  sms: smsGateway,
+  email: emailGateway,
+  verifyGoogleToken: async (idToken) => {
+    const profiles = {
+      'valid-google-token': { sub: 'google-subject-123', email: 'google@example.com', name: 'Google Member' },
+      'another-google-token': { sub: 'google-subject-456', email: 'another@example.com', name: 'Another Member' },
+      'wallet-google-token': { sub: 'wallet-google-subject', email: 'wallet-owner@example.com', name: 'Wallet Owner' }
+    };
+    if (!profiles[idToken]) throw new Error('Invalid test credential.');
+    return { ...profiles[idToken], email_verified: true };
+  },
+  publicSiteUrl: 'https://valorafrica.co.ke'
+});
 const adminToken = login(process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD);
 const admin = { Authorization: `Bearer ${adminToken}` };
 
@@ -275,22 +299,44 @@ test('free registrations issue admission tickets without requiring M-Pesa', asyn
   paymentGateway.enabled = true;
 });
 
-test('wallet sign-in, verified M-Pesa deposits, ticket payments, and organizer promotion payments', async () => {
-  const otp = await request(app).post('/api/wallet/otp').send({ phone: '0712345678' });
+test('account sign-in links existing phone wallet and pays verified deposits, tickets, and promotions', async () => {
+  const legacyWalletId = 'legacy-phone-wallet';
+  db.prepare("INSERT INTO wallets (id,phone,account_type) VALUES (?,'254712345678','organizer')").run(legacyWalletId);
+  db.prepare(`
+    INSERT INTO wallet_transactions (id,wallet_id,transaction_type,amount_kes,status,receipt,description,completed_at)
+    VALUES ('legacy-deposit',?,'deposit',1200,'completed','LEGACY123','Existing phone-wallet balance',datetime('now'))
+  `).run(legacyWalletId);
+
+  const accountLogin = await request(app).post('/api/auth/google').send({ idToken: 'wallet-google-token' });
+  assert.equal(accountLogin.status, 200);
+  const walletAuth = { Authorization: `Bearer ${accountLogin.body.accessToken}` };
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.linked, false);
+  assert.equal((await request(app).post('/api/wallet/otp').send({ phone: '0712345678' })).status, 404);
+  assert.equal((await request(app).get('/api/wallet')).status, 401);
+
+  const otp = await request(app).post('/api/account/phone/otp').set(walletAuth).send({ phone: '0712345678' });
   assert.equal(otp.status, 202);
   const code = smsCodes.get('254712345678');
   assert.match(code, /^\d{6}$/);
-  assert.equal((await request(app).get('/api/wallet')).status, 401);
-
-  const signIn = await request(app).post('/api/wallet/verify').send({
+  assert.equal((await request(app).post('/api/account/phone/verify').set(walletAuth).send({
+    phone: '0712345678',
+    code: '000000',
+    accountType: 'organizer'
+  })).status, 401);
+  const linked = await request(app).post('/api/account/phone/verify').set(walletAuth).send({
     phone: '0712345678',
     code,
     accountType: 'organizer'
   });
-  assert.equal(signIn.status, 200);
-  assert.equal(signIn.body.wallet.accountType, 'organizer');
-  const walletAuth = { Authorization: `Bearer ${signIn.body.accessToken}` };
-  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 0);
+  assert.equal(linked.status, 200);
+  assert.equal(linked.body.wallet.accountType, 'organizer');
+  assert.equal(linked.body.balanceKes, 1200);
+  assert.equal(db.prepare('SELECT account_id FROM wallets WHERE id=?').get(legacyWalletId).account_id, accountLogin.body.account.id);
+
+  const anotherAccount = await request(app).post('/api/auth/google').send({ idToken: 'another-google-token' });
+  const anotherAuth = { Authorization: 'Bearer ' + anotherAccount.body.accessToken };
+  assert.equal((await request(app).post('/api/account/phone/otp').set(anotherAuth)
+    .send({ phone: '0712345678' })).status, 409);
 
   const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
   const insufficient = await request(app).post('/api/orders/tickets').set(walletAuth).send({
@@ -304,12 +350,12 @@ test('wallet sign-in, verified M-Pesa deposits, ticket payments, and organizer p
 
   const deposit = await request(app).post('/api/wallet/deposits').set(walletAuth).send({ amountKes: 5000 });
   assert.equal(deposit.status, 201);
-  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 0);
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 1200);
   await completePayment('checkout-6', 'merchant-6', 5000, 'WALLET1234');
   const funded = await request(app).get('/api/wallet').set(walletAuth);
-  assert.equal(funded.body.balanceKes, 5000);
+  assert.equal(funded.body.balanceKes, 6200);
   await completePayment('checkout-6', 'merchant-6', 5000, 'WALLET1234');
-  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 5000);
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 6200);
 
   const ticketOrder = await request(app).post('/api/orders/tickets').set(walletAuth).send({
     eventId: event.id,
@@ -323,7 +369,7 @@ test('wallet sign-in, verified M-Pesa deposits, ticket payments, and organizer p
   const paidTickets = await request(app).get(`/api/orders/${ticketOrder.body.orderId}`)
     .set('X-Order-Access', ticketOrder.body.accessToken);
   assert.equal(paidTickets.body.tickets.length, 2);
-  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 3400);
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 4600);
 
   const secondDeposit = await request(app).post('/api/wallet/deposits').set(walletAuth).send({ amountKes: 10000 });
   assert.equal(secondDeposit.status, 201);
@@ -339,10 +385,68 @@ test('wallet sign-in, verified M-Pesa deposits, ticket payments, and organizer p
   const paidAd = await request(app).get(`/api/orders/${adOrder.body.orderId}`)
     .set('X-Order-Access', adOrder.body.accessToken);
   assert.equal(paidAd.body.campaign.campaignStatus, 'active');
-  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 5900);
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 7100);
 
-  assert.equal((await request(app).post('/api/wallet/logout').set(walletAuth)).status, 200);
+  assert.equal((await request(app).post('/api/auth/account/logout').set(walletAuth)).status, 200);
   assert.equal((await request(app).get('/api/wallet').set(walletAuth)).status, 401);
+});
+
+test('email verification, password reset, and Google sign-in create separate account sessions', async () => {
+  const config = await request(app).get('/api/auth/config');
+  assert.equal(config.status, 200);
+  assert.equal(config.body.emailAuthConfigured, true);
+
+  const email = 'member@example.com';
+  const register = await request(app).post('/api/auth/email/register').send({
+    email: '  MEMBER@example.com ',
+    displayName: 'Email Member',
+    password: 'a-long-test-password-123'
+  });
+  assert.equal(register.status, 202);
+  assert.equal((await request(app).post('/api/auth/email/login').send({
+    email,
+    password: 'a-long-test-password-123'
+  })).status, 403);
+
+  const verifyCode = emailCodes.get(`${email}:verify`);
+  assert.equal((await request(app).post('/api/auth/email/verify').send({ email, code: '000000' })).status, 401);
+  const verified = await request(app).post('/api/auth/email/verify').send({ email, code: verifyCode });
+  assert.equal(verified.status, 200);
+  assert.equal(verified.body.account.displayName, 'Email Member');
+  const originalSession = { Authorization: `Bearer ${verified.body.accessToken}` };
+  assert.equal((await request(app).get('/api/auth/account').set(originalSession)).body.account.email, email);
+
+  assert.equal((await request(app).post('/api/auth/email/forgot-password').send({ email })).status, 202);
+  const reset = await request(app).post('/api/auth/email/reset-password').send({
+    email,
+    code: emailCodes.get(`${email}:reset`),
+    password: 'another-long-password-456'
+  });
+  assert.equal(reset.status, 200);
+  assert.equal((await request(app).get('/api/auth/account').set(originalSession)).status, 401);
+  assert.equal((await request(app).post('/api/auth/email/login').send({
+    email,
+    password: 'another-long-password-456'
+  })).status, 200);
+
+  const google = await request(app).post('/api/auth/google').send({ idToken: 'valid-google-token' });
+  assert.equal(google.status, 200);
+  assert.equal(google.body.account.email, 'google@example.com');
+  const googleAuth = { Authorization: 'Bearer ' + google.body.accessToken };
+  const emptyWallet = await request(app).get('/api/wallet').set(googleAuth);
+  assert.equal(emptyWallet.status, 200);
+  assert.equal(emptyWallet.body.linked, false);
+  assert.equal((await request(app).post('/api/wallet/deposits').send({ amountKes: 1000 })).status, 401);
+  assert.equal((await request(app).get('/api/wallet')).status, 401);
+
+  emailGateway.enabled = false;
+  assert.equal((await request(app).post('/api/auth/email/register')
+    .set('X-Forwarded-For', '198.51.100.18')
+    .send({
+      email: 'disabled@example.com',
+      password: 'a-long-test-password-123'
+    })).status, 503);
+  emailGateway.enabled = true;
 });
 
 after(() => {

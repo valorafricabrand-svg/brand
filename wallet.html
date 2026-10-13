@@ -15,32 +15,61 @@
   <main class="wrap service-page wallet-page">
     <p class="eyebrow">BUYER &amp; ORGANIZER WALLET</p>
     <h1>Your Valor Wallet</h1>
-    <p>Top up securely with M-Pesa, then use your wallet balance to pay for event tickets and organizer promotions.</p>
-    <section class="service-card" id="walletSignIn">
-      <h2>Sign in with your phone</h2>
-      <form id="walletPhoneForm" class="service-form">
-        <label>Kenyan mobile number<input name="phone" type="tel" autocomplete="tel" placeholder="0712345678" required></label>
-        <button class="button button-primary" type="submit">Send sign-in code</button>
-      </form>
-      <form id="walletVerifyForm" class="service-form" hidden>
-        <p id="walletPhoneMessage"></p>
-        <label>Six-digit SMS code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
-        <label>I am a
-          <select name="accountType">
-            <option value="buyer">Ticket buyer</option>
-            <option value="organizer">Event organizer</option>
-            <option value="both">Buyer and organizer</option>
-          </select>
-        </label>
-        <button class="button button-primary" type="submit">Verify and open wallet</button>
-        <button class="button secondary" id="walletChangePhone" type="button">Use a different number</button>
-      </form>
-      <p class="page-feedback" id="walletSignInFeedback" aria-live="polite"></p>
+    <p>Sign in with Google or email, then verify your phone once to access your existing wallet balance and M-Pesa deposits.</p>
+    <section class="service-card account-card" id="accountAuth">
+      <div id="accountSignedOut">
+        <h2>Sign in to your Valor Africa account</h2>
+        <div id="googleSignInButton" class="google-sign-in"></div>
+        <p class="page-feedback" id="googleFeedback" aria-live="polite"></p>
+        <div class="auth-divider"><span>or continue with email</span></div>
+        <div class="account-auth-actions" id="emailAuthActions">
+          <button class="button button-primary" id="showEmailLogin" type="button">Sign in with email</button>
+          <button class="button secondary" id="showEmailRegister" type="button">Create an account</button>
+        </div>
+        <form id="accountEmailForm" class="service-form" hidden>
+          <h3 id="accountEmailHeading"></h3>
+          <label id="accountNameField" hidden>Your name<input name="displayName" type="text" maxlength="120" autocomplete="name"></label>
+          <label>Email address<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
+          <label id="accountPasswordField">Password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="current-password" required></label>
+          <label id="accountCodeField" hidden>Six-digit email code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"></label>
+          <button class="button button-primary" id="accountEmailSubmit" type="submit"></button>
+          <button class="text-button" id="accountForgotPassword" type="button" hidden>Forgot password?</button>
+          <button class="text-button" id="accountResendCode" type="button" hidden>Resend verification code</button>
+          <button class="text-button" id="accountBackToOptions" type="button">Back to sign-in options</button>
+        </form>
+        <p class="page-feedback" id="accountEmailFeedback" aria-live="polite"></p>
+      </div>
+      <div id="accountSignedIn" hidden>
+        <p class="eyebrow">SIGNED IN</p>
+        <h2 id="accountDisplayName"></h2>
+        <p id="accountEmailAddress" class="service-meta"></p>
+        <p class="account-wallet-note">Link your phone wallet once to securely move its existing balance and transaction history under your account.</p>
+        <form id="walletPhoneForm" class="service-form">
+          <h3>Link your M-Pesa wallet</h3>
+          <label>Kenyan mobile number<input name="phone" type="tel" autocomplete="tel" placeholder="0712345678" required></label>
+          <label>Account type
+            <select name="accountType">
+              <option value="buyer">Ticket buyer</option>
+              <option value="organizer">Event organizer</option>
+              <option value="both">Buyer and organizer</option>
+            </select>
+          </label>
+          <button class="button button-primary" type="submit">Verify phone and link wallet</button>
+        </form>
+        <form id="walletVerifyForm" class="service-form" hidden>
+          <p id="walletPhoneMessage"></p>
+          <label>Six-digit SMS code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
+          <button class="button button-primary" type="submit">Verify and link wallet</button>
+          <button class="button secondary" id="walletChangePhone" type="button">Use a different number</button>
+        </form>
+        <p class="page-feedback" id="walletSignInFeedback" aria-live="polite"></p>
+        <p class="service-meta" id="walletLinkedPhone" hidden></p>
+        <button class="button secondary" id="accountSignOut" type="button">Sign out</button>
+      </div>
     </section>
     <section class="service-card wallet-dashboard" id="walletDashboard" hidden>
       <div class="wallet-heading">
-        <div><p class="eyebrow">AVAILABLE BALANCE</p><h2 id="walletBalance">KES 0</h2><p class="service-meta" id="walletAccount"></p></div>
-        <button class="button secondary" id="walletSignOut" type="button">Sign out</button>
+        <div><p class="eyebrow">AVAILABLE BALANCE</p><h2 id="walletBalance">KES 0</h2></div>
       </div>
       <form id="walletDepositForm" class="service-form wallet-deposit">
         <h2>Add money with M-Pesa</h2>
