@@ -10,7 +10,7 @@ Valor Africa is an event discovery, publishing, ticketing, and event-promotion p
 - `wallet.html` — one-time phone-wallet linking, M-Pesa deposits, and transaction history.
 - `host.html` — organizer event submission and local draft saving.
 - `event.html`, `order.html`, `ticket.html`, and `advertise.html` — public event details, payment status and ticket confirmations, ticket verification, and paid ad booking.
-- `backend-events/` — separate API and admin dashboard for publishing, review, orders, tickets, and ad packages. It is not connected to the merchandise shop backend.
+- `backend-events/` — API and admin dashboard for publishing, review, event orders, tickets, ad packages, and the merchandise catalog with Valor Wallet checkout.
 
 ## Run locally
 

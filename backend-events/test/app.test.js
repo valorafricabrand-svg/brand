@@ -415,6 +415,64 @@ test('account sign-in links existing phone wallet and pays verified deposits, ti
   assert.equal(paidAd.body.campaign.campaignStatus, 'active');
   assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 7100);
 
+  const publicProducts = await request(app).get('/api/shop/products');
+  assert.equal(publicProducts.status, 200);
+  assert.equal(publicProducts.body.products.some((product) => product.id === 'valor-tote'), true);
+  assert.equal((await request(app).get('/api/shop/admin/products')).status, 401);
+  const product = await request(app).post('/api/shop/admin/products').set(admin).send({
+    name: 'Limited event pin',
+    description: 'A limited-run enamel pin.',
+    priceKes: 350,
+    imageUrl: '/images/one.jpg',
+    stock: 1
+  });
+  assert.equal(product.status, 201);
+  const merchandiseOrder = {
+    items: [{ productId: product.body.id, quantity: 1, priceKes: 1 }],
+    customerName: 'Organizer Buyer',
+    phone: '0712345678',
+    deliveryAddress: 'Nairobi, Westlands',
+    clientRequestId: '30000000-0000-4000-8000-000000000001'
+  };
+  assert.equal((await request(app).post('/api/orders/merchandise').send(merchandiseOrder)).status, 401);
+  assert.equal((await request(app).post('/api/orders/merchandise').set(walletAuth).send({
+    ...merchandiseOrder,
+    items: [{ productId: product.body.id, quantity: 11 }]
+  })).status, 400);
+  const purchase = await request(app).post('/api/orders/merchandise').set(walletAuth).send(merchandiseOrder);
+  assert.equal(purchase.status, 201);
+  assert.equal(purchase.body.status, 'paid');
+  assert.equal(purchase.body.amountKes, 350);
+  assert.equal(purchase.body.balanceKes, 6750);
+  const repeatPurchase = await request(app).post('/api/orders/merchandise').set(walletAuth).send(merchandiseOrder);
+  assert.equal(repeatPurchase.status, 200);
+  assert.equal(repeatPurchase.body.orderId, purchase.body.orderId);
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 6750);
+  assert.equal(db.prepare('SELECT stock FROM merchandise_products WHERE id=?').get(product.body.id).stock, 0);
+  const soldOut = await request(app).post('/api/orders/merchandise').set(walletAuth).send({
+    ...merchandiseOrder,
+    clientRequestId: '30000000-0000-4000-8000-000000000002'
+  });
+  assert.equal(soldOut.status, 409);
+  const expensive = await request(app).post('/api/shop/admin/products').set(admin).send({
+    name: 'Premium event banner',
+    priceKes: 100000,
+    stock: null
+  });
+  assert.equal(expensive.status, 201);
+  const insufficientFunds = await request(app).post('/api/orders/merchandise').set(walletAuth).send({
+    ...merchandiseOrder,
+    items: [{ productId: expensive.body.id, quantity: 1 }],
+    clientRequestId: '30000000-0000-4000-8000-000000000003'
+  });
+  assert.equal(insufficientFunds.status, 402);
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 6750);
+  const adminOrders = await request(app).get('/api/orders/admin').set(admin);
+  const recordedOrder = adminOrders.body.orders.find((order) => order.id === purchase.body.orderId);
+  assert.equal(recordedOrder.orderType, 'merchandise');
+  assert.equal(recordedOrder.items[0].name, 'Limited event pin');
+  assert.equal(recordedOrder.deliveryAddress, 'Nairobi, Westlands');
+
   assert.equal((await request(app).post('/api/auth/account/logout').set(walletAuth)).status, 200);
   assert.equal((await request(app).get('/api/wallet').set(walletAuth)).status, 401);
 });

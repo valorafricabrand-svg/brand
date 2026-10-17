@@ -191,6 +191,43 @@ db.exec(`
     checked_in_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS merchandise_products (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    price_kes INTEGER NOT NULL CHECK (price_kes > 0),
+    image_url TEXT NOT NULL DEFAULT '',
+    stock INTEGER CHECK (stock IS NULL OR stock >= 0),
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS merchandise_orders (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts(id),
+    wallet_id TEXT NOT NULL REFERENCES wallets(id),
+    client_request_id TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    delivery_address TEXT NOT NULL,
+    amount_kes INTEGER NOT NULL CHECK (amount_kes > 0),
+    status TEXT NOT NULL DEFAULT 'paid' CHECK (status = 'paid'),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (account_id, client_request_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS merchandise_orders_created ON merchandise_orders(created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS merchandise_order_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id TEXT NOT NULL REFERENCES merchandise_orders(id),
+    product_id TEXT NOT NULL,
+    product_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity BETWEEN 1 AND 10),
+    unit_price_kes INTEGER NOT NULL CHECK (unit_price_kes > 0)
+  );
 `);
 
 const walletColumns = db.prepare('PRAGMA table_info(wallets)').all();
@@ -203,5 +240,57 @@ if (!orderColumns.some((column) => column.name === 'account_id')) {
 }
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS wallets_account ON wallets(account_id)');
 db.exec('DROP TABLE IF EXISTS wallet_sessions');
+
+const walletTransactionSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='wallet_transactions'").get().sql;
+if (!walletTransactionSchema.includes("'merchandise_purchase'")) {
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    db.exec(`
+      BEGIN IMMEDIATE;
+      CREATE TABLE wallet_transactions_new (
+        id TEXT PRIMARY KEY,
+        wallet_id TEXT NOT NULL REFERENCES wallets(id),
+        order_id TEXT UNIQUE REFERENCES orders(id),
+        merchandise_order_id TEXT UNIQUE REFERENCES merchandise_orders(id),
+        transaction_type TEXT NOT NULL CHECK (transaction_type IN ('deposit','ticket_purchase','ad_purchase','merchandise_purchase')),
+        amount_kes INTEGER NOT NULL CHECK (amount_kes != 0),
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','completed','failed','review')),
+        checkout_request_id TEXT UNIQUE,
+        merchant_request_id TEXT,
+        receipt TEXT UNIQUE,
+        description TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        completed_at TEXT
+      );
+      INSERT INTO wallet_transactions_new (
+        id,wallet_id,order_id,transaction_type,amount_kes,status,checkout_request_id,
+        merchant_request_id,receipt,description,created_at,completed_at
+      )
+      SELECT id,wallet_id,order_id,transaction_type,amount_kes,status,checkout_request_id,
+        merchant_request_id,receipt,description,created_at,completed_at
+      FROM wallet_transactions;
+      DROP TABLE wallet_transactions;
+      ALTER TABLE wallet_transactions_new RENAME TO wallet_transactions;
+      CREATE INDEX wallet_transactions_history ON wallet_transactions(wallet_id,created_at DESC);
+      COMMIT;
+    `);
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
+
+const starterProducts = [
+  ['valor-tote', 'Valor Africa Tote Bag', 'Durable canvas tote with the Valor Africa emblem, hand-printed.', 4500, '/images/one.jpg'],
+  ['community-print-tee', 'Community Print Tee', 'Soft cotton tee celebrating African entrepreneurship.', 2800, '/images/IMG_0729.jpg'],
+  ['founders-notebook', 'Founder’s Notebook', 'A5 hardcover notebook for brand-building notes and sketches.', 6200, '/images/IMG_1212.jpg']
+];
+const insertStarterProduct = db.prepare(`
+  INSERT OR IGNORE INTO merchandise_products (id,name,description,price_kes,image_url)
+  VALUES (?,?,?,?,?)
+`);
+for (const product of starterProducts) insertStarterProduct.run(...product);
 
 module.exports = db;

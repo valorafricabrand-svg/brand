@@ -60,6 +60,19 @@ function publicEvent(row) {
   };
 }
 
+function publicMerchandiseProduct(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    priceKes: row.price_kes,
+    currency: 'KES',
+    imageUrl: row.image_url,
+    stock: row.stock,
+    active: Boolean(row.active)
+  };
+}
+
 function normalizePhone(value) {
   const digits = String(value || '').replace(/[^\d]/g, '');
   if (/^0[17]\d{8}$/.test(digits)) return `254${digits.slice(1)}`;
@@ -448,6 +461,121 @@ function createApp(options = {}) {
     res.json({ linked: Boolean(wallet), ...walletSnapshot(wallet && wallet.id) });
   });
 
+  app.get('/api/shop/products', (req, res) => {
+    const products = db.prepare(`
+      SELECT id,name,description,price_kes,image_url,stock,active
+      FROM merchandise_products WHERE active=1 ORDER BY created_at DESC,id
+    `).all();
+    res.json({ products: products.map(publicMerchandiseProduct) });
+  });
+
+  app.post('/api/orders/merchandise', requireAccount, (req, res) => {
+    const wallet = walletForAccount(req.account.id);
+    if (!wallet) return res.status(409).json({ error: 'Link your phone wallet before paying for merchandise.' });
+    const { items, customerName, phone, deliveryAddress, clientRequestId } = req.body || {};
+    if (!Array.isArray(items) || items.length < 1 || items.length > 20) {
+      return res.status(400).json({ error: 'Choose 1–20 merchandise items for your order.' });
+    }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRequestId || '')) {
+      return res.status(400).json({ error: 'Refresh the shop and try your order again.' });
+    }
+    if (typeof customerName !== 'string' || !customerName.trim() || customerName.trim().length > 120) {
+      return res.status(400).json({ error: 'Enter your name (120 characters maximum).' });
+    }
+    const normalizedContactPhone = normalizePhone(phone);
+    if (!normalizedContactPhone) return res.status(400).json({ error: 'Enter a valid Kenyan contact number.' });
+    if (typeof deliveryAddress !== 'string' || !deliveryAddress.trim() || deliveryAddress.trim().length > 500) {
+      return res.status(400).json({ error: 'Enter delivery details (500 characters maximum).' });
+    }
+
+    const productQuantities = new Map();
+    for (const item of items) {
+      if (!item || typeof item.productId !== 'string' || !item.productId ||
+          !Number.isSafeInteger(item.quantity) || item.quantity < 1 || item.quantity > 10 ||
+          productQuantities.has(item.productId)) {
+        return res.status(400).json({ error: 'Each item must have a unique product and a quantity from 1 to 10.' });
+      }
+      productQuantities.set(item.productId, item.quantity);
+    }
+
+    try {
+      const order = db.transaction(() => {
+        const existing = db.prepare(`
+          SELECT id,amount_kes AS amountKes FROM merchandise_orders
+          WHERE account_id=? AND client_request_id=?
+        `).get(req.account.id, clientRequestId);
+        if (existing) {
+          const balanceKes = db.prepare("SELECT COALESCE(SUM(amount_kes),0) AS balance FROM wallet_transactions WHERE wallet_id=? AND status='completed'")
+            .get(wallet.id).balance;
+          return { ...existing, balanceKes, duplicate: true };
+        }
+
+        const orderItems = [];
+        let amountKes = 0;
+        for (const [productId, quantity] of productQuantities) {
+          const product = db.prepare(`
+            SELECT id,name,price_kes,stock FROM merchandise_products
+            WHERE id=? AND active=1
+          `).get(productId);
+          if (!product) throw Object.assign(new Error('A merchandise item in your cart is no longer available.'), { statusCode: 409 });
+          if (product.stock !== null && product.stock < quantity) {
+            throw Object.assign(new Error(`${product.name} does not have enough stock for that quantity.`), { statusCode: 409 });
+          }
+          const lineTotal = product.price_kes * quantity;
+          if (!Number.isSafeInteger(lineTotal) || !Number.isSafeInteger(amountKes + lineTotal)) {
+            throw Object.assign(new Error('Your merchandise order total is too large.'), { statusCode: 400 });
+          }
+          amountKes += lineTotal;
+          orderItems.push({ ...product, quantity });
+        }
+
+        const balanceKes = db.prepare("SELECT COALESCE(SUM(amount_kes),0) AS balance FROM wallet_transactions WHERE wallet_id=? AND status='completed'")
+          .get(wallet.id).balance;
+        if (balanceKes < amountKes) {
+          throw Object.assign(new Error('Your wallet balance is too low. Add funds and try again.'), { statusCode: 402 });
+        }
+
+        const orderId = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO merchandise_orders (
+            id,account_id,wallet_id,client_request_id,customer_name,phone,delivery_address,amount_kes
+          ) VALUES (?,?,?,?,?,?,?,?)
+        `).run(orderId, req.account.id, wallet.id, clientRequestId, customerName.trim(), normalizedContactPhone, deliveryAddress.trim(), amountKes);
+
+        const insertItem = db.prepare(`
+          INSERT INTO merchandise_order_items (order_id,product_id,product_name,quantity,unit_price_kes)
+          VALUES (?,?,?,?,?)
+        `);
+        const updateStock = db.prepare("UPDATE merchandise_products SET stock=stock-?,updated_at=datetime('now') WHERE id=? AND stock>=?");
+        for (const item of orderItems) {
+          insertItem.run(orderId, item.id, item.name, item.quantity, item.price_kes);
+          if (item.stock !== null && updateStock.run(item.quantity, item.id, item.quantity).changes !== 1) {
+            throw Object.assign(new Error(`${item.name} just sold out. Refresh the shop and try again.`), { statusCode: 409 });
+          }
+        }
+        db.prepare(`
+          INSERT INTO wallet_transactions (
+            id,wallet_id,merchandise_order_id,transaction_type,amount_kes,status,description,completed_at
+          ) VALUES (?,?,?,'merchandise_purchase',?,'completed',?,datetime('now'))
+        `).run(crypto.randomUUID(), wallet.id, orderId, -amountKes, `Merchandise order ${orderId}`);
+
+        return { id: orderId, amountKes, balanceKes: balanceKes - amountKes, duplicate: false };
+      })();
+      return res.status(order.duplicate ? 200 : 201).json({
+        orderId: order.id,
+        status: 'paid',
+        amountKes: order.amountKes,
+        balanceKes: order.balanceKes,
+        message: order.duplicate
+          ? 'This merchandise order was already paid from your Valor Wallet.'
+          : 'Your merchandise order is paid with Valor Wallet. Our team will contact you about delivery.'
+      });
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
+  });
+
   app.post('/api/wallet/deposits', requireAccount, async (req, res) => {
     const wallet = walletForAccount(req.account.id);
     if (!wallet) return res.status(409).json({ error: 'Verify and link your phone number before adding wallet funds.' });
@@ -807,7 +935,7 @@ function createApp(options = {}) {
   });
 
   app.get('/api/orders/admin', requireAdmin, (req, res) => {
-    const rows = db.prepare(`
+    const eventOrders = db.prepare(`
       SELECT o.id,o.order_type AS orderType,o.status,o.buyer_name AS buyerName,o.phone,
         o.ticket_type AS ticketType,o.quantity,o.amount_kes AS amountKes,
         o.mpesa_receipt AS receipt,o.result_description AS resultDescription,
@@ -819,7 +947,90 @@ function createApp(options = {}) {
       LEFT JOIN ad_packages p ON p.id=b.package_id
       ORDER BY o.created_at DESC LIMIT 200
     `).all();
-    res.json({ orders: rows });
+    const merchandiseOrders = db.prepare(`
+      SELECT id,'merchandise' AS orderType,status,customer_name AS buyerName,phone,
+        '' AS ticketType,
+        (SELECT COALESCE(SUM(quantity),0) FROM merchandise_order_items WHERE order_id=merchandise_orders.id) AS quantity,
+        amount_kes AS amountKes,'' AS receipt,'Paid with Valor Wallet.' AS resultDescription,
+        created_at AS createdAt,'Merchandise order' AS eventTitle,'' AS adPackage,
+        delivery_address AS deliveryAddress
+      FROM merchandise_orders ORDER BY created_at DESC LIMIT 200
+    `).all().map((order) => ({
+      ...order,
+      items: db.prepare(`
+        SELECT product_name AS name,quantity,unit_price_kes AS unitPriceKes
+        FROM merchandise_order_items WHERE order_id=?
+      `).all(order.id)
+    }));
+    const orders = [...eventOrders, ...merchandiseOrders]
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(0, 200);
+    res.json({ orders });
+  });
+
+  app.get('/api/shop/admin/products', requireAdmin, (req, res) => {
+    const products = db.prepare(`
+      SELECT id,name,description,price_kes,image_url,stock,active
+      FROM merchandise_products ORDER BY created_at DESC,id
+    `).all();
+    res.json({ products: products.map(publicMerchandiseProduct) });
+  });
+
+  app.post('/api/shop/admin/products', requireAdmin, (req, res) => {
+    const { name, description = '', priceKes, imageUrl = '', stock = null, active = true } = req.body || {};
+    if (typeof name !== 'string' || !name.trim() || name.trim().length > 120) {
+      return res.status(400).json({ error: 'Product name is required (120 characters maximum).' });
+    }
+    if (typeof description !== 'string' || description.length > 2000) {
+      return res.status(400).json({ error: 'Product description must be 2,000 characters or fewer.' });
+    }
+    if (!Number.isSafeInteger(priceKes) || priceKes < 1 || priceKes > 100000000) {
+      return res.status(400).json({ error: 'Set a positive whole-number price in KES.' });
+    }
+    if (typeof imageUrl !== 'string' || imageUrl.length > 2048 ||
+        (imageUrl && !imageUrl.startsWith('/images/') && !/^https:\/\//i.test(imageUrl))) {
+      return res.status(400).json({ error: 'Use a site image path under /images/ or a secure HTTPS image URL.' });
+    }
+    if (stock !== null && (!Number.isSafeInteger(stock) || stock < 0)) {
+      return res.status(400).json({ error: 'Stock must be a non-negative whole number, or blank for unlimited stock.' });
+    }
+    if (![0,1,false,true].includes(active)) return res.status(400).json({ error: 'Choose whether the product is active.' });
+    const id = crypto.randomUUID();
+    db.prepare(`
+      INSERT INTO merchandise_products (id,name,description,price_kes,image_url,stock,active)
+      VALUES (?,?,?,?,?,?,?)
+    `).run(id, name.trim(), description.trim(), priceKes, imageUrl.trim(), stock, active ? 1 : 0);
+    return res.status(201).json(publicMerchandiseProduct(db.prepare('SELECT * FROM merchandise_products WHERE id=?').get(id)));
+  });
+
+  app.patch('/api/shop/admin/products/:id', requireAdmin, (req, res) => {
+    const existing = db.prepare('SELECT * FROM merchandise_products WHERE id=?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Merchandise product not found.' });
+    const { name = existing.name, description = existing.description, priceKes = existing.price_kes,
+      imageUrl = existing.image_url, stock = existing.stock, active = existing.active } = req.body || {};
+    if (typeof name !== 'string' || !name.trim() || name.trim().length > 120) {
+      return res.status(400).json({ error: 'Product name is required (120 characters maximum).' });
+    }
+    if (typeof description !== 'string' || description.length > 2000) {
+      return res.status(400).json({ error: 'Product description must be 2,000 characters or fewer.' });
+    }
+    if (!Number.isSafeInteger(priceKes) || priceKes < 1 || priceKes > 100000000) {
+      return res.status(400).json({ error: 'Set a positive whole-number price in KES.' });
+    }
+    if (typeof imageUrl !== 'string' || imageUrl.length > 2048 ||
+        (imageUrl && !imageUrl.startsWith('/images/') && !/^https:\/\//i.test(imageUrl))) {
+      return res.status(400).json({ error: 'Use a site image path under /images/ or a secure HTTPS image URL.' });
+    }
+    if (stock !== null && (!Number.isSafeInteger(stock) || stock < 0)) {
+      return res.status(400).json({ error: 'Stock must be a non-negative whole number, or blank for unlimited stock.' });
+    }
+    if (![0,1,false,true].includes(active)) return res.status(400).json({ error: 'Choose whether the product is active.' });
+    db.prepare(`
+      UPDATE merchandise_products
+      SET name=?,description=?,price_kes=?,image_url=?,stock=?,active=?,updated_at=datetime('now')
+      WHERE id=?
+    `).run(name.trim(), description.trim(), priceKes, imageUrl.trim(), stock, active ? 1 : 0, req.params.id);
+    return res.json(publicMerchandiseProduct(db.prepare('SELECT * FROM merchandise_products WHERE id=?').get(req.params.id)));
   });
 
   app.patch('/api/events/admin/:id/review', requireAdmin, (req, res) => {

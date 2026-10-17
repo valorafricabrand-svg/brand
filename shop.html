@@ -3,11 +3,83 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="refresh" content="0; url=events.html">
-  <link rel="canonical" href="https://valorafrica.co.ke/events.html">
-  <title>Events & Tickets | Valor Africa</title>
+  <title>Valor Africa Shop | Official Merchandise</title>
+  <meta name="description" content="Shop official Valor Africa merchandise and pay securely with your Valor Wallet.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://valorafrica.co.ke/shop.html">
+  <meta property="og:title" content="Valor Africa Shop | Official Merchandise">
+  <meta property="og:description" content="Shop official Valor Africa merchandise and pay securely with your Valor Wallet.">
+  <meta property="og:url" content="https://valorafrica.co.ke/shop.html">
+  <meta property="og:image" content="https://valorafrica.co.ke/images/og-image.svg">
+  <meta name="theme-color" content="#087f5b">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/events.css">
+  <script src="scripts/events-api.js" defer></script>
+  <script src="scripts/shop.js" defer></script>
 </head>
 <body>
-  <p>Valor Africa is now focused on events. <a href="events.html">Browse events and tickets</a>.</p>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <nav class="nav wrap" aria-label="Main navigation">
+      <a href="index.html" class="brand" aria-label="Valor Africa Events home"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a>
+      <div class="nav-links nav-links-static">
+        <a href="events.html">Events</a>
+        <a href="index.html#events">Discover</a>
+        <a href="host.html">For organizers</a>
+        <a href="wallet.html">Wallet</a>
+        <a href="account.html">Account</a>
+        <a href="contact.html">Help</a>
+        <a class="nav-host" href="shop.html" aria-current="page">Shop now</a>
+      </div>
+    </nav>
+  </header>
+  <main id="main">
+    <section class="wrap shop-intro">
+      <p class="eyebrow">THE VALOR AFRICA SHOP</p>
+      <h1>Take Valor with you.</h1>
+      <p>Shop official merchandise and pay securely with Valor Wallet.</p>
+    </section>
+    <div class="wrap shop-layout">
+      <section aria-labelledby="shopProductsTitle">
+        <div class="shop-section-heading">
+          <div><p class="eyebrow">MADE FOR THE COMMUNITY</p><h2 id="shopProductsTitle">Official merchandise</h2></div>
+          <a class="shop-wallet-link" href="wallet.html">View your wallet <span aria-hidden="true">→</span></a>
+        </div>
+        <p class="shop-feedback" id="shopProductsFeedback" role="status" aria-live="polite"></p>
+        <div class="shop-product-grid" id="shopProducts" aria-live="polite"></div>
+      </section>
+      <aside class="shop-cart" aria-labelledby="shopCartTitle">
+        <div class="shop-cart-heading"><h2 id="shopCartTitle">Your bag</h2><span id="shopCartCount">0 items</span></div>
+        <div class="shop-cart-items" id="shopCartItems"></div>
+        <div class="shop-cart-total"><span>Merchandise subtotal</span><strong id="shopCartTotal">KES 0</strong></div>
+        <p class="shop-delivery-note">Delivery details are collected at checkout. Our team will contact you to arrange delivery and confirm any delivery charges separately.</p>
+        <div class="shop-wallet-status" id="shopWalletStatus" role="status" aria-live="polite">Checking your Valor Wallet…</div>
+        <form class="shop-checkout-form" id="shopCheckoutForm" hidden>
+          <label for="shopCustomerName">Full name</label>
+          <input id="shopCustomerName" name="customerName" autocomplete="name" maxlength="120" required>
+          <label for="shopCustomerPhone">Contact phone</label>
+          <input id="shopCustomerPhone" name="phone" type="tel" autocomplete="tel" placeholder="0712 345 678" required>
+          <label for="shopDeliveryAddress">Delivery details</label>
+          <textarea id="shopDeliveryAddress" name="deliveryAddress" maxlength="500" placeholder="Town, area, and preferred delivery details" required></textarea>
+          <button class="button button-primary" id="shopCheckoutButton" type="submit" disabled>Pay with Valor Wallet</button>
+        </form>
+        <p class="shop-checkout-feedback" id="shopCheckoutFeedback" role="status" aria-live="polite"></p>
+        <p class="shop-signin-note" id="shopSignInNote" hidden>Sign in to continue: <a href="account.html?returnTo=%2Fshop.html">Open your Valor account</a>.</p>
+        <p class="shop-wallet-link-note" id="shopWalletLinkNote" hidden>Link your phone wallet before checkout: <a href="wallet.html">Set up Valor Wallet</a>.</p>
+      </aside>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand-block"><a href="index.html" class="brand footer-brand"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a><p>Discover experiences and find your next great event across Africa.</p><a class="footer-email" href="mailto:hello@valorafrica.co.ke">hello@valorafrica.co.ke</a></div>
+      <div class="footer-column"><h2 class="footer-heading">Discover</h2><nav class="footer-links" aria-label="Discover"><a href="events.html">Browse events</a><a href="about.html">About Valor Africa</a><a href="shop.html" aria-current="page">Shop now</a></nav></div>
+      <div class="footer-column"><h2 class="footer-heading">For organizers</h2><nav class="footer-links" aria-label="For organizers"><a href="host.html">Host an event</a><a href="advertise.html">Promote an event</a><a href="partnership.html">Partnership with Valor</a></nav></div>
+      <div class="footer-column"><h2 class="footer-heading">Tickets &amp; support</h2><nav class="footer-links" aria-label="Tickets and support"><a href="account.html">Your account</a><a href="wallet.html">Valor Wallet</a><a href="contact.html">Contact support</a><a href="refund-policy.html">Refund policy</a></nav></div>
+    </div>
+    <div class="wrap footer-bottom"><p>© 2026 Valor Africa Events</p><a href="index.html">Back to home <span aria-hidden="true">↑</span></a></div>
+  </footer>
 </body>
 </html>

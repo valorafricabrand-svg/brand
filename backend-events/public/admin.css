@@ -42,14 +42,19 @@ input,select,textarea{width:100%;min-height:42px;padding:9px 11px;border:1px sol
 .record-actions .button{width:auto}
 .record-actions .reject{border:1px solid #efc3be;color:#a3261a;background:#fff}
 .record-poster{display:block;width:min(100%,450px);max-height:260px;margin-top:12px;border-radius:9px;object-fit:cover}
-.package-form{display:grid;grid-template-columns:1.3fr 1.5fr .8fr .8fr auto;gap:11px;align-items:end;margin-bottom:18px;padding:15px;border-radius:11px;background:#f7f9fb}
-.package-form label{margin:0}
-.package-form .button{white-space:nowrap}
+.package-form,.product-form{display:grid;grid-template-columns:1.3fr 1.5fr .8fr .8fr auto;gap:11px;align-items:end;margin-bottom:18px;padding:15px;border-radius:11px;background:#f7f9fb}
+.package-form label,.product-form label{margin:0}
+.package-form .button,.product-form .button{white-space:nowrap}
 .package-row{display:grid;grid-template-columns:1fr 1.4fr .7fr .8fr auto;gap:10px;align-items:end}
 .package-row label{margin:0;font-size:11px}
 .package-row .button{width:100%}
+.product-form{grid-template-columns:1fr 1.5fr .7fr 1.2fr .8fr auto}
+.product-row{display:grid;grid-template-columns:1fr 1.5fr .7fr 1.2fr .8fr auto;gap:10px;align-items:end}
+.product-row label{margin:0;font-size:11px}
+.product-row .record-actions{margin:0}
+.product-row .button{width:100%}
 .feedback{min-height:22px;margin:10px 0 0;color:var(--green-dark,#064e3b);font-size:13px}
 .feedback.error{color:#b42318}
 .empty{padding:20px;border:1px dashed var(--border);border-radius:10px;color:var(--muted);text-align:center}
-@media(max-width:760px){.package-form,.package-row{grid-template-columns:1fr 1fr}.package-form .button{grid-column:1/-1}.section-heading{align-items:stretch;flex-direction:column}.section-heading select{width:100%}}
-@media(max-width:470px){.package-form,.package-row{grid-template-columns:1fr}.record-actions .button{flex:1 1 100%}.tabs{margin-inline:-5px}}
+@media(max-width:760px){.package-form,.package-row,.product-form,.product-row{grid-template-columns:1fr 1fr}.package-form .button,.product-form .button{grid-column:1/-1}.section-heading{align-items:stretch;flex-direction:column}.section-heading select{width:100%}}
+@media(max-width:470px){.package-form,.package-row,.product-form,.product-row{grid-template-columns:1fr}.record-actions .button{flex:1 1 100%}.tabs{margin-inline:-5px}}

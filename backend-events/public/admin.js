@@ -41,6 +41,7 @@
     dashboard.hidden = false;
     document.getElementById('logoutButton').hidden = false;
     await loadSubmissions();
+    await loadProducts();
     await loadPackages();
     await loadOrders();
   }
@@ -146,17 +147,72 @@
     });
   }
 
+  async function loadProducts() {
+    const list = document.getElementById('productsList');
+    list.replaceChildren();
+    const { products } = await api('/api/shop/admin/products');
+    if (!products.length) return addText(list, 'p', 'empty', 'No merchandise added yet. Add your first product above.');
+    products.forEach((product) => {
+      const card = document.createElement('article');
+      card.className = 'record product-row';
+      card.dataset.productId = product.id;
+      const fields = [
+        ['Name','name',product.name,'text'],
+        ['Description','description',product.description,'text'],
+        ['Price (KES)','priceKes',product.priceKes,'number'],
+        ['Image path or HTTPS URL','imageUrl',product.imageUrl,'text'],
+        ['Stock (blank means unlimited)','stock',product.stock ?? '','number']
+      ];
+      fields.forEach(([labelText, name, value, type]) => {
+        const label = document.createElement('label');
+        label.textContent = labelText;
+        const input = document.createElement('input');
+        input.name = name;
+        input.type = type;
+        input.value = value;
+        if (name === 'priceKes') { input.min = '1'; input.max = '100000000'; }
+        if (name === 'stock') input.min = '0';
+        if (name === 'imageUrl') input.maxLength = 2048;
+        if (name === 'description') input.maxLength = 2000;
+        label.appendChild(input);
+        card.appendChild(label);
+      });
+      const actions = document.createElement('div');
+      actions.className = 'record-actions';
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'button primary';
+      save.dataset.saveProduct = product.id;
+      save.textContent = 'Save';
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'button secondary';
+      toggle.dataset.toggleProduct = product.id;
+      toggle.textContent = product.active ? 'Deactivate' : 'Activate';
+      toggle.dataset.active = String(product.active);
+      actions.append(save, toggle);
+      card.appendChild(actions);
+      list.appendChild(card);
+    });
+  }
+
   async function loadOrders() {
     const list = document.getElementById('ordersList');
     list.replaceChildren();
     const { orders } = await api('/api/orders/admin');
-    if (!orders.length) return addText(list, 'p', 'empty', 'No ticket or advertising orders have been created.');
+    if (!orders.length) return addText(list, 'p', 'empty', 'No customer orders have been created.');
     orders.forEach((order) => {
       const card = document.createElement('article');
       card.className = 'record';
-      addText(card, 'h3', '', `${order.eventTitle || 'Event'} · ${order.orderType === 'ad' ? order.adPackage || 'Event promotion' : `${order.quantity} × ${order.ticketType}`}`);
+      const orderTitle = order.orderType === 'merchandise'
+        ? order.items.map((item) => `${item.quantity} × ${item.name}`).join(', ')
+        : order.orderType === 'ad'
+          ? `${order.eventTitle || 'Event'} · ${order.adPackage || 'Event promotion'}`
+          : `${order.eventTitle || 'Event'} · ${order.quantity} × ${order.ticketType}`;
+      addText(card, 'h3', '', orderTitle);
       addText(card, 'p', 'record-meta', `${order.status.toUpperCase()} · ${order.orderType.toUpperCase()} · KES ${Number(order.amountKes).toLocaleString('en-KE')} · ${new Date(order.createdAt).toLocaleString()}`);
       addText(card, 'p', 'record-contact', `${order.buyerName} · ${order.phone}${order.receipt ? ` · M-Pesa receipt ${order.receipt}` : ''}`);
+      if (order.deliveryAddress) addText(card, 'p', 'record-contact', `Delivery details: ${order.deliveryAddress}`);
       if (order.resultDescription) addText(card, 'p', 'record-meta', order.resultDescription);
       list.appendChild(card);
     });
@@ -190,6 +246,7 @@
     if (!button) return;
     document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('is-active', tab === button));
     document.getElementById('submissionsSection').hidden = button.dataset.adminTab !== 'submissions';
+    document.getElementById('merchandiseSection').hidden = button.dataset.adminTab !== 'merchandise';
     document.getElementById('packagesSection').hidden = button.dataset.adminTab !== 'packages';
     document.getElementById('ordersSection').hidden = button.dataset.adminTab !== 'orders';
   });
@@ -236,6 +293,60 @@
       setFeedback(feedback, 'Paid advertising package added.');
       await loadPackages();
     } catch (error) {
+      setFeedback(feedback, error.message, true);
+    }
+  });
+
+  document.getElementById('productForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const productForm = event.currentTarget;
+    const data = new FormData(productForm);
+    const stock = data.get('stock');
+    try {
+      await api('/api/shop/admin/products', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: data.get('name'),
+          description: data.get('description'),
+          priceKes: Number(data.get('priceKes')),
+          imageUrl: data.get('imageUrl'),
+          stock: stock === '' ? null : Number(stock)
+        })
+      });
+      productForm.reset();
+      setFeedback(feedback, 'Merchandise product added.');
+      await loadProducts();
+    } catch (error) {
+      setFeedback(feedback, error.message, true);
+    }
+  });
+
+  document.getElementById('productsList').addEventListener('click', async (event) => {
+    const save = event.target.closest('[data-save-product]');
+    const toggle = event.target.closest('[data-toggle-product]');
+    if (!save && !toggle) return;
+    const button = save || toggle;
+    const card = button.closest('[data-product-id]');
+    const stockValue = card.querySelector('[name=stock]').value;
+    const body = save
+      ? {
+        name: card.querySelector('[name=name]').value,
+        description: card.querySelector('[name=description]').value,
+        priceKes: Number(card.querySelector('[name=priceKes]').value),
+        imageUrl: card.querySelector('[name=imageUrl]').value,
+        stock: stockValue === '' ? null : Number(stockValue)
+      }
+      : { active: toggle.dataset.active !== 'true' };
+    button.disabled = true;
+    try {
+      await api(`/api/shop/admin/products/${encodeURIComponent(button.dataset.saveProduct || button.dataset.toggleProduct)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body)
+      });
+      setFeedback(feedback, 'Merchandise product updated.');
+      await loadProducts();
+    } catch (error) {
+      button.disabled = false;
       setFeedback(feedback, error.message, true);
     }
   });

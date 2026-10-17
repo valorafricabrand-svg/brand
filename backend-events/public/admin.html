@@ -20,7 +20,7 @@
     <section class="card login-card" id="loginPanel">
       <p class="kicker">SECURE ORGANIZER TOOLS</p>
       <h1>Review event submissions</h1>
-      <p>Sign in to approve events, manage ad packages, and view paid ticket orders.</p>
+      <p>Sign in to manage event listings, merchandise, advertising, and orders.</p>
       <form id="loginForm">
         <label for="username">Admin username</label>
         <input id="username" name="username" autocomplete="username" required>
@@ -38,8 +38,9 @@
       </div>
       <nav class="tabs" aria-label="Admin sections">
         <button class="tab is-active" type="button" data-admin-tab="submissions">Event submissions</button>
+        <button class="tab" type="button" data-admin-tab="merchandise">Merchandise</button>
         <button class="tab" type="button" data-admin-tab="packages">Ad packages</button>
-        <button class="tab" type="button" data-admin-tab="orders">Ticket &amp; ad orders</button>
+        <button class="tab" type="button" data-admin-tab="orders">All orders</button>
       </nav>
       <section class="card admin-section" id="submissionsSection">
         <div class="section-heading">
@@ -53,6 +54,18 @@
         </div>
         <div class="record-list" id="submissionsList"></div>
       </section>
+      <section class="card admin-section" id="merchandiseSection" hidden>
+        <div class="section-heading"><div><h2>Official merchandise</h2><p>Manage products, KES prices, stock, and storefront availability.</p></div></div>
+        <form class="product-form" id="productForm">
+          <label>Product name<input name="name" maxlength="120" required></label>
+          <label>Description<input name="description" maxlength="2000"></label>
+          <label>Price (KES)<input name="priceKes" type="number" min="1" max="100000000" step="1" required></label>
+          <label>Image path or HTTPS URL<input name="imageUrl" maxlength="2048" placeholder="/images/product.jpg"></label>
+          <label>Stock (blank means unlimited)<input name="stock" type="number" min="0" step="1"></label>
+          <button class="button primary" type="submit">Add product</button>
+        </form>
+        <div class="record-list" id="productsList"></div>
+      </section>
       <section class="card admin-section" id="packagesSection" hidden>
         <div class="section-heading"><div><h2>Paid ad packages</h2><p>Set the exact KES prices and exposure duration organizers can book.</p></div></div>
         <form class="package-form" id="packageForm">
@@ -65,7 +78,7 @@
         <div class="record-list" id="packagesList"></div>
       </section>
       <section class="card admin-section" id="ordersSection" hidden>
-        <div class="section-heading"><div><h2>Ticket &amp; ad orders</h2><p>Only M-Pesa-confirmed orders issue tickets or activate advertisements.</p></div></div>
+        <div class="section-heading"><div><h2>All orders</h2><p>Review ticket, advertising, and merchandise order payments.</p></div></div>
         <div class="record-list" id="ordersList"></div>
       </section>
       <p class="feedback" id="dashboardFeedback" aria-live="polite"></p>
