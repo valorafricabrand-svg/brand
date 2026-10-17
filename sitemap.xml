@@ -20,4 +20,8 @@
     <loc>https://valorafrica.co.ke/contact.html</loc>
     <priority>0.5</priority>
   </url>
+  <url>
+    <loc>https://valorafrica.co.ke/refund-policy.html</loc>
+    <priority>0.5</priority>
+  </url>
 </urlset>

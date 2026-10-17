@@ -27,9 +27,105 @@
       tickets: [
         { name: 'Regular', price: 10, currency: 'USD' }
       ]
+    },
+    {
+      id: 'mixed-tape-birthday',
+      title: 'The Mixed Tape Experience: Birthday Edition (All Vinyl Party)',
+      category: 'Concerts',
+      location: 'Simba Saloon at Carnivore, Nairobi',
+      startsAt: '2026-10-19T18:00:00+03:00',
+      tickets: [{ name: 'Regular', price: 1100, currency: 'KES' }]
+    },
+    {
+      id: 'padel-tennis-experience',
+      title: 'Padel Tennis Experience',
+      category: 'Sports',
+      location: 'Sarit Centre, Lower Kabete Road, Nairobi',
+      startsAt: '2026-10-20T19:00:00+03:00',
+      tickets: [{ name: 'Regular', price: 6500, currency: 'KES' }]
+    },
+    {
+      id: 'marketplace-mastery-miracles',
+      title: 'Marketplace Mastery & Miracles',
+      category: 'Business',
+      location: 'Argyle Grand Hotel, Nairobi',
+      startsAt: '2026-10-24T09:00:00+03:00',
+      tickets: [{ name: 'Regular', price: 2200, currency: 'KES' }]
+    },
+    {
+      id: 'south-africa-wine-fair',
+      title: 'Wines of South Africa by the Glass: 3-Day Wine Fair',
+      category: 'Food & Drink',
+      location: 'Artcaffé, Rhapta Road, Nairobi',
+      startsAt: '2026-10-30T12:00:00+03:00',
+      tickets: [{ name: 'Regular', price: 2000, currency: 'KES' }]
+    },
+    {
+      id: 'ballpoint-karaoke-halloween',
+      title: 'Ballpoint Karaoke Night: Halloween Edition',
+      category: 'Concerts',
+      location: 'Ballpoint Social Club, Nairobi',
+      startsAt: '2026-10-30T19:00:00+03:00',
+      tickets: [{ name: 'Regular', price: 500, currency: 'KES' }]
+    },
+    {
+      id: 'sensory-halloween-pairing',
+      title: 'Sensory Halloween: Chocolate & Wine Pairing',
+      category: 'Food & Drink',
+      location: 'Karel T-Lounge, Village Market, Nairobi',
+      startsAt: '2026-10-30T19:30:00+03:00',
+      tickets: [{ name: 'Regular', price: 4000, currency: 'KES' }]
+    },
+    {
+      id: 'halloween-fright-night',
+      title: 'Halloween Fright Night',
+      category: 'Festivals',
+      location: 'Village Market, Limuru Road, Nairobi',
+      startsAt: '2026-10-31T14:00:00+03:00',
+      tickets: [{ name: 'Regular', price: 1500, currency: 'KES' }]
+    },
+    {
+      id: 'graveyard-halloween-party',
+      title: 'RaveYard: Thee Halloween Party',
+      category: 'Concerts',
+      location: 'Uptown Lavington, James Gichuru Road, Nairobi',
+      startsAt: '2026-10-31T18:00:00+03:00',
+      tickets: [{ name: 'Regular', price: 1500, currency: 'KES' }]
+    },
+    {
+      id: 'eco-fashion-week-africa',
+      title: 'Eco Fashion Week Africa: Season 4',
+      category: 'Arts & Culture',
+      location: 'Mawe Zuri Resort, Watamu',
+      startsAt: '2026-11-07T17:00:00+03:00',
+      tickets: [{ name: 'Regular', price: 4000, currency: 'KES' }]
+    },
+    {
+      id: 'grace-to-heal',
+      title: 'The Grace to Heal',
+      category: 'Community',
+      location: 'Global Trade Centre, Westlands, Nairobi',
+      startsAt: '2026-11-07T13:00:00+03:00',
+      tickets: [{ name: 'Regular', price: 12000, currency: 'KES' }]
+    },
+    {
+      id: 'time-attack-last-lap',
+      title: 'Time Attack: The Last Lap (Round 4 DMSC)',
+      category: 'Sports',
+      location: "Machakos People's Park, Machakos",
+      startsAt: '2026-11-08T07:00:00+03:00',
+      tickets: [{ name: 'Regular', price: 750, currency: 'KES' }]
+    },
+    {
+      id: 'amac-awards-season-two',
+      title: 'AMAC Awards: Season 2 (Ankara Edition)',
+      category: 'Arts & Culture',
+      location: 'KICC, Nairobi',
+      startsAt: '2026-11-08T07:00:00+03:00',
+      tickets: [{ name: 'Regular', price: 300, currency: 'KES' }]
     }
   ];
-  let adEvents = events;
+  let adEvents = events.slice(0, 2);
   let checkoutEnabled = false;
   const apiBase = window.valorEventsApiBase;
   if (apiBase) {
@@ -88,6 +184,8 @@
       }
     }
   }
+
+  events.sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt));
 
   const formatMoney = (amount, currency) => {
     const formatted = new Intl.NumberFormat('en-KE', {
@@ -157,11 +255,37 @@
 
     const poster = document.createElement('div');
     poster.className = 'event-poster';
-    const image = document.createElement('img');
-    image.src = event.poster;
-    image.alt = `${event.title} event poster`;
-    image.loading = 'lazy';
-    poster.appendChild(image);
+    if (event.poster) {
+      const image = document.createElement('img');
+      image.src = event.poster;
+      image.alt = `${event.title} event poster`;
+      image.loading = 'lazy';
+      poster.appendChild(image);
+    } else {
+      const artwork = document.createElement('div');
+      artwork.className = 'poster-art';
+      artwork.dataset.theme = ({
+        'Arts & Culture': 'culture',
+        'Food & Drink': 'food',
+        Business: 'business',
+        Community: 'community',
+        Concerts: 'music',
+        Festivals: 'festival',
+        Sports: 'sport'
+      })[event.category] || 'community';
+      artwork.setAttribute('aria-hidden', 'true');
+      const label = document.createElement('span');
+      label.className = 'poster-art-label';
+      label.textContent = 'VALOR AFRICA PRESENTS';
+      const title = document.createElement('strong');
+      title.className = 'poster-art-title';
+      title.textContent = event.title;
+      const category = document.createElement('span');
+      category.className = 'poster-art-category';
+      category.textContent = event.category;
+      artwork.append(label, title, category);
+      poster.appendChild(artwork);
+    }
 
     const badgeDate = document.createElement('span');
     badgeDate.className = 'poster-date';
