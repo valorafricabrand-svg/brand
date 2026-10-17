@@ -125,7 +125,18 @@
       tickets: [{ name: 'Regular', price: 300, currency: 'KES' }]
     }
   ];
-  let adEvents = events.slice(0, 2);
+  const organizerPromo = {
+    id: 'valor-organizer-promo',
+    isPlatformPromo: true,
+    title: 'Grow your event with Valor Africa',
+    category: 'For organizers',
+    location: 'Valor Africa Events',
+    startsAt: new Date().toISOString(),
+    adVideo: 'videos/valor-ads-organizer-intro.webm',
+    adPoster: 'images/events/valor-ads-promo-poster.svg',
+    tickets: []
+  };
+  let adEvents = [organizerPromo, ...events.slice(0, 1)];
   let checkoutEnabled = false;
   const apiBase = window.valorEventsApiBase;
   if (apiBase) {
@@ -143,7 +154,7 @@
         tickets: event.tickets.map((ticket) => ({ ...ticket, currency: 'KES' }))
       });
       events = listing.events.map(toEvent);
-      adEvents = featured.events.map(toEvent);
+      adEvents = [organizerPromo, ...featured.events.map(toEvent)];
       checkoutEnabled = Boolean(health.paymentsConfigured);
       const status = document.querySelector('.listing-disclaimer, .hub-bottom p');
       if (status) {
@@ -154,10 +165,12 @@
             : 'Paid ticket checkout is temporarily unavailable. Free-event registrations remain open.';
       }
       const adNote = document.querySelector('.ad-note');
-      if (adNote) adNote.textContent = adEvents.length ? 'Sponsored event placements' : 'No paid event placements are live right now.';
+      if (adNote) adNote.textContent = adEvents.some((event) => !event.isPlatformPromo)
+        ? 'Organizer spotlight · sponsored events'
+        : 'Host your next event with Valor Africa.';
       const sponsoredBadge = document.querySelector('.sponsored-badge');
       if (sponsoredBadge) {
-        sponsoredBadge.textContent = adEvents.length ? '✦ PAID PROMOTION' : 'VALOR ADS';
+        sponsoredBadge.textContent = 'FOR EVENT ORGANIZERS';
         sponsoredBadge.hidden = !adEvents.length;
       }
       if (!adEvents.length) {
@@ -170,11 +183,14 @@
       }
     } catch (error) {
       events = [];
-      adEvents = [];
-      const stage = document.getElementById('adStage');
-      const controls = document.querySelector('.ad-controls');
-      if (stage) stage.hidden = true;
-      if (controls) controls.hidden = true;
+      adEvents = [organizerPromo];
+      const adNote = document.querySelector('.ad-note');
+      if (adNote) adNote.textContent = 'Host your next event with Valor Africa.';
+      const sponsoredBadge = document.querySelector('.sponsored-badge');
+      if (sponsoredBadge) {
+        sponsoredBadge.textContent = 'FOR EVENT ORGANIZERS';
+        sponsoredBadge.hidden = false;
+      }
       const status = document.querySelector('.listing-disclaimer');
       if (status) status.textContent = error.message;
       const empty = document.getElementById('homeEmpty');
@@ -387,13 +403,15 @@
   const adPlayToggle = document.getElementById('adPlayToggle');
   let activeAdIndex = 0;
   let adTimer = null;
-  let adPaused = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let adPaused = reducedMotionQuery.matches;
   let adPointerInside = false;
   let adHasFocus = false;
 
   function createAdSlide(event, index) {
     const slide = document.createElement('article');
     slide.className = 'ad-slide';
+    if (event.isPlatformPromo) slide.classList.add('is-organizer-promo');
     slide.dataset.adIndex = String(index);
     slide.dataset.eventId = event.id;
     slide.setAttribute('role', 'group');
@@ -405,12 +423,37 @@
     visual.className = 'ad-visual';
     const adPoster = event.adPoster || 'images/events/concert-crowd.svg';
 
+    if (event.isPlatformPromo) {
+      const video = document.createElement('video');
+      video.className = 'ad-video';
+      video.src = event.adVideo;
+      video.poster = adPoster;
+      video.autoplay = index === 0 && !adPaused;
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.preload = 'metadata';
+      video.setAttribute('aria-label', '15-second Valor Africa introduction for event organizers');
+      visual.appendChild(video);
+
+      const hostLink = document.createElement('a');
+      hostLink.className = 'ad-ticket-cta promo-host-cta';
+      hostLink.href = 'host.html';
+      hostLink.innerHTML = '<span>Host with Valor</span><span aria-hidden="true">→</span>';
+
+      const transcript = document.createElement('p');
+      transcript.className = 'sr-only';
+      transcript.textContent = 'Turn your next event into a full house. Create your event listing, choose ticket types and prices, and promote your event with Valor Ads. Host with Valor Africa.';
+      slide.append(visual, hostLink, transcript);
+      return slide;
+    }
+
     if (event.adVideo) {
       const video = document.createElement('video');
       video.className = 'ad-video';
       video.src = event.adVideo;
       video.poster = adPoster;
-      video.autoplay = index === 0;
+      video.autoplay = index === 0 && !adPaused;
       video.muted = true;
       video.loop = true;
       video.playsInline = true;
@@ -466,9 +509,13 @@
       if (video) {
         if (active) {
           video.muted = true;
-          video.play().catch(() => {
-            video.controls = true;
-          });
+          if (document.hidden || (reducedMotionQuery.matches && adPaused)) {
+            video.pause();
+          } else {
+            video.play().catch(() => {
+              if (!adEvents[activeAdIndex].isPlatformPromo) video.controls = true;
+            });
+          }
         } else {
           video.pause();
           video.currentTime = 0;
@@ -481,9 +528,15 @@
       dot.setAttribute('aria-current', active ? 'true' : 'false');
       dot.setAttribute('aria-label', `Show advertisement ${dotIndex + 1}: ${adEvents[dotIndex].title}`);
     });
+    const sponsoredBadge = document.querySelector('.sponsored-badge');
+    if (sponsoredBadge) {
+      const isOrganizerPromo = adEvents[activeAdIndex].isPlatformPromo;
+      sponsoredBadge.hidden = isOrganizerPromo;
+      if (!isOrganizerPromo) sponsoredBadge.textContent = '✦ PAID PROMOTION';
+    }
     if (adSoundToggle) {
       const video = adSlides.querySelector('.ad-slide:not([hidden]) video');
-      adSoundToggle.hidden = !video;
+      adSoundToggle.hidden = !video || Boolean(adEvents[activeAdIndex].isPlatformPromo);
       if (video) {
         adSoundToggle.setAttribute('aria-pressed', String(!video.muted));
         adSoundToggle.setAttribute('aria-label', video.muted ? 'Turn sound on' : 'Turn sound off');
@@ -492,14 +545,18 @@
   }
 
   function stopAdRotation() {
-    if (adTimer) window.clearInterval(adTimer);
+    if (adTimer) window.clearTimeout(adTimer);
     adTimer = null;
   }
 
   function startAdRotation() {
     stopAdRotation();
     if (!adPaused && !adPointerInside && !adHasFocus && adEvents.length > 1) {
-      adTimer = window.setInterval(() => showAd(activeAdIndex + 1), 7000);
+      const delay = adEvents[activeAdIndex].isPlatformPromo ? 16000 : 7000;
+      adTimer = window.setTimeout(() => {
+        showAd(activeAdIndex + 1);
+        startAdRotation();
+      }, delay);
     }
   }
 
@@ -539,6 +596,7 @@
       adPlayToggle.classList.toggle('is-paused', adPaused);
       if (adPaused) stopAdRotation();
       else startAdRotation();
+      showAd(activeAdIndex);
     });
     adSoundToggle?.addEventListener('click', () => {
       const video = adSlides.querySelector('.ad-slide:not([hidden]) video');
@@ -569,7 +627,7 @@
       if (document.hidden) stopAdRotation();
       else startAdRotation();
     });
-    window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', (event) => {
+    reducedMotionQuery.addEventListener('change', (event) => {
       adPaused = event.matches;
       if (adPlayToggle) {
         adPlayToggle.setAttribute('aria-pressed', String(adPaused));
@@ -578,7 +636,9 @@
       }
       if (adPaused) stopAdRotation();
       else startAdRotation();
+      showAd(activeAdIndex);
     });
+    document.addEventListener('visibilitychange', () => showAd(activeAdIndex));
   }
 
   const nextCountdown = document.getElementById('nextEventCountdown');
