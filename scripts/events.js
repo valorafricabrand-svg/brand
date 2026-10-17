@@ -132,7 +132,7 @@
     category: 'For organizers',
     location: 'Valor Africa Events',
     startsAt: new Date().toISOString(),
-    adVideo: 'videos/valor-ads-organizer-intro.webm',
+    adVideo: 'videos/valor-ads-organizer-intro.mp4',
     adPoster: 'images/events/valor-ads-promo-poster.svg',
     tickets: []
   };
