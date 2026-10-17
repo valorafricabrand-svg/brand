@@ -76,6 +76,14 @@
       <form id="walletDepositForm" class="service-form wallet-deposit">
         <h2>Add money with M-Pesa</h2>
         <p>A secure payment prompt will be sent to your verified wallet phone. Funds are added only after M-Pesa confirms the deposit.</p>
+        <label>Payment method
+          <select name="paymentMethod">
+            <option value="mpesa">M-Pesa</option>
+            <option value="paypal" disabled>PayPal (coming soon)</option>
+            <option value="crypto" disabled>Crypto (coming soon)</option>
+          </select>
+        </label>
+        <p class="checkout-note">PayPal and crypto payments are coming soon; provider APIs are not connected yet.</p>
         <label>Amount (KES)<input name="amountKes" type="number" min="100" max="150000" step="1" value="500" required></label>
         <button class="button button-primary" type="submit">Deposit with M-Pesa</button>
         <p class="page-feedback" id="walletDepositFeedback" aria-live="polite"></p>

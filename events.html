@@ -79,7 +79,8 @@
         <label for="ticketType">Ticket type</label><select id="ticketType" name="ticketType" required></select>
         <label for="ticketQuantity">Number of tickets</label><input id="ticketQuantity" name="quantity" type="number" min="1" max="10" value="1" required>
         <label for="buyerName">Your name</label><input id="buyerName" name="name" autocomplete="name" required>
-        <label for="ticketPaymentMethod">Payment method</label><select id="ticketPaymentMethod" name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option></select>
+        <label for="ticketPaymentMethod">Payment method</label><select id="ticketPaymentMethod" name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="paypal" disabled>PayPal (coming soon)</option><option value="crypto" disabled>Crypto (coming soon)</option></select>
+        <p class="checkout-note">PayPal and crypto payments are coming soon; provider APIs are not connected yet.</p>
         <label for="buyerPhone">WhatsApp number</label><input id="buyerPhone" name="phone" type="tel" autocomplete="tel" required>
         <p class="checkout-note" id="ticketPaymentNote">You will receive an M-Pesa payment prompt. Your ticket is issued only after payment is confirmed.</p>
         <p class="checkout-note">Sign in to your account to get tickets. <a href="account.html">Open your account</a> or <a href="wallet.html">wallet</a>.</p>

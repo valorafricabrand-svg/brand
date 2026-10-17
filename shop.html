@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Valor Africa Shop | Official Merchandise</title>
-  <meta name="description" content="Shop official Valor Africa merchandise and pay securely with your Valor Wallet.">
+  <meta name="description" content="Shop official Valor Africa merchandise and pay securely with Valor Wallet. PayPal and crypto are coming soon.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://valorafrica.co.ke/shop.html">
   <meta property="og:title" content="Valor Africa Shop | Official Merchandise">
-  <meta property="og:description" content="Shop official Valor Africa merchandise and pay securely with your Valor Wallet.">
+  <meta property="og:description" content="Shop official Valor Africa merchandise and pay securely with Valor Wallet. PayPal and crypto are coming soon.">
   <meta property="og:url" content="https://valorafrica.co.ke/shop.html">
   <meta property="og:image" content="https://valorafrica.co.ke/images/og-image.svg">
   <meta name="theme-color" content="#087f5b">
@@ -40,7 +40,7 @@
     <section class="wrap shop-intro">
       <p class="eyebrow">THE VALOR AFRICA SHOP</p>
       <h1>Take Valor with you.</h1>
-      <p>Shop official merchandise and pay securely with Valor Wallet.</p>
+      <p>Shop official merchandise and pay securely with Valor Wallet. PayPal and crypto checkout are coming soon.</p>
     </section>
     <div class="wrap shop-layout">
       <section aria-labelledby="shopProductsTitle">
@@ -56,6 +56,14 @@
         <div class="shop-cart-items" id="shopCartItems"></div>
         <div class="shop-cart-total"><span>Merchandise subtotal</span><strong id="shopCartTotal">KES 0</strong></div>
         <p class="shop-delivery-note">Delivery details are collected at checkout. Our team will contact you to arrange delivery and confirm any delivery charges separately.</p>
+        <label class="shop-payment-method" for="shopPaymentMethod">Payment method
+          <select id="shopPaymentMethod" name="paymentMethod">
+            <option value="wallet">Valor Wallet</option>
+            <option value="paypal" disabled>PayPal (coming soon)</option>
+            <option value="crypto" disabled>Crypto (coming soon)</option>
+          </select>
+        </label>
+        <p class="checkout-note">PayPal and crypto payments are coming soon; provider APIs are not connected yet.</p>
         <div class="shop-wallet-status" id="shopWalletStatus" role="status" aria-live="polite">Checking your Valor Wallet…</div>
         <form class="shop-checkout-form" id="shopCheckoutForm" hidden>
           <label for="shopCustomerName">Full name</label>

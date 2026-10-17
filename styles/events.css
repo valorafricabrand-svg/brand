@@ -327,6 +327,8 @@ img { display: block; max-width: 100%; }
 .shop-cart-total strong { color: var(--ink); font-size: 16px; }
 .shop-delivery-note { margin: 0 0 14px; padding: 11px; border-radius: 8px; color: #5c6e84; background: #f3f6f9; font-size: 11px; }
 .shop-wallet-status { margin-bottom: 12px; color: var(--green-dark); font-size: 12px; font-weight: 700; }
+.shop-payment-method { display: grid; gap: 5px; margin-bottom: 12px; color: #33445b; font-size: 12px; font-weight: 700; }
+.shop-payment-method select { width: 100%; min-height: 42px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); background: #fff; }
 .shop-checkout-form label { display: block; margin: 12px 0 5px; color: #33445b; font-size: 12px; font-weight: 700; }
 .shop-checkout-form input, .shop-checkout-form textarea { width: 100%; min-height: 42px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); background: #fff; }
 .shop-checkout-form textarea { min-height: 76px; resize: vertical; }

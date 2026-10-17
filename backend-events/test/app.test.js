@@ -378,6 +378,11 @@ test('account sign-in links existing phone wallet and pays verified deposits, ti
 
   const deposit = await request(app).post('/api/wallet/deposits').set(walletAuth).send({ amountKes: 5000 });
   assert.equal(deposit.status, 201);
+  const unsupportedDeposit = await request(app).post('/api/wallet/deposits').set(walletAuth).send({
+    amountKes: 5000,
+    paymentMethod: 'paypal'
+  });
+  assert.equal(unsupportedDeposit.status, 400);
   assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 1200);
   await completePayment('checkout-6', 'merchant-6', 5000, 'WALLET1234');
   const funded = await request(app).get('/api/wallet').set(walletAuth);
@@ -439,6 +444,11 @@ test('account sign-in links existing phone wallet and pays verified deposits, ti
     ...merchandiseOrder,
     items: [{ productId: product.body.id, quantity: 11 }]
   })).status, 400);
+  const unsupportedMerchandisePayment = await request(app).post('/api/orders/merchandise').set(walletAuth).send({
+    ...merchandiseOrder,
+    paymentMethod: 'crypto'
+  });
+  assert.equal(unsupportedMerchandisePayment.status, 400);
   const purchase = await request(app).post('/api/orders/merchandise').set(walletAuth).send(merchandiseOrder);
   assert.equal(purchase.status, 201);
   assert.equal(purchase.body.status, 'paid');

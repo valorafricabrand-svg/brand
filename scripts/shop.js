@@ -15,6 +15,7 @@
   const walletStatus = document.getElementById('shopWalletStatus');
   const signInNote = document.getElementById('shopSignInNote');
   const walletLinkNote = document.getElementById('shopWalletLinkNote');
+  const paymentMethod = document.getElementById('shopPaymentMethod');
   let accountToken = '';
   let walletBalance = 0;
   let walletLinked = false;
@@ -253,6 +254,7 @@
           customerName: checkoutForm.elements.customerName.value,
           phone: checkoutForm.elements.phone.value,
           deliveryAddress: checkoutForm.elements.deliveryAddress.value,
+          paymentMethod: paymentMethod.value,
           clientRequestId
         })
       });

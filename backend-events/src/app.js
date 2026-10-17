@@ -473,6 +473,9 @@ function createApp(options = {}) {
     const wallet = walletForAccount(req.account.id);
     if (!wallet) return res.status(409).json({ error: 'Link your phone wallet before paying for merchandise.' });
     const { items, customerName, phone, deliveryAddress, clientRequestId } = req.body || {};
+    if (req.body && req.body.paymentMethod !== undefined && req.body.paymentMethod !== 'wallet') {
+      return res.status(400).json({ error: 'PayPal and crypto payments are not available for merchandise yet. Choose Valor Wallet.' });
+    }
     if (!Array.isArray(items) || items.length < 1 || items.length > 20) {
       return res.status(400).json({ error: 'Choose 1–20 merchandise items for your order.' });
     }
@@ -579,6 +582,9 @@ function createApp(options = {}) {
   app.post('/api/wallet/deposits', requireAccount, async (req, res) => {
     const wallet = walletForAccount(req.account.id);
     if (!wallet) return res.status(409).json({ error: 'Verify and link your phone number before adding wallet funds.' });
+    if (req.body && req.body.paymentMethod !== undefined && req.body.paymentMethod !== 'mpesa') {
+      return res.status(400).json({ error: 'PayPal and crypto deposits are not available yet. Choose M-Pesa.' });
+    }
     const amountKes = req.body && req.body.amountKes;
     if (!Number.isSafeInteger(amountKes) || amountKes < 100 || amountKes > 150000) {
       return res.status(400).json({ error: 'Deposit an amount from KES 100 to KES 150,000.' });

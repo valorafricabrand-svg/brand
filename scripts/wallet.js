@@ -160,6 +160,10 @@
   document.getElementById('walletDepositForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
+    if (form.elements.paymentMethod.value !== 'mpesa') {
+      setFeedback(depositFeedback, 'That payment method is not available yet.', true);
+      return;
+    }
     const button = form.querySelector('[type=submit]');
     button.disabled = true;
     setFeedback(depositFeedback, 'Sending an M-Pesa deposit prompt…');
@@ -167,7 +171,10 @@
       const result = await window.valorEventsApi('/api/wallet/deposits', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ amountKes: Number(form.elements.amountKes.value) })
+        body: JSON.stringify({
+          amountKes: Number(form.elements.amountKes.value),
+          paymentMethod: form.elements.paymentMethod.value
+        })
       });
       setFeedback(depositFeedback, result.message || 'Approve the M-Pesa prompt to complete your deposit.');
       if (await loadWallet()) window.setTimeout(refreshWallet, 5000);
