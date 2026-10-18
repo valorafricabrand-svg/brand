@@ -267,6 +267,11 @@ function createApp(options = {}) {
     next();
   }
 
+  function optionalAccount(req, res, next) {
+    if (!req.headers.authorization) return next();
+    return requireAccount(req, res, next);
+  }
+
   function accountCodeLimiter(req, res, next) {
     const email = normalizedEmail(req.body && req.body.email);
     if (!email) return res.status(400).json({ error: 'Enter a valid email address.' });
@@ -852,7 +857,31 @@ function createApp(options = {}) {
     res.json({ event: publicEvent(row) });
   });
 
-  app.post('/api/events/submissions', submissionLimiter, (req, res, next) => {
+  app.get('/api/events/mine', requireAccount, (req, res) => {
+    const events = db.prepare(`
+      SELECT e.*,
+        (SELECT COALESCE(SUM(o.quantity),0) FROM orders o
+          WHERE o.event_id=e.id AND o.order_type='ticket' AND o.status IN ('paid','confirmed')) AS tickets_sold,
+        (SELECT COUNT(*) FROM tickets t
+          WHERE t.event_id=e.id AND t.checked_in_at IS NOT NULL) AS checked_in,
+        (SELECT COALESCE(SUM(o.amount_kes),0) FROM orders o
+          WHERE o.event_id=e.id AND o.order_type='ticket' AND o.status IN ('paid','confirmed')) AS gross_kes
+      FROM events e
+      WHERE e.organizer_account_id=?
+      ORDER BY e.created_at DESC LIMIT 200
+    `).all(req.account.id);
+    res.json({
+      events: events.map((event) => ({
+        ...publicEvent(event),
+        reviewNote: event.review_note,
+        ticketsSold: event.tickets_sold,
+        checkedIn: event.checked_in,
+        grossKes: event.gross_kes
+      }))
+    });
+  });
+
+  app.post('/api/events/submissions', submissionLimiter, optionalAccount, (req, res, next) => {
     imageUpload(req, res, (error) => {
       if (error) return next(error);
       if (req.body.website) return res.status(400).json({ error: 'Invalid event submission.' });
@@ -901,12 +930,12 @@ function createApp(options = {}) {
             id, slug, title, description, category, format, timezone, starts_at, ends_at,
             venue_name, meeting_url, city, capacity, regular_price, early_bird_price,
             early_bird_ends, vip_price, tags_json, poster_url, organizer_name, organizer_email,
-            organizer_phone
+            organizer_phone, organizer_account_id
           ) VALUES (
             @id, @slug, @title, @description, @category, @format, @timezone, @startsAt, @endsAt,
             @venueName, @meetingUrl, @city, @capacity, @regularPrice, @earlyBirdPrice,
             @earlyBirdEnds, @vipPrice, @tags, @posterUrl, @organizerName, @organizerEmail,
-            @organizerPhone
+            @organizerPhone, @organizerAccountId
           )
         `).run({
           ...input,
@@ -920,7 +949,8 @@ function createApp(options = {}) {
           earlyBirdPrice: input.earlyBirdPrice ? Number(input.earlyBirdPrice) : null,
           vipPrice: input.vipPrice ? Number(input.vipPrice) : null,
           tags: JSON.stringify(input.tags.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 12)),
-          posterUrl
+          posterUrl,
+          organizerAccountId: req.account ? req.account.id : null
         });
       } catch (error) {
         if (posterUrl) {
@@ -1420,6 +1450,33 @@ function createApp(options = {}) {
       return startCheckout(res, order, packageRow.price_kes, phone);
     } catch (error) {
       return next(error);
+    }
+  });
+
+  app.get('/api/account/tickets', requireAccount, async (req, res, next) => {
+    try {
+      const tickets = db.prepare(`
+        SELECT t.code,t.ticket_type AS ticketType,t.created_at AS issuedAt,
+          o.id AS orderId,o.status AS orderStatus,o.quantity,
+          e.id AS eventId,e.title AS eventTitle,e.slug AS eventSlug,e.starts_at AS startsAt,
+          e.venue_name AS venueName,e.city,e.timezone
+        FROM tickets t
+        JOIN orders o ON o.id=t.order_id
+        JOIN events e ON e.id=t.event_id
+        WHERE o.account_id=? AND o.order_type='ticket' AND o.status IN ('paid','confirmed')
+        ORDER BY e.starts_at ASC,t.created_at ASC
+      `).all(req.account.id);
+      res.json({
+        tickets: await Promise.all(tickets.map(async (ticket) => ({
+          ...ticket,
+          qr: await QRCode.toDataURL(
+            `${publicSiteUrl}/ticket.html?code=${encodeURIComponent(ticket.code)}`,
+            { errorCorrectionLevel: 'M', margin: 1, width: 220 }
+          )
+        })))
+      });
+    } catch (error) {
+      next(error);
     }
   });
 

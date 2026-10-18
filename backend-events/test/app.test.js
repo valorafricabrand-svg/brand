@@ -9,6 +9,7 @@ process.env.PUBLIC_SITE_URL = 'https://valorafrica.co.ke';
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const assert = require('node:assert/strict');
 const { after, test } = require('node:test');
 const request = require('supertest');
@@ -101,6 +102,21 @@ async function ticketAccountAuth(idToken = 'valid-google-token') {
   return { Authorization: `Bearer ${response.body.accessToken}` };
 }
 
+function createTestAccountAuth(email) {
+  const id = crypto.randomUUID();
+  const token = crypto.randomBytes(32).toString('base64url');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  db.prepare(`
+    INSERT INTO accounts (id,email,display_name,email_verified_at)
+    VALUES (?,?,?,datetime('now'))
+  `).run(id, email, email.split('@')[0]);
+  db.prepare(`
+    INSERT INTO account_sessions (token_hash,account_id,expires_at)
+    VALUES (?,?,datetime('now','+12 hours'))
+  `).run(tokenHash, id);
+  return { Authorization: `Bearer ${token}` };
+}
+
 function submitEvent(title = 'Test Live Festival') {
   const future = Date.now() + 7 * 86400000;
   const starts = new Date(future).toISOString();
@@ -160,11 +176,24 @@ function stripeWebhook(session, type = 'checkout.session.completed') {
 }
 
 test('event submissions remain private until an admin approves them', async () => {
-  const created = await submitEvent();
+  const owner = createTestAccountAuth('organizer-owner@example.com');
+  const otherAccount = createTestAccountAuth('different-organizer@example.com');
+  const created = await submitEvent().set(owner);
   assert.equal(created.status, 202);
   assert.equal(created.body.status, 'pending');
   assert.equal((await request(app).get('/api/events')).body.events.length, 0);
   assert.equal((await request(app).get(`/api/events/by-slug/${created.body.slug}`)).status, 404);
+
+  assert.equal((await request(app).get('/api/events/mine')).status, 401);
+  const ownerEvents = await request(app).get('/api/events/mine').set(owner);
+  assert.equal(ownerEvents.status, 200);
+  const ownedEvent = ownerEvents.body.events.find((item) => item.id === created.body.id);
+  assert.equal(ownedEvent.status, 'pending');
+  assert.equal(ownedEvent.ticketsSold, 0);
+  assert.equal(ownedEvent.checkedIn, 0);
+  assert.equal(ownedEvent.grossKes, 0);
+  const otherEvents = await request(app).get('/api/events/mine').set(otherAccount);
+  assert.equal(otherEvents.body.events.some((item) => item.id === created.body.id), false);
 
   const unauthorized = await request(app).get('/api/events/admin/submissions');
   assert.equal(unauthorized.status, 401);
@@ -452,6 +481,14 @@ test('free registrations require an account but do not require M-Pesa', async ()
   assert.equal(order.body.amountKes, 0);
   assert.equal(order.body.tickets.length, 1);
   assert.match(order.body.tickets[0].qr, /^data:image\/png;base64,/);
+  const accountTickets = await request(app).get('/api/account/tickets').set(accountAuth);
+  assert.equal(accountTickets.status, 200);
+  const accountTicket = accountTickets.body.tickets.find((ticket) => ticket.orderId === registration.body.orderId);
+  assert.ok(accountTicket);
+  assert.match(accountTicket.qr, /^data:image\/png;base64,/);
+  const unrelatedTickets = await request(app).get('/api/account/tickets')
+    .set(createTestAccountAuth('unrelated-ticket-owner@example.com'));
+  assert.equal(unrelatedTickets.body.tickets.some((ticket) => ticket.orderId === registration.body.orderId), false);
   const verification = await request(app).get(`/api/tickets/${order.body.tickets[0].code}/verify`);
   assert.equal(verification.body.valid, true);
   paymentGateway.enabled = true;

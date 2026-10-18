@@ -277,8 +277,75 @@
     }
   }
 
+  async function loadMyTickets() {
+    const root = document.getElementById('myTickets');
+    if (!root) return;
+    const token = window.sessionStorage.getItem('valor-account-token');
+    if (!token) {
+      root.replaceChildren();
+      showError(root, 'Sign in to view your tickets. ');
+      const link = document.createElement('a');
+      link.href = `account.html?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`;
+      link.textContent = 'Sign in';
+      root.appendChild(link);
+      return;
+    }
+    try {
+      const result = await api('/api/account/tickets', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!result.tickets.length) {
+        const message = document.createElement('p');
+        message.textContent = 'You do not have any confirmed tickets yet.';
+        const link = document.createElement('a');
+        link.href = 'events.html';
+        link.textContent = 'Browse events';
+        root.replaceChildren(message, link);
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      result.tickets.forEach((ticket) => {
+        const section = document.createElement('article');
+        section.className = 'issued-ticket';
+        const title = document.createElement('h2');
+        title.textContent = `${ticket.eventTitle} · ${ticket.ticketType}`;
+        const details = document.createElement('p');
+        details.textContent = `${new Intl.DateTimeFormat('en-KE', {
+          dateStyle: 'full',
+          timeStyle: 'short',
+          timeZone: ticket.timezone
+        }).format(new Date(ticket.startsAt))} · ${ticket.venueName || ticket.city}`;
+        const code = document.createElement('p');
+        code.textContent = `Ticket ${ticket.code}`;
+        const qr = document.createElement('img');
+        qr.src = ticket.qr;
+        qr.alt = `QR entry pass for ${ticket.eventTitle}`;
+        const eventLink = document.createElement('a');
+        eventLink.href = `event.html?slug=${encodeURIComponent(ticket.eventSlug)}`;
+        eventLink.textContent = 'Event details';
+        section.append(title, details, code, qr, eventLink);
+        fragment.appendChild(section);
+      });
+      root.replaceChildren(fragment);
+    } catch (error) {
+      if (/sign in|session has expired/i.test(error.message)) {
+        window.sessionStorage.removeItem('valor-account-token');
+        root.replaceChildren();
+        showError(root, 'Your session has expired. ');
+        const link = document.createElement('a');
+        link.href = `account.html?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`;
+        link.textContent = 'Sign in again';
+        root.appendChild(link);
+      } else {
+        root.replaceChildren();
+        showError(root, error.message);
+      }
+    }
+  }
+
   loadEventDetails();
   setupAdBooking();
   loadOrder();
   loadTicket();
+  loadMyTickets();
 })();

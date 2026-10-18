@@ -1106,7 +1106,10 @@
       button.disabled = true;
       feedback.textContent = 'Submitting your event for review…';
       try {
-        const result = await window.valorEventsApi('/api/events/submissions', { method: 'POST', body: submission });
+        const headers = {};
+        const accountToken = window.sessionStorage.getItem('valor-account-token');
+        if (accountToken) headers.Authorization = `Bearer ${accountToken}`;
+        const result = await window.valorEventsApi('/api/events/submissions', { method: 'POST', headers, body: submission });
         feedback.textContent = `${result.message} Your event page will be /event.html?slug=${result.slug}`;
         feedback.classList.remove('error');
       } catch (error) {

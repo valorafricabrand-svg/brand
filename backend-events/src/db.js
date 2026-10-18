@@ -68,6 +68,7 @@ db.exec(`
     organizer_name TEXT NOT NULL,
     organizer_email TEXT NOT NULL,
     organizer_phone TEXT NOT NULL,
+    organizer_account_id TEXT REFERENCES accounts(id),
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
     review_note TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -232,6 +233,12 @@ db.exec(`
     unit_price_kes INTEGER NOT NULL CHECK (unit_price_kes > 0)
   );
 `);
+
+const eventColumns = db.prepare('PRAGMA table_info(events)').all();
+if (!eventColumns.some((column) => column.name === 'organizer_account_id')) {
+  db.exec('ALTER TABLE events ADD COLUMN organizer_account_id TEXT REFERENCES accounts(id)');
+}
+db.exec('CREATE INDEX IF NOT EXISTS events_organizer ON events(organizer_account_id,created_at DESC)');
 
 const walletColumns = db.prepare('PRAGMA table_info(wallets)').all();
 if (!walletColumns.some((column) => column.name === 'account_id')) {
