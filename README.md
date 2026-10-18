@@ -45,6 +45,40 @@ Use the admin dashboard to review event submissions and manage advertising-packa
 
 With the API configured, the Valor Ads carousel displays events with active paid bookings. The static-only preview still contains sample artwork/listings and cannot publish events, accept checkout, or issue tickets. Existing animated artwork and configured video previews can be used; campaign-video upload management and impression analytics are not included yet.
 
+### Oracle Cloud Free Tier setup
+
+The event API can run on an Oracle Cloud VM, including an Ampere A1 ARM VM, using Docker Compose. Oracle's free-tier availability and eligibility vary by region and account; confirm the current limits before creating resources. A free VM is self-managed and has no managed-service uptime guarantee.
+
+1. Create an Ubuntu 24.04 ARM VM with a public IPv4 address. In Oracle's network security rules and the VM firewall, allow inbound TCP ports 80 and 443; keep SSH restricted to your own IP.
+2. Point an `A` DNS record such as `api.valorafrica.co.ke` to the VM's public IPv4 address. Set the same hostname as `API_DOMAIN` in `backend-events/.env`. Caddy will obtain and renew its HTTPS certificate after DNS resolves and ports 80/443 are reachable.
+3. Attach an Oracle block volume for the database and event posters. Format and mount it at `/opt/valorafrica-data`, then configure it to mount automatically after reboot. Create the directory and grant the container's `node` user (UID 1000) write access:
+
+   ```bash
+   sudo mkdir -p /opt/valorafrica-data
+   sudo chown -R 1000:1000 /opt/valorafrica-data
+   ```
+
+4. Install Docker Engine and the Docker Compose plugin on the VM. Clone this repository, enter `backend-events/`, and prepare its private environment file:
+
+   ```bash
+   cp .env.example .env
+   chmod 600 .env
+   ```
+
+   Edit `.env` on the VM: set a unique `JWT_SECRET` of at least 32 characters, `ADMIN_USERNAME`, a strong `ADMIN_PASSWORD` of at least 16 characters, `API_DOMAIN`, `VALOR_DATA_DIR=/opt/valorafrica-data`, and `PUBLIC_SITE_URL`. Remove localhost from `ALLOWED_ORIGINS` and keep only the exact public website origins. Add provider credentials privately as needed; do not commit `.env`.
+5. Start the service from `backend-events/`:
+
+   ```bash
+   docker compose up -d --build
+   docker compose ps
+   ```
+
+   Check `https://api.valorafrica.co.ke/api/health` and open `https://api.valorafrica.co.ke/admin`. The VM's attached block volume holds the SQLite database and uploaded posters across container rebuilds and VM restarts. Back it up regularly; do not delete the volume when replacing the VM.
+6. After HTTPS is working, set `MPESA_CALLBACK_URL=https://api.valorafrica.co.ke/api/mpesa/callback` and add Daraja credentials to `.env` if ready to test payments. Configure Google, Resend, and Africa's Talking credentials there if those sign-in/verification services are needed. Restart after environment changes with `docker compose up -d`.
+7. Set `window.VALOR_EVENTS_API` in `scripts/events-api.js` to `https://api.valorafrica.co.ke`, then publish the static-site change. Verify account sign-in, event submission, admin approval, and ticket checkout; test M-Pesa with Daraja sandbox credentials before using production credentials.
+
+The hostname in these steps is an example; use the API subdomain you control and set it consistently in DNS, `.env`, the Daraja callback, and `scripts/events-api.js`. The VM and DNS must be created before the public frontend can be wired to the API.
+
 ### Render setup
 
 This repository includes a Render Blueprint in `render.yaml`. To deploy the event API:

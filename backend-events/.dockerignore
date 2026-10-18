@@ -1,0 +1,7 @@
+.env
+.env.*
+.git
+data
+node_modules
+coverage
+test

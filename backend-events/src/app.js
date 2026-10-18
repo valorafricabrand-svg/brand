@@ -9,6 +9,7 @@ const { OAuth2Client } = require('google-auth-library');
 const db = require('./db');
 const { createLoginLimiter, initializeAdmin, login, requireAdmin } = require('./auth');
 const mpesa = require('./mpesa');
+const stripe = require('./stripe');
 const walletSms = require('./wallet-sms');
 const accountEmail = require('./account-email');
 
@@ -172,6 +173,7 @@ function safeOrderAccess(order, suppliedToken) {
 
 function createApp(options = {}) {
   const paymentGateway = options.mpesa || mpesa;
+  const stripeGateway = options.stripe || stripe;
   const smsGateway = options.sms || walletSms;
   const emailGateway = options.email || accountEmail;
   const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
@@ -200,6 +202,21 @@ function createApp(options = {}) {
     }
     return callback(new Error('Origin is not allowed.'));
   }));
+  app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '1mb' }), (req, res, next) => {
+    if (!stripeGateway.isConfigured()) return res.status(503).send('Stripe webhooks are not configured.');
+    let event;
+    try {
+      event = stripeGateway.constructWebhookEvent(req.body, req.get('stripe-signature'));
+    } catch (error) {
+      return res.status(400).send('Invalid Stripe webhook signature.');
+    }
+    try {
+      processStripeWebhook(event);
+      return res.json({ received: true });
+    } catch (error) {
+      return next(error);
+    }
+  });
   app.use(express.json({ limit: '64kb' }));
   app.use('/uploads/events', express.static(uploadDirectory, {
     fallthrough: false,
@@ -367,6 +384,7 @@ function createApp(options = {}) {
     res.json({
       ok: true,
       paymentsConfigured: paymentGateway.isConfigured(),
+      stripePaymentsConfigured: stripeGateway.isConfigured(),
       phoneLinkSmsConfigured: smsGateway.isConfigured(),
       emailAuthConfigured: emailGateway.isConfigured(),
       googleAuthConfigured: Boolean(googleClientId)
@@ -1113,13 +1131,13 @@ function createApp(options = {}) {
     return true;
   }
 
-  function createPendingOrder({ orderType, eventId = null, adBookingId = null, accountId = null, buyerName, phone, ticketType = '', quantity = 1, amountKes }) {
+  function createPendingOrder({ orderType, eventId = null, adBookingId = null, accountId = null, buyerName, phone, ticketType = '', quantity = 1, amountKes, paymentMethod = 'mpesa' }) {
     const id = crypto.randomUUID();
     const accessToken = crypto.randomBytes(32).toString('base64url');
     db.prepare(`
-      INSERT INTO orders (id,access_token_hash,order_type,event_id,ad_booking_id,account_id,buyer_name,phone,ticket_type,quantity,amount_kes)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)
-    `).run(id, sha256(accessToken), orderType, eventId, adBookingId, accountId, buyerName.trim(), phone, ticketType, quantity, amountKes);
+      INSERT INTO orders (id,access_token_hash,order_type,event_id,ad_booking_id,account_id,buyer_name,phone,ticket_type,quantity,amount_kes,payment_method)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    `).run(id, sha256(accessToken), orderType, eventId, adBookingId, accountId, buyerName.trim(), phone, ticketType, quantity, amountKes, paymentMethod);
     return { id, accessToken };
   }
 
@@ -1148,11 +1166,100 @@ function createApp(options = {}) {
     }
   }
 
+  async function startStripeCheckout(res, order, amountKes, unitAmountKes, event, customerEmail) {
+    try {
+      const session = await stripeGateway.createCheckoutSession({
+        id: order.id,
+        amountKes,
+        unitAmountKes,
+        quantity: order.quantity,
+        ticketType: order.ticketType,
+        eventTitle: event.title,
+        eventSlug: event.slug,
+        customerEmail,
+        publicSiteUrl
+      });
+      if (!session || typeof session.id !== 'string' || typeof session.url !== 'string' ||
+          !Number.isSafeInteger(session.expiresAt)) {
+        throw new Error('Stripe did not return a valid checkout session.');
+      }
+      db.prepare(`
+        UPDATE orders SET stripe_session_id=?,stripe_session_expires_at=? WHERE id=? AND status='pending'
+      `).run(session.id, new Date(session.expiresAt * 1000).toISOString(), order.id);
+      return res.status(201).json({
+        orderId: order.id,
+        accessToken: order.accessToken,
+        status: 'pending',
+        checkoutUrl: session.url,
+        paymentMethod: 'stripe',
+        message: 'Continue to Stripe Checkout to complete your ticket payment.'
+      });
+    } catch (error) {
+      db.prepare("UPDATE orders SET status='failed',result_description=? WHERE id=? AND status='pending'")
+        .run('Could not start Stripe Checkout.', order.id);
+      console.error('Stripe Checkout could not be started:', error.message);
+      return res.status(502).json({ error: 'Stripe could not start checkout. Please try again shortly.' });
+    }
+  }
+
+  function processStripeWebhook(event) {
+    const session = event && event.data && event.data.object;
+    if (!session || typeof session.id !== 'string') return;
+    const order = db.prepare('SELECT * FROM orders WHERE stripe_session_id=?').get(session.id);
+    if (!order) return;
+    if (order.order_type !== 'ticket' || order.payment_method !== 'stripe' ||
+        !session.metadata || session.metadata.orderId !== order.id) {
+      console.error('Stripe Checkout session metadata did not match its ticket order.');
+      db.prepare("UPDATE orders SET status='review',result_description=? WHERE id=? AND status='pending'")
+        .run('Stripe payment details did not match this order; support review is required.', order.id);
+      return;
+    }
+
+    if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
+      db.prepare("UPDATE orders SET status='failed',result_description=? WHERE id=? AND status='pending'")
+        .run('Stripe payment was not completed.', order.id);
+      return;
+    }
+    if (!['checkout.session.completed','checkout.session.async_payment_succeeded'].includes(event.type) ||
+        session.payment_status !== 'paid') return;
+
+    if (session.amount_total !== order.amount_kes * 100 || session.currency !== 'kes') {
+      db.prepare("UPDATE orders SET status='review',result_description=? WHERE id=? AND status='pending'")
+        .run('Stripe payment amount did not match this order; support review is required.', order.id);
+      return;
+    }
+
+    db.transaction(() => {
+      const current = db.prepare("SELECT * FROM orders WHERE id=? AND status='pending'").get(order.id);
+      if (!current) return;
+      if (current.event_id) {
+        const eventRow = db.prepare('SELECT capacity FROM events WHERE id=?').get(current.event_id);
+        if (eventRow && eventRow.capacity !== null) {
+          const sold = db.prepare(`
+            SELECT COALESCE(SUM(quantity),0) AS total FROM orders
+            WHERE event_id=? AND order_type='ticket' AND status IN ('paid','confirmed')
+          `).get(current.event_id).total;
+          if (sold + current.quantity > eventRow.capacity) {
+            db.prepare("UPDATE orders SET status='review',result_description=? WHERE id=?")
+              .run('Payment received but ticket capacity was reached; contact support for a refund.', current.id);
+            return;
+          }
+        }
+      }
+      db.prepare("UPDATE orders SET status='paid',result_description=?,paid_at=datetime('now') WHERE id=?")
+        .run('Payment confirmed by Stripe.', current.id);
+      const insertTicket = db.prepare('INSERT INTO tickets (code,order_id,event_id,ticket_type) VALUES (?,?,?,?)');
+      for (let ticket = 0; ticket < current.quantity; ticket += 1) {
+        insertTicket.run(crypto.randomUUID(), current.id, current.event_id, current.ticket_type);
+      }
+    })();
+  }
+
   app.post('/api/orders/tickets', requireAccount, async (req, res, next) => {
     try {
       const { eventId, ticketType, buyerName, phone: inputPhone, quantity = 1 } = req.body || {};
       const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
-      if (!['mpesa','wallet'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa or Valor Wallet as the payment method.' });
+      if (!['mpesa','wallet','stripe'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa, Valor Wallet, or Stripe Checkout as the payment method.' });
       req.wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
       if (paymentMethod === 'wallet' && !req.wallet) return res.status(409).json({ error: 'Verify and link your phone number before paying from your wallet.' });
       const phone = paymentMethod === 'wallet' ? req.wallet.phone : normalizePhone(inputPhone);
@@ -1169,6 +1276,10 @@ function createApp(options = {}) {
       else if (ticketType === 'VIP' && event.vip_price !== null) price = event.vip_price;
       else return res.status(400).json({ error: 'That ticket type is unavailable.' });
       if (!Number.isSafeInteger(price * quantity)) return res.status(400).json({ error: 'The ticket order total is too large.' });
+      if (price > 0 && paymentMethod === 'mpesa' && paymentsUnavailable(res)) return;
+      if (price > 0 && paymentMethod === 'stripe' && !stripeGateway.isConfigured()) {
+        return res.status(503).json({ error: 'Stripe Checkout is not enabled yet. Valor Africa must configure its Stripe keys and webhook secret.' });
+      }
 
       let order;
       try {
@@ -1177,14 +1288,19 @@ function createApp(options = {}) {
             const reserved = db.prepare(`
               SELECT COALESCE(SUM(quantity),0) AS total FROM orders
               WHERE event_id = ? AND order_type = 'ticket' AND (
-                status IN ('paid','confirmed') OR (status = 'pending' AND created_at >= datetime('now','-5 minutes'))
-              )
-            `).get(eventId).total;
+                    status IN ('paid','confirmed') OR (
+                      status = 'pending' AND (
+                        created_at >= datetime('now','-5 minutes') OR
+                        (payment_method='stripe' AND julianday(stripe_session_expires_at) > julianday('now'))
+                      )
+                    )
+                  )
+                `).get(eventId).total;
             if (reserved + quantity > event.capacity) throw Object.assign(new Error('There are not enough tickets remaining.'), { statusCode: 409 });
           }
           const created = createPendingOrder({
             orderType: 'ticket', eventId, accountId: req.account.id, buyerName, phone, ticketType, quantity,
-            amountKes: price * quantity
+            amountKes: price * quantity, paymentMethod: price === 0 ? 'free' : paymentMethod
           });
           if (price === 0) {
             db.prepare("UPDATE orders SET status='confirmed',result_description=?,paid_at=datetime('now') WHERE id=?")
@@ -1233,7 +1349,9 @@ function createApp(options = {}) {
           message: 'Your ticket order was paid using Valor Wallet.'
         });
       }
-      if (paymentsUnavailable(res)) return;
+      if (paymentMethod === 'stripe') {
+        return startStripeCheckout(res, order, price * quantity, price, event, req.account.email);
+      }
       return startCheckout(res, order, price * quantity, phone);
     } catch (error) {
       return next(error);
@@ -1328,6 +1446,7 @@ function createApp(options = {}) {
         amountKes: order.amount_kes,
         quantity: order.quantity,
         ticketType: order.ticket_type,
+        paymentMethod: order.payment_method,
         receipt: order.status === 'paid' ? order.mpesa_receipt : '',
         resultDescription: order.result_description,
         createdAt: order.created_at

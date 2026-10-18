@@ -110,9 +110,12 @@ db.exec(`
     ticket_type TEXT NOT NULL DEFAULT '',
     quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity BETWEEN 1 AND 10),
     amount_kes INTEGER NOT NULL CHECK (amount_kes >= 0),
+    payment_method TEXT NOT NULL DEFAULT 'mpesa',
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','confirmed','failed','review')),
     checkout_request_id TEXT UNIQUE,
     merchant_request_id TEXT,
+    stripe_session_id TEXT,
+    stripe_session_expires_at TEXT,
     mpesa_receipt TEXT,
     result_description TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -238,7 +241,17 @@ const orderColumns = db.prepare('PRAGMA table_info(orders)').all();
 if (!orderColumns.some((column) => column.name === 'account_id')) {
   db.exec('ALTER TABLE orders ADD COLUMN account_id TEXT REFERENCES accounts(id)');
 }
+if (!orderColumns.some((column) => column.name === 'payment_method')) {
+  db.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'mpesa'");
+}
+if (!orderColumns.some((column) => column.name === 'stripe_session_id')) {
+  db.exec('ALTER TABLE orders ADD COLUMN stripe_session_id TEXT');
+}
+if (!orderColumns.some((column) => column.name === 'stripe_session_expires_at')) {
+  db.exec('ALTER TABLE orders ADD COLUMN stripe_session_expires_at TEXT');
+}
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS wallets_account ON wallets(account_id)');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_session ON orders(stripe_session_id) WHERE stripe_session_id IS NOT NULL');
 db.exec('DROP TABLE IF EXISTS wallet_sessions');
 
 const walletTransactionSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='wallet_transactions'").get().sql;

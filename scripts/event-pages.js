@@ -43,9 +43,14 @@
       )));
       form.hidden = false;
       const health = await api('/api/health');
+      const stripePaymentsConfigured = Boolean(health.stripePaymentsConfigured);
+      const stripeOption = form.elements.paymentMethod.querySelector('option[value="stripe"]');
+      stripeOption.disabled = !stripePaymentsConfigured;
+      stripeOption.textContent = stripePaymentsConfigured ? 'Card (Stripe Checkout)' : 'Card (Stripe Checkout; coming soon)';
+      const anyCardPaymentConfigured = Boolean(health.paymentsConfigured || stripePaymentsConfigured);
       const hasFreeTickets = event.tickets.some((ticket) => Number(ticket.price) === 0);
       const accountToken = window.sessionStorage.getItem('valor-account-token');
-      if (!health.paymentsConfigured) {
+      if (!anyCardPaymentConfigured) {
         event.tickets.forEach((ticket) => {
           if (Number(ticket.price) > 0 && !accountToken) {
             const option = Array.from(select.options).find((entry) => entry.value === ticket.name);
@@ -55,20 +60,23 @@
         const freeTicket = event.tickets.find((ticket) => Number(ticket.price) === 0);
         if (freeTicket) select.value = freeTicket.name;
       }
-      if (!health.paymentsConfigured && !hasFreeTickets && !accountToken) {
+      if (!anyCardPaymentConfigured && !hasFreeTickets && !accountToken) {
         const button = form.querySelector('[type=submit]');
         button.disabled = true;
         showError(document.getElementById('pageFeedback'), 'Paid checkout is not available yet. Please try again later or use a funded wallet after signing in.');
-      } else if (!health.paymentsConfigured) {
-        document.getElementById('pageFeedback').textContent = 'M-Pesa is unavailable; free ticket registration remains open.';
+      } else if (!anyCardPaymentConfigured) {
+        document.getElementById('pageFeedback').textContent = 'M-Pesa and Stripe are unavailable; free registration and funded Valor Wallet payments remain available.';
       }
       const paymentMethod = form.elements.paymentMethod;
       const phoneInput = form.elements.phone;
       const updatePaymentFields = () => {
         const usesWallet = paymentMethod.value === 'wallet';
+        const usesStripe = paymentMethod.value === 'stripe';
         phoneInput.required = !usesWallet;
         phoneInput.disabled = usesWallet;
-        form.querySelector('[type=submit]').textContent = `Pay with ${usesWallet ? 'Valor Wallet' : 'M-Pesa'}`;
+        const phoneLabel = phoneInput.closest('label');
+        if (phoneLabel) phoneLabel.firstChild.textContent = usesWallet ? 'M-Pesa number (not needed for wallet)' : usesStripe ? 'Contact phone number' : 'Safaricom M-Pesa number';
+        form.querySelector('[type=submit]').textContent = `Pay with ${usesWallet ? 'Valor Wallet' : usesStripe ? 'Stripe Checkout' : 'M-Pesa'}`;
       };
       paymentMethod.addEventListener('change', updatePaymentFields);
       updatePaymentFields();
@@ -87,6 +95,16 @@
           link.textContent = 'Sign in to continue';
           feedback.appendChild(link);
           feedback.classList.add('error');
+          button.disabled = false;
+          return;
+        }
+        if (selectedMethod === 'mpesa' && !health.paymentsConfigured) {
+          showError(document.getElementById('pageFeedback'), 'M-Pesa checkout is not configured yet. Choose Stripe Checkout or Valor Wallet.');
+          button.disabled = false;
+          return;
+        }
+        if (selectedMethod === 'stripe' && !stripePaymentsConfigured) {
+          showError(document.getElementById('pageFeedback'), 'Stripe Checkout is not configured yet. Choose M-Pesa or Valor Wallet.');
           button.disabled = false;
           return;
         }
@@ -111,7 +129,7 @@
       const headers = walletToken ? { Authorization: `Bearer ${walletToken}` } : {};
       const order = await api(url, { method: 'POST', headers, body: JSON.stringify(values) });
       saveAccess(order);
-      window.location.assign(`order.html?orderId=${encodeURIComponent(order.orderId)}`);
+      window.location.assign(order.checkoutUrl || `order.html?orderId=${encodeURIComponent(order.orderId)}`);
     } catch (error) {
       showError(feedback, error.message);
     }
@@ -194,15 +212,17 @@
       if (accountToken) headers.set('Authorization', `Bearer ${accountToken}`);
       const order = await api(`/api/orders/${encodeURIComponent(orderId)}`, { headers });
       const heading = document.createElement('h1');
-      heading.textContent = order.status === 'paid' ? 'Payment confirmed' : order.status === 'confirmed' ? 'Free registration confirmed' : order.status === 'failed' ? 'Payment not completed' : order.status === 'review' ? 'Payment needs support review' : 'Waiting for M-Pesa payment';
+      heading.textContent = order.status === 'paid' ? 'Payment confirmed' : order.status === 'confirmed' ? 'Free registration confirmed' : order.status === 'failed' ? 'Payment not completed' : order.status === 'review' ? 'Payment needs support review' : order.paymentMethod === 'stripe' ? 'Waiting for Stripe payment confirmation' : 'Waiting for M-Pesa payment';
       const details = document.createElement('p');
       details.textContent = `${order.orderType === 'ticket' ? `${order.quantity} ${order.ticketType} ticket(s)` : `Advertising: ${order.campaign?.packageName || 'Event promotion'}`} · KES ${Number(order.amountKes).toLocaleString('en-KE')}${order.receipt ? ` · Receipt ${order.receipt}` : ''}`;
       root.replaceChildren(heading, details);
       if (order.status === 'pending') {
         const explanation = document.createElement('p');
-        explanation.textContent = 'Approve the payment prompt on your phone. This page checks for confirmation automatically.';
+        explanation.textContent = order.paymentMethod === 'stripe'
+          ? 'Complete payment in Stripe Checkout. This page checks for confirmation automatically.'
+          : 'Approve the payment prompt on your phone. This page checks for confirmation automatically.';
         root.appendChild(explanation);
-        window.setTimeout(loadOrder, 5000);
+        window.setTimeout(loadOrder, order.paymentMethod === 'stripe' ? 2500 : 5000);
       } else if (['paid','confirmed'].includes(order.status) && order.tickets?.length) {
         order.tickets.forEach((ticket) => {
           const section = document.createElement('article');

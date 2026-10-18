@@ -138,6 +138,8 @@
   };
   let adEvents = [organizerPromo, ...events.slice(0, 1)];
   let checkoutEnabled = false;
+  let mpesaCheckoutEnabled = false;
+  let stripeCheckoutEnabled = false;
   const apiBase = window.valorEventsApiBase;
   if (apiBase) {
     try {
@@ -155,13 +157,18 @@
       });
       events = listing.events.map(toEvent);
       adEvents = [organizerPromo, ...featured.events.map(toEvent)];
-      checkoutEnabled = Boolean(health.paymentsConfigured);
+      mpesaCheckoutEnabled = Boolean(health.paymentsConfigured);
+      stripeCheckoutEnabled = Boolean(health.stripePaymentsConfigured);
+      checkoutEnabled = mpesaCheckoutEnabled || stripeCheckoutEnabled;
       const status = document.querySelector('.listing-disclaimer, .hub-bottom p');
       if (status) {
         status.textContent = !events.length
           ? 'No approved upcoming events are listed right now. Check back soon or submit an event for review.'
           : checkoutEnabled
-            ? 'Tickets are purchased securely through M-Pesa. A ticket is issued only after payment is confirmed.'
+            ? `Paid tickets are available through ${[
+              mpesaCheckoutEnabled && 'M-Pesa',
+              stripeCheckoutEnabled && 'Stripe Checkout'
+            ].filter(Boolean).join(' and ')}. Tickets are issued only after payment is confirmed.`
             : 'Paid ticket checkout is temporarily unavailable. Free-event registrations remain open.';
       }
       const adNote = document.querySelector('.ad-note');
@@ -747,14 +754,21 @@
   }
   function updateTicketPaymentMethod() {
     const usesWallet = paymentMethodSelect.value === 'wallet';
+    const usesStripe = paymentMethodSelect.value === 'stripe';
     buyerPhoneInput.required = !usesWallet;
     buyerPhoneInput.disabled = usesWallet;
-    document.querySelector('label[for="buyerPhone"]').textContent = usesWallet ? 'M-Pesa number (not needed for wallet)' : 'WhatsApp number';
+    document.querySelector('label[for="buyerPhone"]').textContent = usesWallet ? 'M-Pesa number (not needed for wallet)' : usesStripe ? 'Contact phone number' : 'WhatsApp number';
     ticketPaymentNote.textContent = usesWallet
       ? 'Your verified wallet balance will be charged immediately. Tickets are issued as soon as payment succeeds.'
-      : 'You will receive an M-Pesa payment prompt. Your ticket is issued only after payment is confirmed.';
-    ticketForm.querySelector('[type=submit]').innerHTML = `Pay with ${usesWallet ? 'Valor Wallet' : 'M-Pesa'} <span aria-hidden="true">→</span>`;
+      : usesStripe
+        ? 'Continue to Stripe Checkout to pay by card. Your ticket is issued after Stripe confirms payment.'
+        : 'You will receive an M-Pesa payment prompt. Your ticket is issued only after payment is confirmed.';
+    const paymentLabel = usesWallet ? 'Valor Wallet' : usesStripe ? 'Stripe Checkout' : 'M-Pesa';
+    ticketForm.querySelector('[type=submit]').innerHTML = `Pay with ${paymentLabel} <span aria-hidden="true">→</span>`;
   }
+  const stripeTicketOption = paymentMethodSelect.querySelector('option[value="stripe"]');
+  stripeTicketOption.disabled = !stripeCheckoutEnabled;
+  stripeTicketOption.textContent = stripeCheckoutEnabled ? 'Card (Stripe Checkout)' : 'Card (Stripe Checkout; coming soon)';
   paymentMethodSelect.addEventListener('change', updateTicketPaymentMethod);
   let activeEvent = null;
   document.addEventListener('click', (event) => {
@@ -798,10 +812,15 @@
         showAccountSignIn(ticketFeedback);
         return;
       }
-      if (!checkoutEnabled && Number(ticket.price) > 0 && paymentMethod === 'mpesa') {
+      if (paymentMethod === 'mpesa' && !mpesaCheckoutEnabled) {
         ticketFeedback.textContent = apiBase
           ? 'M-Pesa checkout is not available right now. Choose Valor Wallet or try again later.'
           : 'Secure ticket checkout is not connected on this preview website yet.';
+        ticketFeedback.classList.add('error');
+        return;
+      }
+      if (paymentMethod === 'stripe' && !stripeCheckoutEnabled) {
+        ticketFeedback.textContent = 'Stripe Checkout is not configured yet. Choose M-Pesa or Valor Wallet instead.';
         ticketFeedback.classList.add('error');
         return;
       }
@@ -809,7 +828,9 @@
       ticketFeedback.classList.remove('error');
       ticketFeedback.textContent = Number(ticket.price) === 0
         ? 'Confirming your free registration…'
-        : paymentMethod === 'wallet' ? 'Paying with your Valor Wallet…' : 'Sending an M-Pesa payment prompt…';
+        : paymentMethod === 'wallet'
+          ? 'Paying with your Valor Wallet…'
+          : paymentMethod === 'stripe' ? 'Starting Stripe Checkout…' : 'Sending an M-Pesa payment prompt…';
       try {
         const order = await window.valorEventsApi('/api/orders/tickets', {
           method: 'POST',
@@ -823,6 +844,11 @@
             paymentMethod
           })
         });
+        if (order.checkoutUrl) {
+          window.sessionStorage.setItem(`valor-order-${order.orderId}`, order.accessToken);
+          window.location.assign(order.checkoutUrl);
+          return;
+        }
         window.sessionStorage.setItem(`valor-order-${order.orderId}`, order.accessToken);
         window.location.assign(`order.html?orderId=${encodeURIComponent(order.orderId)}`);
       } catch (error) {

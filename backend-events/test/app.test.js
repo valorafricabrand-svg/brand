@@ -36,6 +36,26 @@ const paymentGateway = {
     return { CheckoutRequestID: checkoutRequestId, ResultCode: '0' };
   }
 };
+let stripeCheckoutNumber = 0;
+const stripeGateway = {
+  enabled: true,
+  async createCheckoutSession(order) {
+    stripeCheckoutNumber += 1;
+    return {
+      id: `cs_test_${stripeCheckoutNumber}`,
+      url: `https://checkout.stripe.test/session/${stripeCheckoutNumber}`,
+      expiresAt: Math.floor(Date.now() / 1000) + 1800,
+      order
+    };
+  },
+  constructWebhookEvent(payload, signature) {
+    if (signature !== 'test-stripe-signature') throw new Error('Invalid signature.');
+    return JSON.parse(payload.toString());
+  },
+  isConfigured() {
+    return this.enabled;
+  }
+};
 const smsCodes = new Map();
 const smsGateway = {
   enabled: true,
@@ -58,6 +78,7 @@ const emailGateway = {
 };
 const app = createApp({
   mpesa: paymentGateway,
+  stripe: stripeGateway,
   sms: smsGateway,
   email: emailGateway,
   verifyGoogleToken: async (idToken) => {
@@ -127,6 +148,17 @@ async function completePayment(checkoutRequestId, merchantRequestId, amount, rec
   });
 }
 
+function stripeWebhook(session, type = 'checkout.session.completed') {
+  return request(app).post('/api/stripe/webhook')
+    .set('Content-Type', 'application/json')
+    .set('Stripe-Signature', 'test-stripe-signature')
+    .send(JSON.stringify({
+      id: `evt_${session.id}`,
+      type,
+      data: { object: session }
+    }));
+}
+
 test('event submissions remain private until an admin approves them', async () => {
   const created = await submitEvent();
   assert.equal(created.status, 202);
@@ -188,7 +220,105 @@ test('ticket checkout is unavailable until Daraja is configured', async () => {
     .send(payload);
   assert.equal(response.status, 503);
   assert.equal(response.body.error.includes('Daraja'), true);
+  stripeGateway.enabled = false;
+  const unavailable = await request(app).post('/api/orders/tickets')
+    .set(await ticketAccountAuth())
+    .send({ ...payload, paymentMethod: 'stripe' });
+  assert.equal(unavailable.status, 503);
+  stripeGateway.enabled = true;
   paymentGateway.enabled = true;
+});
+
+test('Stripe ticket checkout issues QR tickets only after a verified matching webhook', async () => {
+  const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
+  const accountAuth = await ticketAccountAuth();
+  const checkout = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Early bird',
+    buyerName: 'Stripe Buyer',
+    phone: '0712345678',
+    quantity: 2,
+    paymentMethod: 'stripe'
+  });
+  assert.equal(checkout.status, 201);
+  assert.equal(checkout.body.paymentMethod, 'stripe');
+  assert.match(checkout.body.checkoutUrl, /^https:\/\/checkout\.stripe\.test\//);
+  const pending = db.prepare('SELECT * FROM orders WHERE id=?').get(checkout.body.orderId);
+  assert.equal(pending.payment_method, 'stripe');
+  assert.match(pending.stripe_session_id, /^cs_test_\d+$/);
+  assert.ok(pending.stripe_session_expires_at);
+  assert.equal((await request(app).get(`/api/orders/${checkout.body.orderId}`)
+    .set(accountAuth).set('X-Order-Access', checkout.body.accessToken)).body.status, 'pending');
+
+  const session = {
+    id: pending.stripe_session_id,
+    payment_status: 'paid',
+    amount_total: 160000,
+    currency: 'kes',
+    metadata: { orderId: pending.id }
+  };
+  const invalidSignature = await request(app).post('/api/stripe/webhook')
+    .set('Content-Type', 'application/json')
+    .set('Stripe-Signature', 'invalid')
+    .send(JSON.stringify({ type: 'checkout.session.completed', data: { object: session } }));
+  assert.equal(invalidSignature.status, 400);
+  assert.equal((await request(app).get(`/api/orders/${checkout.body.orderId}`)
+    .set(accountAuth).set('X-Order-Access', checkout.body.accessToken)).body.status, 'pending');
+
+  assert.equal((await stripeWebhook(session)).status, 200);
+  assert.equal((await stripeWebhook(session)).status, 200);
+  const paid = await request(app).get(`/api/orders/${checkout.body.orderId}`)
+    .set(accountAuth).set('X-Order-Access', checkout.body.accessToken);
+  assert.equal(paid.body.status, 'paid');
+  assert.equal(paid.body.paymentMethod, 'stripe');
+  assert.equal(paid.body.tickets.length, 2);
+  assert.match(paid.body.tickets[0].qr, /^data:image\/png;base64,/);
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(pending.id).total, 2);
+});
+
+test('Stripe webhook rejects mismatched totals and expires abandoned checkouts without issuing tickets', async () => {
+  const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
+  const accountAuth = await ticketAccountAuth();
+  const wrongTotal = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Early bird',
+    buyerName: 'Stripe Buyer',
+    phone: '0712345678',
+    quantity: 1,
+    paymentMethod: 'stripe'
+  });
+  const wrongOrder = db.prepare('SELECT * FROM orders WHERE id=?').get(wrongTotal.body.orderId);
+  const mismatch = await stripeWebhook({
+    id: wrongOrder.stripe_session_id,
+    payment_status: 'paid',
+    amount_total: 1,
+    currency: 'kes',
+    metadata: { orderId: wrongOrder.id }
+  });
+  assert.equal(mismatch.status, 200);
+  const reviewed = await request(app).get(`/api/orders/${wrongOrder.id}`)
+    .set(accountAuth).set('X-Order-Access', wrongTotal.body.accessToken);
+  assert.equal(reviewed.body.status, 'review');
+  assert.equal(reviewed.body.tickets, undefined);
+
+  const abandoned = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Early bird',
+    buyerName: 'Stripe Buyer',
+    phone: '0712345678',
+    quantity: 1,
+    paymentMethod: 'stripe'
+  });
+  const abandonedOrder = db.prepare('SELECT stripe_session_id FROM orders WHERE id=?').get(abandoned.body.orderId);
+  const expired = await stripeWebhook({
+    id: abandonedOrder.stripe_session_id,
+    metadata: { orderId: abandoned.body.orderId }
+  }, 'checkout.session.expired');
+  assert.equal(expired.status, 200);
+  const failed = await request(app).get(`/api/orders/${abandoned.body.orderId}`)
+    .set(accountAuth).set('X-Order-Access', abandoned.body.accessToken);
+  assert.equal(failed.body.status, 'failed');
+  assert.equal(failed.body.tickets, undefined);
 });
 
 test('paid ticket order issues only after Daraja verifies the callback', async () => {
