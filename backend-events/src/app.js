@@ -738,8 +738,8 @@ function createApp(options = {}) {
       return res.status(503).json({ error: 'Email sign-up is not available until Resend is configured.' });
     }
     const { password, displayName = '' } = req.body || {};
-    if (typeof password !== 'string' || password.length < 12 || password.length > 128) {
-      return res.status(400).json({ error: 'Choose a password between 12 and 128 characters.' });
+    if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+      return res.status(400).json({ error: 'Choose a password between 8 and 128 characters.' });
     }
     if (typeof displayName !== 'string' || displayName.trim().length > 120) {
       return res.status(400).json({ error: 'Your name must be 120 characters or fewer.' });
@@ -838,8 +838,8 @@ function createApp(options = {}) {
     if (!email || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
       return res.status(400).json({ error: 'Enter your email and six-digit password reset code.' });
     }
-    if (typeof password !== 'string' || password.length < 12 || password.length > 128) {
-      return res.status(400).json({ error: 'Choose a password between 12 and 128 characters.' });
+    if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+      return res.status(400).json({ error: 'Choose a password between 8 and 128 characters.' });
     }
     if (!verifyAccountCode(email, 'reset', code)) {
       return res.status(401).json({ error: 'That password reset code is incorrect or expired.' });

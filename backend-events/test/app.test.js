@@ -718,15 +718,22 @@ test('email verification, password reset, and Google sign-in create separate acc
   assert.equal(config.body.emailAuthConfigured, true);
 
   const email = 'member@example.com';
+  const tooShortPassword = await request(app).post('/api/auth/email/register').send({
+    email: 'short-password@example.com',
+    displayName: 'Email Member',
+    password: 'short7!'
+  }).set('X-Forwarded-For', '198.51.100.30');
+  assert.equal(tooShortPassword.status, 400);
+  assert.match(tooShortPassword.body.error, /8 and 128/);
   const register = await request(app).post('/api/auth/email/register').send({
     email: '  MEMBER@example.com ',
     displayName: 'Email Member',
-    password: 'a-long-test-password-123'
+    password: 'Short8!!'
   });
   assert.equal(register.status, 202);
   assert.equal((await request(app).post('/api/auth/email/login').send({
     email,
-    password: 'a-long-test-password-123'
+    password: 'Short8!!'
   })).status, 403);
 
   const verifyCode = emailCodes.get(`${email}:verify`);
@@ -738,16 +745,24 @@ test('email verification, password reset, and Google sign-in create separate acc
   assert.equal((await request(app).get('/api/auth/account').set(originalSession)).body.account.email, email);
 
   assert.equal((await request(app).post('/api/auth/email/forgot-password').send({ email })).status, 202);
+  const resetCode = emailCodes.get(`${email}:reset`);
+  const tooShortResetPassword = await request(app).post('/api/auth/email/reset-password').send({
+    email,
+    code: resetCode,
+    password: 'short7!'
+  });
+  assert.equal(tooShortResetPassword.status, 400);
+  assert.match(tooShortResetPassword.body.error, /8 and 128/);
   const reset = await request(app).post('/api/auth/email/reset-password').send({
     email,
-    code: emailCodes.get(`${email}:reset`),
-    password: 'another-long-password-456'
+    code: resetCode,
+    password: 'Reset8!!'
   });
   assert.equal(reset.status, 200);
   assert.equal((await request(app).get('/api/auth/account').set(originalSession)).status, 401);
   assert.equal((await request(app).post('/api/auth/email/login').send({
     email,
-    password: 'another-long-password-456'
+    password: 'Reset8!!'
   })).status, 200);
 
   const google = await request(app).post('/api/auth/google').send({ idToken: 'valid-google-token' });

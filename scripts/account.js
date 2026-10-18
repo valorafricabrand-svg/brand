@@ -59,7 +59,7 @@
     nameField.querySelector('input').required = mode === 'register';
     passwordField.hidden = !['login','register','reset'].includes(mode);
     passwordInput.required = !passwordField.hidden;
-    passwordInput.minLength = mode === 'login' ? 1 : 12;
+    passwordInput.minLength = mode === 'login' ? 1 : 8;
     passwordInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
     passwordField.firstChild.textContent = mode === 'reset' ? 'New password' : 'Password';
     codeField.hidden = !['verify','reset'].includes(mode);
