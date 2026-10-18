@@ -8,7 +8,11 @@
   const emailForm = document.getElementById('accountEmailForm');
   const emailFeedback = document.getElementById('accountEmailFeedback');
   const signOutFeedback = document.getElementById('accountEmailFeedbackSignedIn');
+  const emailLoginButton = document.getElementById('showEmailLogin');
+  const emailRegisterButton = document.getElementById('showEmailRegister');
   let emailMode = 'options';
+  let accountConfigLoaded = false;
+  let emailAuthAvailable = false;
 
   function setFeedback(element, message, isError = false) {
     if (!element) return;
@@ -118,10 +122,14 @@
     loadingMessage.textContent = 'Loading sign-in options…';
     googleContainer.replaceChildren(loadingMessage);
     const config = await window.valorEventsApi('/api/auth/config');
-    if (!config.emailAuthConfigured) {
-      document.getElementById('showEmailLogin').disabled = true;
-      document.getElementById('showEmailRegister').disabled = true;
+    accountConfigLoaded = true;
+    emailAuthAvailable = Boolean(config.emailAuthConfigured);
+    emailLoginButton.disabled = !emailAuthAvailable;
+    emailRegisterButton.disabled = !emailAuthAvailable;
+    if (!emailAuthAvailable) {
       setFeedback(emailFeedback, 'Email sign-in will be available after Resend is configured.');
+    } else {
+      setFeedback(emailFeedback, '');
     }
     if (!config.googleClientId) {
       const unavailable = document.createElement('p');
@@ -152,6 +160,29 @@
       text: 'continue_with',
       width: Math.min(360, Math.max(200, googleContainer.clientWidth))
     });
+  }
+
+  function showAccountServiceUnavailable(error) {
+    if (!accountConfigLoaded) {
+      emailLoginButton.disabled = true;
+      emailRegisterButton.disabled = true;
+    }
+    const message = error.message === 'The Valor Africa event service is not configured for this website yet.'
+      ? 'The account service is not connected to this website yet. Sign-in, wallet deposits, and purchases will work after the backend is deployed and connected.'
+      : `Could not load sign-in options. ${error.message}`;
+    const unavailable = document.createElement('p');
+    unavailable.className = 'google-unavailable';
+    unavailable.textContent = message;
+    const retryButton = document.createElement('button');
+    retryButton.type = 'button';
+    retryButton.className = 'button secondary';
+    retryButton.textContent = 'Retry connection';
+    retryButton.addEventListener('click', () => {
+      retryButton.disabled = true;
+      initializeGoogleSignIn().catch(showAccountServiceUnavailable);
+    });
+    document.getElementById('googleSignInButton').replaceChildren(unavailable, retryButton);
+    setFeedback(emailFeedback, message, true);
   }
 
   document.getElementById('showEmailLogin').addEventListener('click', () => setEmailMode('login'));
@@ -251,11 +282,7 @@
     try {
       await initializeGoogleSignIn();
     } catch (error) {
-      const unavailable = document.createElement('p');
-      unavailable.className = 'google-unavailable';
-      unavailable.textContent = 'Connect to the Valor Africa service to load sign-in options.';
-      document.getElementById('googleSignInButton').replaceChildren(unavailable);
-      setFeedback(emailFeedback, error.message, true);
+      showAccountServiceUnavailable(error);
     }
   }
 
