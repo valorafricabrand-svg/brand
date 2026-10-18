@@ -449,11 +449,12 @@
       video.className = 'ad-video';
       video.src = event.adVideo;
       video.poster = adPoster;
-      video.autoplay = index === 0 && !adPaused;
+      video.autoplay = index === 0 && (!adPaused || event.isTicketBuyerPromo);
       video.muted = true;
       video.loop = true;
       video.playsInline = true;
       video.preload = 'metadata';
+      video.controls = Boolean(event.isTicketBuyerPromo);
       video.setAttribute('aria-label', event.isTicketBuyerPromo
         ? 'Valor Africa ticket buyer video'
         : '15-second Valor Africa introduction for event organizers');
@@ -475,7 +476,22 @@
         cta.href = 'events.html';
         cta.innerHTML = '<span>Explore events</span><span aria-hidden="true">→</span>';
         content.append(category, title, details, cta);
-        slide.append(visual, content);
+
+        const playButton = document.createElement('button');
+        playButton.type = 'button';
+        playButton.className = 'buyer-video-play';
+        playButton.setAttribute('aria-label', 'Play ticket buyer video');
+        playButton.innerHTML = '<span aria-hidden="true">▶</span><span>Play video</span>';
+        video.addEventListener('playing', () => { playButton.hidden = true; });
+        video.addEventListener('pause', () => { playButton.hidden = false; });
+        playButton.addEventListener('click', () => {
+          video.muted = true;
+          video.play().catch((error) => {
+            console.error('Ticket buyer video could not be played', error);
+            video.controls = true;
+          });
+        });
+        slide.append(visual, content, playButton);
         return slide;
       }
 
@@ -552,11 +568,12 @@
       if (video) {
         if (active) {
           video.muted = true;
-          if (document.hidden || (reducedMotionQuery.matches && adPaused)) {
+          if (document.hidden) {
             video.pause();
           } else {
             video.play().catch(() => {
-              if (!adEvents[activeAdIndex].isPlatformPromo) video.controls = true;
+              const activeEvent = adEvents[activeAdIndex];
+              if (!activeEvent.isPlatformPromo || activeEvent.isTicketBuyerPromo) video.controls = true;
             });
           }
         } else {
@@ -599,7 +616,8 @@
   function startAdRotation() {
     stopAdRotation();
     if (!adPaused && !adPointerInside && !adHasFocus && adEvents.length > 1) {
-      const delay = adEvents[activeAdIndex].isPlatformPromo ? 16000 : 7000;
+      const activeEvent = adEvents[activeAdIndex];
+      const delay = activeEvent.isTicketBuyerPromo ? 30000 : activeEvent.isPlatformPromo ? 16000 : 7000;
       adTimer = window.setTimeout(() => {
         showAd(activeAdIndex + 1);
         startAdRotation();

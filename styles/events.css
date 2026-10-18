@@ -140,6 +140,9 @@ img { display: block; max-width: 100%; }
 .ad-price { margin: -8px 0 14px; color: #fff; font-size: 13px; font-weight: 800; }
 .ad-ticket-cta { display: inline-flex; min-height: 44px; align-items: center; gap: 16px; padding: 0 17px; border: 0; border-radius: 999px; color: var(--green-dark); background: #fff; font-size: 13px; font-weight: 800; }
 .ad-ticket-cta:hover { color: #fff; background: var(--green); }
+.buyer-video-play { position: absolute; z-index: 3; top: 50%; left: 50%; display: inline-flex; min-height: 54px; align-items: center; justify-content: center; gap: 10px; padding: 0 20px; transform: translate(-50%, -50%); border: 1px solid rgba(255,255,255,.75); border-radius: 999px; color: #18362d; background: var(--yellow); box-shadow: 0 8px 28px rgba(0,0,0,.32); font-size: 13px; font-weight: 800; white-space: nowrap; }
+.buyer-video-play:hover { color: #fff; background: var(--green); }
+.buyer-video-play[hidden] { display: none; }
 .promo-host-cta { position: absolute; z-index: 4; right: clamp(16px, 4vw, 52px); bottom: 16px; min-width: clamp(180px, 18vw, 235px); justify-content: space-between; color: #17352c; background: var(--yellow); box-shadow: 0 8px 24px rgba(0,0,0,.2); }
 .promo-host-cta:hover { color: #fff; background: var(--green); }
 .sponsored-badge { position: absolute; z-index: 3; top: 18px; left: 19px; display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; border: 1px solid rgba(255,255,255,.24); border-radius: 999px; color: #fff; background: rgba(10,18,31,.56); font-size: 10px; font-weight: 800; letter-spacing: .08em; backdrop-filter: blur(8px); }
