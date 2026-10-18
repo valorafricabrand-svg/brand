@@ -743,11 +743,35 @@
   const paymentMethodSelect = document.getElementById('ticketPaymentMethod');
   const buyerPhoneInput = document.getElementById('buyerPhone');
   const ticketPaymentNote = document.getElementById('ticketPaymentNote');
+  const ticketForm = document.getElementById('ticketRequestForm');
+  const ticketDraftKey = 'valor-pending-ticket';
+  const ticketReturnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const accountLink = ticketDialog && ticketDialog.querySelector('a[href="account.html"]');
+  if (accountLink) {
+    accountLink.href = `account.html?returnTo=${encodeURIComponent(ticketReturnTo)}`;
+    accountLink.addEventListener('click', () => {
+      if (!window.sessionStorage.getItem('valor-account-token')) saveTicketDraft();
+    });
+  }
+
+  function saveTicketDraft() {
+    if (!activeEvent || !ticketForm) return;
+    const values = Object.fromEntries(new FormData(ticketForm));
+    window.sessionStorage.setItem(ticketDraftKey, JSON.stringify({
+      eventId: activeEvent.id,
+      ticketType: values.ticketType,
+      quantity: values.quantity,
+      name: values.name,
+      paymentMethod: values.paymentMethod,
+      phone: values.phone
+    }));
+  }
+
   function showAccountSignIn(feedback) {
+    saveTicketDraft();
     feedback.replaceChildren(document.createTextNode('Sign in to your account before getting tickets. '));
     const link = document.createElement('a');
-    const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    link.href = `account.html?returnTo=${encodeURIComponent(returnTo)}`;
+    link.href = `account.html?returnTo=${encodeURIComponent(ticketReturnTo)}`;
     link.textContent = 'Sign in to continue';
     feedback.appendChild(link);
     feedback.classList.add('error');
@@ -771,16 +795,11 @@
   stripeTicketOption.textContent = stripeCheckoutEnabled ? 'Card (Stripe Checkout)' : 'Card (Stripe Checkout; coming soon)';
   paymentMethodSelect.addEventListener('change', updateTicketPaymentMethod);
   let activeEvent = null;
-  document.addEventListener('click', (event) => {
-    if (!(event.target instanceof Element)) return;
-    const button = event.target.closest('[data-buy-event], [data-get-tickets], .get-tickets-btn');
-    if (!button) return;
-    event.preventDefault();
+  function openTicketDialog(eventId, draft = null) {
     if (!ticketDialog || !ticketSelect || !ticketForm) {
       console.error('Ticket dialog is not available on this page.');
       return;
     }
-    const eventId = button.dataset.eventId || button.dataset.buyEvent;
     activeEvent = events.find((item) => item.id === eventId);
     if (!activeEvent) return;
     document.getElementById('ticketEventName').textContent = `${activeEvent.title} · ${locationLine(activeEvent)}`;
@@ -799,11 +818,33 @@
     ticketFeedback.textContent = availableTickets.length ? '' : 'Ticket sales are not available right now.';
     ticketFeedback.classList.toggle('error', availableTickets.length === 0);
     paymentMethodSelect.value = 'mpesa';
+    if (draft) {
+      if (availableTickets.some((ticket) => ticket.name === draft.ticketType)) ticketSelect.value = draft.ticketType;
+      ticketForm.elements.quantity.value = String(Math.min(10, Math.max(1, Number(draft.quantity) || 1)));
+      ticketForm.elements.name.value = typeof draft.name === 'string' ? draft.name : '';
+      const paymentOption = Array.from(paymentMethodSelect.options).find((option) =>
+        option.value === draft.paymentMethod && !option.disabled
+      );
+      if (paymentOption) paymentMethodSelect.value = paymentOption.value;
+      ticketForm.elements.phone.value = typeof draft.phone === 'string' ? draft.phone : '';
+    }
     updateTicketPaymentMethod();
+    if (draft) {
+      ticketFeedback.textContent = 'You’re signed in. Review your ticket details and continue to payment.';
+      ticketFeedback.classList.remove('error');
+    }
     if (!ticketDialog.open) ticketDialog.showModal();
+  }
+
+  document.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) return;
+    const button = event.target.closest('[data-buy-event], [data-get-tickets], .get-tickets-btn');
+    if (!button) return;
+    event.preventDefault();
+    const eventId = button.dataset.eventId || button.dataset.buyEvent;
+    openTicketDialog(eventId);
   });
 
-  const ticketForm = document.getElementById('ticketRequestForm');
   if (ticketForm) {
     ticketForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -859,11 +900,27 @@
         window.sessionStorage.setItem(`valor-order-${order.orderId}`, order.accessToken);
         window.location.assign(`order.html?orderId=${encodeURIComponent(order.orderId)}`);
       } catch (error) {
+        if (/session has expired|sign in to your valor africa account/i.test(error.message)) {
+          window.sessionStorage.removeItem('valor-account-token');
+          showAccountSignIn(ticketFeedback);
+          return;
+        }
         ticketFeedback.textContent = error.message;
         ticketFeedback.classList.add('error');
         submitButton.disabled = false;
       }
     });
+  }
+
+  const savedTicketDraft = window.sessionStorage.getItem(ticketDraftKey);
+  if (savedTicketDraft) {
+    window.sessionStorage.removeItem(ticketDraftKey);
+    try {
+      const draft = JSON.parse(savedTicketDraft);
+      if (draft && typeof draft.eventId === 'string') openTicketDialog(draft.eventId, draft);
+    } catch (error) {
+      console.error('Could not restore the saved ticket form.', error);
+    }
   }
 
   document.querySelectorAll('[data-countdown-to]').forEach((element) => {
