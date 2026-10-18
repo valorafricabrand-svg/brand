@@ -224,6 +224,19 @@ img { display: block; max-width: 100%; }
 .hub-bottom a { color: var(--green); font-weight: 800; }
 .listing-disclaimer { margin-top: 8px; color: #758397; font-size: 10px; }
 
+.community-events { padding: 66px 0 70px; background: #f3f7f5; }
+.community-events-heading { display: flex; align-items: end; justify-content: space-between; gap: 28px; margin-bottom: 24px; }
+.community-events-heading .section-kicker { margin-bottom: 6px; }
+.community-events-heading h2 { margin: 0; font: 800 clamp(25px, 4vw, 36px)/1.15 Manrope, sans-serif; letter-spacing: -.035em; }
+.community-events-heading > p { max-width: 470px; margin: 0; color: #5b6b7f; font-size: 14px; line-height: 1.7; }
+.community-event-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0; padding: 0; list-style: none; }
+.community-event-list li { display: flex; min-height: 152px; align-items: center; gap: 18px; padding: 24px; border: 1px solid #e1e9e4; border-radius: 14px; background: #fff; }
+.community-event-number { display: grid; width: 48px; height: 48px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: var(--green-dark); background: #e7f5ed; font: 800 14px Manrope, sans-serif; }
+.community-event-category { color: #708073; font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+.community-event-list h3 { margin: 7px 0 0; font: 800 19px/1.25 Manrope, sans-serif; }
+.community-events-cta { margin: 22px 0 0; color: #5b6b7f; font-size: 13px; }
+.community-events-cta a { color: var(--green-dark); font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+
 .host-banner { display: grid; grid-template-columns: 1.2fr .8fr; gap: 28px; align-items: center; margin-bottom: 68px; padding: clamp(26px, 5vw, 50px); border-radius: 22px; color: #fff; background: linear-gradient(120deg, #10233b, #153a3a); }
 .host-banner .eyebrow { color: #75e0b1; }
 .host-banner h2 { margin: 12px 0; font: 800 clamp(28px, 4vw, 40px)/1.12 Manrope, sans-serif; letter-spacing: -.04em; }
@@ -483,6 +496,11 @@ img { display: block; max-width: 100%; }
   .event-card-body { min-height: 0; }
   .ticket-link { margin-top: 3px; }
   .hub-bottom { align-items: flex-start; flex-direction: column; gap: 6px; font-size: 11px; }
+  .community-events { padding: 48px 0 50px; }
+  .community-events-heading { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+  .community-event-list { grid-template-columns: 1fr; gap: 10px; }
+  .community-event-list li { min-height: 110px; padding: 19px; }
+  .community-events-cta { line-height: 1.7; }
   .host-banner { grid-template-columns: 1fr; gap: 23px; margin-bottom: 40px; padding: 25px 21px; border-radius: 17px; }
   .host-points { gap: 8px; }
   .site-footer { margin-top: 42px; padding-top: 38px; }
