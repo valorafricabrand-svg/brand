@@ -136,7 +136,19 @@
     adPoster: 'images/events/valor-ads-promo-poster.svg',
     tickets: []
   };
-  let adEvents = [organizerPromo, ...events.slice(0, 1)];
+  const ticketBuyerPromo = {
+    id: 'valor-ticket-buyer-promo',
+    isPlatformPromo: true,
+    isTicketBuyerPromo: true,
+    title: 'Your next great experience starts here.',
+    category: 'For ticket buyers',
+    location: 'Valor Africa Events',
+    startsAt: new Date().toISOString(),
+    adVideo: 'videos/valor-ticket-buyer.mp4',
+    adPoster: 'images/events/valor-ticket-buyer-cover.png',
+    tickets: []
+  };
+  let adEvents = [ticketBuyerPromo, organizerPromo, ...events.slice(0, 1)];
   let checkoutEnabled = false;
   let mpesaCheckoutEnabled = false;
   let stripeCheckoutEnabled = false;
@@ -156,7 +168,7 @@
         tickets: event.tickets.map((ticket) => ({ ...ticket, currency: 'KES' }))
       });
       events = listing.events.map(toEvent);
-      adEvents = [organizerPromo, ...featured.events.map(toEvent)];
+      adEvents = [ticketBuyerPromo, organizerPromo, ...featured.events.map(toEvent)];
       mpesaCheckoutEnabled = Boolean(health.paymentsConfigured);
       stripeCheckoutEnabled = Boolean(health.stripePaymentsConfigured);
       checkoutEnabled = mpesaCheckoutEnabled || stripeCheckoutEnabled;
@@ -190,7 +202,7 @@
       }
     } catch (error) {
       events = [];
-      adEvents = [organizerPromo];
+      adEvents = [ticketBuyerPromo, organizerPromo];
       const adNote = document.querySelector('.ad-note');
       if (adNote) adNote.textContent = 'Host your next event with Valor Africa.';
       const sponsoredBadge = document.querySelector('.sponsored-badge');
@@ -418,7 +430,9 @@
   function createAdSlide(event, index) {
     const slide = document.createElement('article');
     slide.className = 'ad-slide';
-    if (event.isPlatformPromo) slide.classList.add('is-organizer-promo');
+    if (event.isPlatformPromo) {
+      slide.classList.add(event.isTicketBuyerPromo ? 'is-ticket-buyer-promo' : 'is-organizer-promo');
+    }
     slide.dataset.adIndex = String(index);
     slide.dataset.eventId = event.id;
     slide.setAttribute('role', 'group');
@@ -440,8 +454,30 @@
       video.loop = true;
       video.playsInline = true;
       video.preload = 'metadata';
-      video.setAttribute('aria-label', '15-second Valor Africa introduction for event organizers');
+      video.setAttribute('aria-label', event.isTicketBuyerPromo
+        ? 'Valor Africa ticket buyer video'
+        : '15-second Valor Africa introduction for event organizers');
       visual.appendChild(video);
+
+      if (event.isTicketBuyerPromo) {
+        const content = document.createElement('div');
+        content.className = 'ad-content';
+        const category = document.createElement('p');
+        category.className = 'ad-category';
+        category.textContent = event.category;
+        const title = document.createElement('h2');
+        title.textContent = event.title;
+        const details = document.createElement('p');
+        details.className = 'ad-description';
+        details.textContent = 'Discover concerts, festivals and experiences across Africa.';
+        const cta = document.createElement('a');
+        cta.className = 'ad-ticket-cta';
+        cta.href = 'events.html';
+        cta.innerHTML = '<span>Explore events</span><span aria-hidden="true">→</span>';
+        content.append(category, title, details, cta);
+        slide.append(visual, content);
+        return slide;
+      }
 
       const hostLink = document.createElement('a');
       hostLink.className = 'ad-ticket-cta promo-host-cta';
@@ -537,13 +573,17 @@
     });
     const sponsoredBadge = document.querySelector('.sponsored-badge');
     if (sponsoredBadge) {
-      const isOrganizerPromo = adEvents[activeAdIndex].isPlatformPromo;
+      const activeEvent = adEvents[activeAdIndex];
+      const isOrganizerPromo = activeEvent.isPlatformPromo && !activeEvent.isTicketBuyerPromo;
       sponsoredBadge.hidden = isOrganizerPromo;
-      if (!isOrganizerPromo) sponsoredBadge.textContent = '✦ PAID PROMOTION';
+      if (activeEvent.isTicketBuyerPromo) sponsoredBadge.textContent = 'TICKET BUYER VIDEO';
+      else if (!isOrganizerPromo) sponsoredBadge.textContent = '✦ PAID PROMOTION';
     }
     if (adSoundToggle) {
       const video = adSlides.querySelector('.ad-slide:not([hidden]) video');
-      adSoundToggle.hidden = !video || Boolean(adEvents[activeAdIndex].isPlatformPromo);
+      adSoundToggle.hidden = !video || Boolean(
+        adEvents[activeAdIndex].isPlatformPromo && !adEvents[activeAdIndex].isTicketBuyerPromo
+      );
       if (video) {
         adSoundToggle.setAttribute('aria-pressed', String(!video.muted));
         adSoundToggle.setAttribute('aria-label', video.muted ? 'Turn sound on' : 'Turn sound off');

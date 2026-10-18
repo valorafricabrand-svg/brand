@@ -130,6 +130,7 @@ img { display: block; max-width: 100%; }
 .is-organizer-promo .ad-visual::after { display: none; }
 .ad-poster, .ad-video { width: 100%; height: 100%; object-fit: cover; object-position: center 47%; transform: scale(1.04); animation: ad-drift 16s ease-in-out infinite alternate; }
 .ad-video { display: block; }
+.is-ticket-buyer-promo .ad-video { object-position: center; transform: none; animation: none; }
 .ad-visual::after { position: absolute; inset: 0; content: ""; background: linear-gradient(90deg, rgba(7,12,25,.9), rgba(7,12,25,.52) 45%, rgba(7,12,25,.12) 100%), linear-gradient(0deg, rgba(5,10,21,.52), transparent 65%); }
 .ad-motion { position: absolute; z-index: 1; inset: -40%; pointer-events: none; background: linear-gradient(113deg, transparent 42%, rgba(255,255,255,.13) 48%, transparent 53%); animation: ad-light-sweep 9s ease-in-out infinite; }
 .ad-content { position: absolute; z-index: 2; right: 24px; bottom: 27px; left: clamp(23px, 4vw, 55px); max-width: 620px; }
