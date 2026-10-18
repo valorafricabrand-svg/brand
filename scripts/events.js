@@ -772,9 +772,16 @@
   paymentMethodSelect.addEventListener('change', updateTicketPaymentMethod);
   let activeEvent = null;
   document.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-buy-event]');
-    if (!button || !ticketDialog || !ticketSelect) return;
-    activeEvent = events.find((item) => item.id === button.dataset.buyEvent);
+    if (!(event.target instanceof Element)) return;
+    const button = event.target.closest('[data-buy-event], [data-get-tickets], .get-tickets-btn');
+    if (!button) return;
+    event.preventDefault();
+    if (!ticketDialog || !ticketSelect || !ticketForm) {
+      console.error('Ticket dialog is not available on this page.');
+      return;
+    }
+    const eventId = button.dataset.eventId || button.dataset.buyEvent;
+    activeEvent = events.find((item) => item.id === eventId);
     if (!activeEvent) return;
     document.getElementById('ticketEventName').textContent = `${activeEvent.title} · ${locationLine(activeEvent)}`;
     const availableTickets = activeEvent.tickets.filter((ticket) =>
@@ -793,7 +800,7 @@
     ticketFeedback.classList.toggle('error', availableTickets.length === 0);
     paymentMethodSelect.value = 'mpesa';
     updateTicketPaymentMethod();
-    ticketDialog.showModal();
+    if (!ticketDialog.open) ticketDialog.showModal();
   });
 
   const ticketForm = document.getElementById('ticketRequestForm');
