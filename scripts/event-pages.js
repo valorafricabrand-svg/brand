@@ -304,6 +304,7 @@
         return;
       }
       const fragment = document.createDocumentFragment();
+      const emailNotices = new Set();
       result.tickets.forEach((ticket) => {
         const section = document.createElement('article');
         section.className = 'issued-ticket';
@@ -324,6 +325,12 @@
         eventLink.href = `event.html?slug=${encodeURIComponent(ticket.eventSlug)}`;
         eventLink.textContent = 'Event details';
         section.append(title, details, code, qr, eventLink);
+        if (['not_sent','sending','failed'].includes(ticket.ticketEmailStatus) && !emailNotices.has(ticket.orderId)) {
+          const notice = document.createElement('p');
+          notice.textContent = 'Your QR pass is available here. The confirmation email is pending delivery.';
+          section.appendChild(notice);
+          emailNotices.add(ticket.orderId);
+        }
         fragment.appendChild(section);
       });
       root.replaceChildren(fragment);

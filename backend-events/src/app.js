@@ -176,6 +176,7 @@ function createApp(options = {}) {
   const stripeGateway = options.stripe || stripe;
   const smsGateway = options.sms || walletSms;
   const emailGateway = options.email || accountEmail;
+  const ticketEmailGateway = options.ticketEmail || require('./ticket-email');
   const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
   const googleClient = new OAuth2Client(googleClientId || undefined);
   const verifyGoogleToken = options.verifyGoogleToken || (async (idToken) => {
@@ -187,6 +188,77 @@ function createApp(options = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
+
+  async function deliverTicketEmail(orderId) {
+    if (!ticketEmailGateway.isConfigured()) return false;
+    const claimed = db.transaction(() => {
+      const order = db.prepare(`
+        SELECT status,ticket_email_status,ticket_email_attempts,ticket_email_attempted_at
+        FROM orders WHERE id=? AND order_type='ticket'
+      `).get(orderId);
+      if (!order || !['paid','confirmed'].includes(order.status) || order.ticket_email_status === 'sent') return false;
+      const attemptedAt = order.ticket_email_attempted_at ? Date.parse(order.ticket_email_attempted_at + 'Z') : 0;
+      if (!['not_sent','failed','sending'].includes(order.ticket_email_status)) return false;
+      if (order.ticket_email_status === 'sending' && attemptedAt > Date.now() - 10 * 60 * 1000) return false;
+      if (order.ticket_email_status === 'failed') {
+        const delaySeconds = Math.min(3600, 60 * (2 ** Math.min(Math.max(order.ticket_email_attempts - 1, 0), 6)));
+        if (attemptedAt > Date.now() - delaySeconds * 1000) return false;
+      }
+      db.prepare(`
+        UPDATE orders SET ticket_email_status='sending',ticket_email_attempts=ticket_email_attempts+1,
+          ticket_email_attempted_at=datetime('now'),ticket_email_error=''
+        WHERE id=?
+      `).run(orderId);
+      return true;
+    })();
+    if (!claimed) return false;
+    try {
+      await ticketEmailGateway.sendConfirmation(orderId, publicSiteUrl);
+      db.prepare(`
+        UPDATE orders SET ticket_email_status='sent',ticket_email_error=''
+        WHERE id=? AND ticket_email_status='sending'
+      `).run(orderId);
+      return true;
+    } catch (error) {
+      const message = String(error && error.message || 'Unknown ticket email delivery error').slice(0, 500);
+      db.prepare(`
+        UPDATE orders SET ticket_email_status='failed',ticket_email_error=?
+        WHERE id=? AND ticket_email_status='sending'
+      `).run(message, orderId);
+      console.error(`Ticket confirmation email failed for order ${orderId}: ${message}`);
+      return false;
+    }
+  }
+
+  function scheduleTicketEmail(orderId) {
+    setImmediate(() => {
+      deliverTicketEmail(orderId).catch((error) => {
+        console.error(`Could not process ticket confirmation email for order ${orderId}:`, error);
+      });
+    });
+  }
+
+  app.locals.retryPendingTicketEmails = async () => {
+    if (!ticketEmailGateway.isConfigured()) return 0;
+    const orders = db.prepare(`
+      SELECT id FROM orders
+      WHERE order_type='ticket' AND status IN ('paid','confirmed')
+        AND ticket_email_status IN ('not_sent','failed','sending')
+        AND EXISTS (SELECT 1 FROM tickets WHERE tickets.order_id=orders.id)
+        AND (
+          ticket_email_status='not_sent'
+          OR (ticket_email_status='failed' AND datetime(ticket_email_attempted_at) <=
+            datetime('now',printf('-%d seconds',MIN(3600,60 * (1 << MIN(MAX(ticket_email_attempts - 1,0),6))))))
+          OR (ticket_email_status='sending' AND datetime(ticket_email_attempted_at) <= datetime('now','-10 minutes'))
+        )
+      ORDER BY paid_at ASC LIMIT 100
+    `).all();
+    let sent = 0;
+    for (const order of orders) {
+      if (await deliverTicketEmail(order.id)) sent += 1;
+    }
+    return sent;
+  };
 
   const origins = (process.env.ALLOWED_ORIGINS || 'http://localhost:8765,http://127.0.0.1:8765')
     .split(',').map((origin) => origin.trim()).filter(Boolean);
@@ -202,7 +274,7 @@ function createApp(options = {}) {
     }
     return callback(new Error('Origin is not allowed.'));
   }));
-  app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '1mb' }), (req, res, next) => {
+  app.post('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req, res, next) => {
     if (!stripeGateway.isConfigured()) return res.status(503).send('Stripe webhooks are not configured.');
     let event;
     try {
@@ -212,6 +284,8 @@ function createApp(options = {}) {
     }
     try {
       processStripeWebhook(event);
+      const orderId = event.data && event.data.object && event.data.object.metadata && event.data.object.metadata.orderId;
+      if (typeof orderId === 'string') await deliverTicketEmail(orderId);
       return res.json({ received: true });
     } catch (error) {
       return next(error);
@@ -392,6 +466,7 @@ function createApp(options = {}) {
       stripePaymentsConfigured: stripeGateway.isConfigured(),
       phoneLinkSmsConfigured: smsGateway.isConfigured(),
       emailAuthConfigured: emailGateway.isConfigured(),
+      ticketEmailsConfigured: ticketEmailGateway.isConfigured(),
       googleAuthConfigured: Boolean(googleClientId)
     });
   });
@@ -1165,9 +1240,15 @@ function createApp(options = {}) {
     const id = crypto.randomUUID();
     const accessToken = crypto.randomBytes(32).toString('base64url');
     db.prepare(`
-      INSERT INTO orders (id,access_token_hash,order_type,event_id,ad_booking_id,account_id,buyer_name,phone,ticket_type,quantity,amount_kes,payment_method)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-    `).run(id, sha256(accessToken), orderType, eventId, adBookingId, accountId, buyerName.trim(), phone, ticketType, quantity, amountKes, paymentMethod);
+      INSERT INTO orders (
+        id,access_token_hash,order_type,event_id,ad_booking_id,account_id,buyer_name,phone,
+        ticket_type,quantity,amount_kes,payment_method,ticket_email_status
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `).run(
+      id, sha256(accessToken), orderType, eventId, adBookingId, accountId, buyerName.trim(),
+      phone, ticketType, quantity, amountKes, paymentMethod,
+      orderType === 'ticket' ? 'not_sent' : 'not_applicable'
+    );
     return { id, accessToken };
   }
 
@@ -1364,6 +1445,7 @@ function createApp(options = {}) {
         throw error;
       }
       if (price === 0) {
+        scheduleTicketEmail(order.id);
         return res.status(201).json({
           orderId: order.id,
           accessToken: order.accessToken,
@@ -1372,6 +1454,7 @@ function createApp(options = {}) {
         });
       }
       if (paymentMethod === 'wallet') {
+        scheduleTicketEmail(order.id);
         return res.status(201).json({
           orderId: order.id,
           accessToken: order.accessToken,
@@ -1457,7 +1540,7 @@ function createApp(options = {}) {
     try {
       const tickets = db.prepare(`
         SELECT t.code,t.ticket_type AS ticketType,t.created_at AS issuedAt,
-          o.id AS orderId,o.status AS orderStatus,o.quantity,
+          o.id AS orderId,o.status AS orderStatus,o.ticket_email_status AS ticketEmailStatus,o.quantity,
           e.id AS eventId,e.title AS eventTitle,e.slug AS eventSlug,e.starts_at AS startsAt,
           e.venue_name AS venueName,e.city,e.timezone
         FROM tickets t
@@ -1625,6 +1708,7 @@ function createApp(options = {}) {
     } catch (error) {
       console.error('M-Pesa payment verification failed; order remains unconfirmed:', error.message);
     }
+    if (order.order_type === 'ticket') scheduleTicketEmail(order.id);
     res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
   });
 

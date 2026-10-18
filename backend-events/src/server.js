@@ -23,10 +23,21 @@ const app = createApp();
 const server = app.listen(port, '0.0.0.0', () => {
   console.log(`Valor Africa event service listening on port ${port}.`);
   console.log(`M-Pesa checkout: ${require('./mpesa').isConfigured() ? 'enabled' : 'disabled until Daraja credentials and HTTPS callback are configured'}.`);
+  console.log(`Ticket confirmation email: ${require('./ticket-email').isConfigured() ? 'enabled' : 'disabled until Resend credentials and a verified sender are configured'}.`);
+});
+const ticketEmailRetryTimer = setInterval(() => {
+  app.locals.retryPendingTicketEmails().catch((error) => {
+    console.error('Could not retry pending ticket confirmation emails:', error);
+  });
+}, 60 * 1000);
+ticketEmailRetryTimer.unref();
+app.locals.retryPendingTicketEmails().catch((error) => {
+  console.error('Could not retry pending ticket confirmation emails:', error);
 });
 
 function shutdown(signal) {
   console.log(`${signal} received; closing event service.`);
+  clearInterval(ticketEmailRetryTimer);
   server.close(() => {
     require('./db').close();
     process.exit(0);

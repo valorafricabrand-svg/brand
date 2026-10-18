@@ -118,6 +118,10 @@ db.exec(`
     stripe_session_id TEXT,
     stripe_session_expires_at TEXT,
     mpesa_receipt TEXT,
+    ticket_email_status TEXT NOT NULL DEFAULT 'not_applicable',
+    ticket_email_attempts INTEGER NOT NULL DEFAULT 0,
+    ticket_email_attempted_at TEXT,
+    ticket_email_error TEXT NOT NULL DEFAULT '',
     result_description TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     paid_at TEXT
@@ -256,6 +260,18 @@ if (!orderColumns.some((column) => column.name === 'stripe_session_id')) {
 }
 if (!orderColumns.some((column) => column.name === 'stripe_session_expires_at')) {
   db.exec('ALTER TABLE orders ADD COLUMN stripe_session_expires_at TEXT');
+}
+if (!orderColumns.some((column) => column.name === 'ticket_email_status')) {
+  db.exec("ALTER TABLE orders ADD COLUMN ticket_email_status TEXT NOT NULL DEFAULT 'not_applicable'");
+}
+if (!orderColumns.some((column) => column.name === 'ticket_email_attempts')) {
+  db.exec('ALTER TABLE orders ADD COLUMN ticket_email_attempts INTEGER NOT NULL DEFAULT 0');
+}
+if (!orderColumns.some((column) => column.name === 'ticket_email_attempted_at')) {
+  db.exec('ALTER TABLE orders ADD COLUMN ticket_email_attempted_at TEXT');
+}
+if (!orderColumns.some((column) => column.name === 'ticket_email_error')) {
+  db.exec("ALTER TABLE orders ADD COLUMN ticket_email_error TEXT NOT NULL DEFAULT ''");
 }
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS wallets_account ON wallets(account_id)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_session ON orders(stripe_session_id) WHERE stripe_session_id IS NOT NULL');

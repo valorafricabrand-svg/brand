@@ -77,11 +77,27 @@ const emailGateway = {
     emailCodes.set(`${email}:${purpose}`, code);
   }
 };
+const ticketEmailAttempts = [];
+const ticketEmailGateway = {
+  enabled: true,
+  failNext: false,
+  isConfigured() {
+    return this.enabled;
+  },
+  async sendConfirmation(orderId, publicSiteUrl) {
+    ticketEmailAttempts.push({ orderId, publicSiteUrl });
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error('Temporary Resend test failure.');
+    }
+  }
+};
 const app = createApp({
   mpesa: paymentGateway,
   stripe: stripeGateway,
   sms: smsGateway,
   email: emailGateway,
+  ticketEmail: ticketEmailGateway,
   verifyGoogleToken: async (idToken) => {
     const profiles = {
       'valid-google-token': { sub: 'google-subject-123', email: 'google@example.com', name: 'Google Member' },
@@ -225,6 +241,7 @@ test('admin dashboard origin can call its same-origin API', async () => {
     .set('Host', '127.0.0.1')
     .set('Origin', 'http://127.0.0.1');
   assert.equal(response.status, 200);
+  assert.equal(response.body.ticketEmailsConfigured, true);
   assert.equal(response.headers['access-control-allow-origin'], 'http://127.0.0.1');
   const orders = await request(app).get('/api/orders/admin').set(admin);
   assert.equal(orders.status, 200);
@@ -294,8 +311,44 @@ test('Stripe ticket checkout issues QR tickets only after a verified matching we
   assert.equal((await request(app).get(`/api/orders/${checkout.body.orderId}`)
     .set(accountAuth).set('X-Order-Access', checkout.body.accessToken)).body.status, 'pending');
 
+  ticketEmailGateway.failNext = true;
   assert.equal((await stripeWebhook(session)).status, 200);
+  assert.equal(db.prepare('SELECT ticket_email_status FROM orders WHERE id=?').get(pending.id).ticket_email_status, 'failed');
   assert.equal((await stripeWebhook(session)).status, 200);
+  db.prepare("UPDATE orders SET ticket_email_attempted_at='2000-01-01 00:00:00' WHERE id=?").run(pending.id);
+  assert.equal(await app.locals.retryPendingTicketEmails(), 1);
+  assert.equal(db.prepare('SELECT ticket_email_status FROM orders WHERE id=?').get(pending.id).ticket_email_status, 'sent');
+  assert.equal(ticketEmailAttempts.filter((attempt) => attempt.orderId === pending.id).length, 2);
+  assert.equal(ticketEmailAttempts.find((attempt) => attempt.orderId === pending.id).publicSiteUrl, 'https://valorafrica.co.ke');
+  assert.equal((await stripeWebhook(session)).status, 200);
+  assert.equal(ticketEmailAttempts.filter((attempt) => attempt.orderId === pending.id).length, 2);
+  assert.equal(db.prepare('SELECT ticket_email_status FROM orders WHERE id=?').get(pending.id).ticket_email_status, 'sent');
+  const originalFetch = global.fetch;
+  const originalApiKey = process.env.RESEND_API_KEY;
+  const originalFrom = process.env.RESEND_FROM_EMAIL;
+  let resendRequest;
+  process.env.RESEND_API_KEY = 'test-resend-key';
+  process.env.RESEND_FROM_EMAIL = 'Valor Africa <tickets@example.test>';
+  global.fetch = async (url, options) => {
+    resendRequest = { url, options, body: JSON.parse(options.body) };
+    return { ok: true, status: 200, async json() { return { id: 'email_test_123' }; } };
+  };
+  try {
+    await require('../src/ticket-email').sendConfirmation(pending.id, 'https://valorafrica.co.ke');
+  } finally {
+    global.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = originalApiKey;
+    if (originalFrom === undefined) delete process.env.RESEND_FROM_EMAIL;
+    else process.env.RESEND_FROM_EMAIL = originalFrom;
+  }
+  assert.equal(resendRequest.url, 'https://api.resend.com/emails');
+  assert.equal(resendRequest.body.to[0], 'google@example.com');
+  assert.match(resendRequest.body.html, /Your tickets are confirmed/);
+  assert.equal(resendRequest.body.attachments.length, 2);
+  assert.ok(Buffer.from(resendRequest.body.attachments[0].content, 'base64')
+    .subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])));
+  assert.equal(resendRequest.options.headers['Idempotency-Key'], `valor-ticket-confirmation-${pending.id}`);
   const paid = await request(app).get(`/api/orders/${checkout.body.orderId}`)
     .set(accountAuth).set('X-Order-Access', checkout.body.accessToken);
   assert.equal(paid.body.status, 'paid');
@@ -378,6 +431,8 @@ test('paid ticket order issues only after Daraja verifies the callback', async (
   const ticket = await request(app).get(`/api/tickets/${paid.body.tickets[0].code}/verify`);
   assert.equal(ticket.body.valid, true);
   assert.equal(ticket.body.eventTitle, 'Test Live Festival');
+  await app.locals.retryPendingTicketEmails();
+  assert.equal(db.prepare('SELECT ticket_email_status FROM orders WHERE id=?').get(checkout.body.orderId).ticket_email_status, 'sent');
 });
 
 test('forged success callbacks do not issue tickets without Daraja verification', async () => {
@@ -475,6 +530,8 @@ test('free registrations require an account but do not require M-Pesa', async ()
   });
   assert.equal(registration.status, 201);
   assert.equal(registration.body.status, 'confirmed');
+  await app.locals.retryPendingTicketEmails();
+  assert.equal(db.prepare('SELECT ticket_email_status FROM orders WHERE id=?').get(registration.body.orderId).ticket_email_status, 'sent');
   const order = await request(app).get(`/api/orders/${registration.body.orderId}`)
     .set(accountAuth).set('X-Order-Access', registration.body.accessToken);
   assert.equal(order.body.status, 'confirmed');
@@ -485,6 +542,7 @@ test('free registrations require an account but do not require M-Pesa', async ()
   assert.equal(accountTickets.status, 200);
   const accountTicket = accountTickets.body.tickets.find((ticket) => ticket.orderId === registration.body.orderId);
   assert.ok(accountTicket);
+  assert.equal(accountTicket.ticketEmailStatus, 'sent');
   assert.match(accountTicket.qr, /^data:image\/png;base64,/);
   const unrelatedTickets = await request(app).get('/api/account/tickets')
     .set(createTestAccountAuth('unrelated-ticket-owner@example.com'));

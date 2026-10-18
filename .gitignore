@@ -8,5 +8,6 @@ backend/storage/framework/views/
 backend/bootstrap/cache/
 .env
 .env.*
+!.env.example
 backend/.env
 backend/.env.*
