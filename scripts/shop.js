@@ -6,6 +6,32 @@
   const products = new Map();
   const productGrid = document.getElementById('shopProducts');
   const productFeedback = document.getElementById('shopProductsFeedback');
+  const previewProducts = [
+    {
+      id: 'valor-tote',
+      name: 'Valor Africa Tote Bag',
+      description: 'Durable canvas tote with the Valor Africa emblem, hand-printed.',
+      priceKes: 4500,
+      imageUrl: 'images/one.jpg',
+      stock: null
+    },
+    {
+      id: 'community-print-tee',
+      name: 'Community Print Tee',
+      description: 'Soft cotton tee celebrating African entrepreneurship.',
+      priceKes: 2800,
+      imageUrl: 'images/IMG_0729.jpg',
+      stock: null
+    },
+    {
+      id: 'founders-notebook',
+      name: 'Founder’s Notebook',
+      description: 'A5 hardcover notebook for brand-building notes and sketches.',
+      priceKes: 6200,
+      imageUrl: 'images/IMG_1212.jpg',
+      stock: null
+    }
+  ];
   const cartItems = document.getElementById('shopCartItems');
   const cartCount = document.getElementById('shopCartCount');
   const cartTotal = document.getElementById('shopCartTotal');
@@ -19,6 +45,7 @@
   let accountToken = '';
   let walletBalance = 0;
   let walletLinked = false;
+  let catalogAvailable = false;
   let clientRequestId = '';
 
   function formatMoney(amount) {
@@ -67,6 +94,9 @@
 
       const details = document.createElement('div');
       details.className = 'shop-product-details';
+      const brand = document.createElement('span');
+      brand.className = 'shop-product-brand';
+      brand.textContent = 'VALOR AFRICA';
       const name = document.createElement('h3');
       name.textContent = product.name;
       const description = document.createElement('p');
@@ -76,15 +106,19 @@
       price.textContent = formatMoney(product.priceKes);
       const stock = document.createElement('span');
       stock.className = 'shop-product-stock';
-      stock.textContent = product.stock === null ? 'Available' : product.stock > 0 ? `${product.stock} in stock` : 'Out of stock';
+      stock.textContent = !catalogAvailable
+        ? 'Preview only — shop service unavailable'
+        : product.stock === null ? 'Available' : product.stock > 0 ? `${product.stock} in stock` : 'Out of stock';
+      stock.hidden = !catalogAvailable;
       const add = makeButton(
-        product.stock === 0 ? 'Out of stock' : 'Add to bag',
+        !catalogAvailable ? 'Temporarily unavailable' : product.stock === 0 ? 'Out of stock' : 'Add to bag',
         'button button-primary shop-add-button',
         'add',
-        product.stock === 0
+        !catalogAvailable || product.stock === 0
       );
+      add.hidden = !catalogAvailable;
       add.dataset.productId = product.id;
-      details.append(name, description, price, stock, add);
+      details.append(brand, name, description, price, stock, add);
       card.appendChild(details);
       productGrid.appendChild(card);
     });
@@ -137,7 +171,7 @@
 
     cartCount.textContent = `${quantityTotal} ${quantityTotal === 1 ? 'item' : 'items'}`;
     cartTotal.textContent = formatMoney(total);
-    checkoutButton.disabled = !cart.size || !walletLinked || total > walletBalance;
+    checkoutButton.disabled = !catalogAvailable || !cart.size || !walletLinked || total > walletBalance;
     if (walletLinked && total > walletBalance && cart.size) {
       walletStatus.textContent = `Wallet balance: ${formatMoney(walletBalance)}. Add funds to cover your merchandise subtotal.`;
       walletStatus.classList.add('error');
@@ -152,6 +186,7 @@
     try {
       const result = await window.valorEventsApi('/api/shop/products');
       if (!Array.isArray(result.products)) throw new Error('The shop returned an invalid product list.');
+      catalogAvailable = true;
       products.clear();
       result.products.forEach((product) => products.set(product.id, product));
       for (const productId of cart.keys()) {
@@ -161,8 +196,12 @@
       renderProducts();
       renderCart();
     } catch (error) {
+      catalogAvailable = false;
+      products.clear();
+      previewProducts.forEach((product) => products.set(product.id, product));
       setFeedback(productFeedback, error.message, true);
-      productGrid.replaceChildren();
+      renderProducts();
+      renderCart();
     } finally {
       productGrid.removeAttribute('aria-busy');
     }
@@ -211,7 +250,7 @@
     const button = event.target.closest('[data-cart-action="add"]');
     if (!button) return;
     const product = products.get(button.dataset.productId);
-    if (!product || product.stock === 0) return;
+    if (!catalogAvailable || !product || product.stock === 0) return;
     const current = cart.get(product.id) || 0;
     const maximum = product.stock === null ? 10 : Math.min(10, product.stock);
     if (current >= maximum) return;
