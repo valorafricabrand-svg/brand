@@ -287,7 +287,29 @@ img { display: block; max-width: 100%; }
 .partnership-dashboard-heading .eyebrow { margin: 0 0 8px; }
 .partnership-dashboard-heading h1 { margin: 0 0 10px; color: var(--ink); font: 800 clamp(30px, 4vw, 42px)/1.15 Manrope, sans-serif; }
 .partnership-dashboard-heading > p:last-child { margin: 0; color: var(--muted); font-size: 17px; }
-.partnership-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; gap: 24px; }
+.partnership-proof { margin: 0 0 30px; padding: clamp(24px, 4vw, 34px); border: 1px solid #dfe6ee; border-radius: 12px; background: #fff; }
+.partnership-proof > .eyebrow { margin: 0 0 6px; color: #087f5b; font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+.partnership-proof h2 { margin: 0 0 20px; color: var(--ink); font: 800 clamp(21px, 3vw, 27px)/1.2 Manrope, sans-serif; }
+.partnership-proof-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 0; }
+.partnership-proof-grid > div { display: grid; align-content: start; gap: 8px; padding: 17px; border-radius: 8px; background: #f3f6f9; }
+.partnership-proof-grid dt { color: #596a82; font-size: 13px; }
+.partnership-proof-grid dd { margin: 0; color: #087f5b; font: 800 clamp(22px, 3vw, 30px)/1.1 Manrope, sans-serif; }
+.partnership-proof-note { margin: 14px 0 0; color: #697990; font-size: 12px; line-height: 1.5; }
+.partnership-investment-brief { margin-bottom: 30px; padding: clamp(24px, 4vw, 38px); border: 1px solid #dfe6ee; border-left: 5px solid #087f5b; border-radius: 12px; background: #fff; }
+.partnership-investment-brief > .eyebrow { margin: 0 0 8px; color: #087f5b; font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+.partnership-investment-brief h2 { margin: 0 0 10px; color: var(--ink); font: 800 clamp(22px, 3vw, 30px)/1.2 Manrope, sans-serif; }
+.partnership-investment-brief > p:not(.eyebrow) { max-width: 850px; color: #596a82; }
+.partnership-investment-priorities { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin: 24px 0; }
+.partnership-investment-priorities h3 { margin: 0 0 6px; color: #30394b; font: 800 16px/1.3 Manrope, sans-serif; }
+.partnership-investment-priorities p { margin: 0; color: #596a82; font-size: 14px; }
+.partnership-investment-terms { margin: 0; padding-top: 18px; border-top: 1px solid #e5ebf0; font-size: 13px; line-height: 1.65; }
+.partnership-investment-terms + .partnership-investment-terms { margin-top: 16px; }
+.partnership-fund-heading { margin: 24px 0 12px; color: #30394b; font: 800 16px/1.3 Manrope, sans-serif; }
+.partnership-fund-split { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.partnership-fund-split > div { display: grid; gap: 4px; padding: 15px; border-radius: 8px; background: #f3f6f9; }
+.partnership-fund-split strong { color: #087f5b; font: 800 22px/1.1 Manrope, sans-serif; }
+.partnership-fund-split span { color: #596a82; font-size: 13px; }
+.partnership-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 24px; }
 .partnership-card { display: grid; grid-template-rows: auto 1fr auto auto; overflow: hidden; border: 1px solid #dfe6ee; border-radius: 10px; color: #30394b; background: #fff; }
 .partnership-card-intro { min-height: 260px; padding: 32px 30px 26px; border-bottom: 4px solid var(--partnership-accent); }
 .partnership-icon { display: block; width: 46px; height: 46px; margin-bottom: 26px; color: var(--partnership-accent); }
@@ -301,9 +323,10 @@ img { display: block; max-width: 100%; }
 .partnership-apply:focus-visible { outline: 3px solid #111b2e; outline-offset: 3px; }
 .partnership-requirement { margin: 0; padding: 18px 28px; color: #697990; background: #f3f6f9; font-size: 13px; }
 .partnership-requirement strong { color: #4d5b71; }
-.partnership-investor { --partnership-accent: #2563eb; }
-.partnership-influencer { --partnership-accent: #9333ea; }
-.partnership-brand { --partnership-accent: #16a34a; }
+.partnership-investor { --partnership-accent: #2563eb; order: 3; }
+.partnership-influencer { --partnership-accent: #9333ea; order: 4; }
+.partnership-brand { --partnership-accent: #16a34a; order: 2; }
+.partnership-organizer { --partnership-accent: #087f5b; order: 1; }
 
 .ticket-dialog { width: min(480px, calc(100% - 30px)); max-height: min(90vh, 760px); padding: 0; overflow: auto; border: 0; border-radius: 18px; box-shadow: 0 24px 90px rgba(10, 27, 44, .3); }
 .ticket-dialog::backdrop { background: rgba(12, 24, 38, .68); backdrop-filter: blur(3px); }
@@ -539,6 +562,9 @@ img { display: block; max-width: 100%; }
   .shop-cart { margin-top: 30px; padding: 18px; }
   .shop-section-heading { align-items: center; }
   .partnership-cards { grid-template-columns: 1fr; gap: 16px; }
+  .partnership-proof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .partnership-fund-split { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .partnership-investment-priorities { grid-template-columns: 1fr; gap: 16px; margin: 20px 0; }
   .partnership-card-intro { min-height: 0; padding: 24px; }
   .partnership-icon { margin-bottom: 18px; }
   .partnership-benefits { padding: 20px 24px 16px; }
