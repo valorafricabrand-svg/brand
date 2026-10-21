@@ -16,9 +16,15 @@
       const params = new URLSearchParams(window.location.search);
       const slug = params.get('slug');
       const previewId = params.get('preview');
+      const sharedEvent = params.get('share');
       let event;
       if (slug) {
         ({ event } = await api(`/api/events/by-slug/${encodeURIComponent(slug)}`));
+      } else if (sharedEvent) {
+        event = JSON.parse(sharedEvent);
+        if (!event || typeof event.title !== 'string' || !Array.isArray(event.tickets)) {
+          throw new Error('This shared event link is invalid.');
+        }
       } else if (previewId) {
         const preview = window.sessionStorage.getItem(`valor-preview-event-${previewId}`);
         if (!preview) throw new Error('This event preview has expired. Browse events and select it again.');
@@ -27,6 +33,7 @@
         throw new Error('This event link is incomplete.');
       }
       root.classList.add('event-detail-card');
+      document.title = `${event.title} | Valor Africa Events`;
       const heading = document.createElement('h1');
       heading.textContent = event.title;
       const copy = document.createElement('div');

@@ -385,6 +385,7 @@
     buy.className = 'ticket-link';
     buy.innerHTML = '<span aria-hidden="true">▣</span> Get tickets';
     body.appendChild(buy);
+    body.appendChild(createEventShareActions(event));
     article.append(poster, body);
     return article;
   }
@@ -398,6 +399,102 @@
         window.sessionStorage.setItem(`valor-preview-event-${event.id}`, JSON.stringify(event));
       });
     }
+  }
+
+  function eventShareUrl(event) {
+    const url = new URL('event.html', window.location.href);
+    if (event.slug) {
+      url.searchParams.set('slug', event.slug);
+    } else {
+      const shareableEvent = {
+        id: event.id,
+        title: event.title,
+        description: event.description || '',
+        category: event.category || '',
+        tags: Array.isArray(event.tags) ? event.tags : [],
+        startsAt: event.startsAt,
+        endsAt: event.endsAt || '',
+        timezone: event.timezone || 'Africa/Nairobi',
+        location: locationLine(event),
+        poster: event.poster || '',
+        tickets: Array.isArray(event.tickets) ? event.tickets : []
+      };
+      url.searchParams.set('share', JSON.stringify(shareableEvent));
+    }
+    return url.href;
+  }
+
+  function createEventShareActions(event) {
+    const actions = document.createElement('div');
+    actions.className = 'event-card-actions';
+    const shareUrl = eventShareUrl(event);
+    const shareText = `Check out ${event.title} on Valor Africa`;
+    const shareButton = document.createElement('button');
+    shareButton.className = 'event-share-button';
+    shareButton.type = 'button';
+    shareButton.textContent = 'Share';
+    shareButton.setAttribute('aria-label', `Share ${event.title}`);
+    shareButton.addEventListener('click', async () => {
+      try {
+        if (navigator.share) {
+          await navigator.share({ title: event.title, text: shareText, url: shareUrl });
+        } else {
+          await copyEventLink(shareUrl);
+          actions.querySelector('.event-share-feedback').textContent = 'Event link copied. Paste it into Instagram or any app.';
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          actions.querySelector('.event-share-feedback').textContent = `Could not share this event: ${error.message}`;
+        }
+      }
+    });
+
+    const whatsappLink = document.createElement('a');
+    whatsappLink.className = 'event-share-button';
+    whatsappLink.href = `https://wa.me/?text=${encodeURIComponent(`${shareText}: ${shareUrl}`)}`;
+    whatsappLink.target = '_blank';
+    whatsappLink.rel = 'noopener noreferrer';
+    whatsappLink.textContent = 'WhatsApp';
+    whatsappLink.setAttribute('aria-label', `Share ${event.title} on WhatsApp`);
+
+    const copyButton = document.createElement('button');
+    copyButton.className = 'event-share-button';
+    copyButton.type = 'button';
+    copyButton.textContent = 'Copy link';
+    copyButton.setAttribute('aria-label', `Copy link to ${event.title}`);
+    copyButton.addEventListener('click', async () => {
+      const feedback = actions.querySelector('.event-share-feedback');
+      try {
+        await copyEventLink(shareUrl);
+        feedback.textContent = 'Event link copied. Paste it into Instagram or any app.';
+      } catch (error) {
+        feedback.textContent = `Could not copy the event link: ${error.message}`;
+      }
+    });
+
+    const feedback = document.createElement('span');
+    feedback.className = 'event-share-feedback';
+    feedback.setAttribute('role', 'status');
+    feedback.setAttribute('aria-live', 'polite');
+    actions.append(shareButton, whatsappLink, copyButton, feedback);
+    return actions;
+  }
+
+  async function copyEventLink(url) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+      return;
+    }
+    const input = document.createElement('textarea');
+    input.value = url;
+    input.setAttribute('readonly', '');
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.appendChild(input);
+    input.select();
+    const copied = document.execCommand('copy');
+    input.remove();
+    if (!copied) throw new Error('Clipboard access is unavailable in this browser.');
   }
 
   function renderEvents(container, list) {
