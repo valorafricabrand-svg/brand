@@ -41,8 +41,8 @@
     <div class="host-page-heading">
       <p class="eyebrow">ORGANIZER TOOLS</p>
       <h1>Host an event on Valor Africa</h1>
-      <p>Create and publish an event for a concert, workshop, launch, webinar, or community meetup.</p>
-      <p><a href="account.html">Sign in</a> before publishing. Your event goes live immediately and appears in the <a href="organizer-dashboard.html">organizer dashboard</a>.</p>
+      <p>Save your event details as a draft, or sign in and publish it immediately.</p>
+      <p>Published events appear in the <a href="organizer-dashboard.html">organizer dashboard</a> and public listings.</p>
     </div>
     <div class="host-layout">
       <form class="host-form" id="hostEventForm">
@@ -155,14 +155,14 @@
           <div class="form-field">
             <label for="eventImages">Event poster <span style="font-weight:500;color:#8995a5;">(optional, up to 10 MB)</span></label>
             <input class="file-picker" id="eventImages" name="eventImages" type="file" accept="image/jpeg,image/png,image/gif,image/webp">
-            <p class="field-hint">Choose a JPEG, PNG, GIF, or WebP image. This poster appears with your event listing as soon as you publish.</p>
+            <p class="field-hint">Choose a JPEG, PNG, GIF, or WebP image up to 10 MB. Select it again when editing a saved draft.</p>
             <p class="file-list" id="imageNames">No images selected.</p>
           </div>
         </section>
 
         <section class="form-section">
           <h2>Organizer contact</h2>
-          <p>Valor Africa uses these details to review your event. Your contact information is not shown on the public listing.</p>
+          <p>Contact details are used for event support and are not shown on the public listing.</p>
           <div class="form-grid-2">
             <div class="form-field"><label for="organizerName">Your name</label><input id="organizerName" name="organizerName" maxlength="120" required></div>
             <div class="form-field"><label for="organizerEmail">Email</label><input id="organizerEmail" name="organizerEmail" type="email" maxlength="254" required></div>
@@ -171,7 +171,7 @@
         </section>
         <p class="draft-disclaimer" id="hostServiceNotice" role="status" aria-live="polite">Checking the online event service…</p>
         <div class="form-actions">
-          <button class="button button-primary" type="submit">Save event draft</button>
+          <button class="button button-primary" type="submit" formnovalidate>Save event draft</button>
           <button class="button button-primary" id="publishEventButton" type="button">Publish event now</button>
           <button class="button" type="reset" style="color:#46576a;background:#f0f4f7;">New draft</button>
           <p class="form-feedback" id="draftFeedback" aria-live="polite"></p>

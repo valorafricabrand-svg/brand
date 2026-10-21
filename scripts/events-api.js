@@ -11,7 +11,11 @@
     if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
     let response;
     try {
-      response = await fetch(`${base}${path}`, { ...options, headers });
+      response = await fetch(`${base}${path}`, {
+        ...options,
+        headers,
+        signal: options.signal || (typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(12000) : undefined)
+      });
     } catch (error) {
       throw new Error('Could not connect to the Valor Africa event service. Please try again later.');
     }

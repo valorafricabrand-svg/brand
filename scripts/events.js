@@ -153,7 +153,7 @@
   let mpesaCheckoutEnabled = false;
   let stripeCheckoutEnabled = false;
   const apiBase = window.valorEventsApiBase;
-  if (apiBase) {
+  if (apiBase && !document.getElementById('hostEventForm')) {
     try {
       const [listing, featured, health] = await Promise.all([
         window.valorEventsApi('/api/events'),
@@ -1123,36 +1123,6 @@
       event.preventDefault();
       feedback.classList.remove('error');
       const data = new FormData(hostForm);
-      const startsAt = new Date(data.get('eventStarts')).getTime();
-      const endsAt = new Date(data.get('eventEnds')).getTime();
-      const regularPrice = Number(data.get('ticketPrice'));
-      const earlyBirdPrice = data.get('earlyBirdPrice') ? Number(data.get('earlyBirdPrice')) : null;
-      const vipPrice = data.get('vipPrice') ? Number(data.get('vipPrice')) : null;
-      const earlyBirdEnds = data.get('earlyBirdEnds') ? new Date(data.get('earlyBirdEnds')).getTime() : null;
-      if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt) || endsAt <= startsAt) {
-        feedback.textContent = 'Add a valid end time that is after the event start.';
-        feedback.classList.add('error');
-        endsInput.focus();
-        return;
-      }
-      if (earlyBirdPrice !== null && (earlyBirdPrice >= regularPrice || !earlyBirdEnds || earlyBirdEnds >= startsAt)) {
-        feedback.textContent = 'Early-bird pricing must be below the regular price, with an end time before the event starts.';
-        feedback.classList.add('error');
-        document.getElementById('earlyBirdPrice').focus();
-        return;
-      }
-      if (vipPrice !== null && vipPrice <= regularPrice) {
-        feedback.textContent = 'VIP ticket price must be higher than the regular ticket price.';
-        feedback.classList.add('error');
-        document.getElementById('vipPrice').focus();
-        return;
-      }
-      if (imageInput.files.length > 0 && Array.from(imageInput.files).some((file) => file.size > 10 * 1024 * 1024)) {
-        feedback.textContent = 'Each event image must be 10 MB or smaller.';
-        feedback.classList.add('error');
-        imageInput.focus();
-        return;
-      }
       const draft = Object.fromEntries(data.entries());
       draft.id = editingId || (window.crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
       draft.imageNames = Array.from(imageInput.files || []).map((file) => file.name);
