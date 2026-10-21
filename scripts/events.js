@@ -1138,7 +1138,82 @@
     const earlyBirdEndsInput = document.getElementById('earlyBirdEnds');
     const publishWithoutEarlyBirdButton = document.getElementById('publishWithoutEarlyBirdButton');
     let editingId = null;
+    let editingEventId = new URLSearchParams(window.location.search).get('editEvent');
     let slugWasEdited = false;
+    const saveDraftButton = hostForm.querySelector('button[type="submit"]');
+    const resetDraftButton = hostForm.querySelector('button[type="reset"]');
+    const existingPoster = document.getElementById('existingEventPoster');
+    const publishButton = document.getElementById('publishEventButton');
+
+    function localDateTime(value) {
+      const date = new Date(value);
+      const pad = (part) => String(part).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    async function loadEventForEditing() {
+      if (!editingEventId) return;
+      saveDraftButton.hidden = true;
+      resetDraftButton.hidden = true;
+      publishButton.disabled = true;
+      publishButton.textContent = 'Save event changes';
+      publishWithoutEarlyBirdButton.textContent = 'Save without early-bird offer';
+      try {
+        const accountToken = window.sessionStorage.getItem('valor-account-token');
+        if (!accountToken) throw new Error('Sign in to your organizer account to edit this event.');
+        const result = await window.valorEventsApi('/api/events/mine', {
+          headers: { Authorization: `Bearer ${accountToken}` }
+        });
+        const event = result.events.find((entry) => entry.id === editingEventId && !entry.archived);
+        if (!event) throw new Error('This event is unavailable or was removed from your account.');
+        const values = {
+          eventTitle: event.title,
+          eventDescription: event.description,
+          eventCategory: event.category,
+          eventFormat: event.format,
+          eventTimezone: event.timezone,
+          eventStarts: localDateTime(event.startsAt),
+          eventEnds: localDateTime(event.endsAt),
+          venueName: event.venueName,
+          meetingUrl: event.meetingUrl,
+          eventCity: event.city,
+          eventCapacity: event.capacity == null ? '' : String(event.capacity),
+          ticketPrice: String(event.regularPrice),
+          earlyBirdPrice: event.earlyBirdPrice == null ? '' : String(event.earlyBirdPrice),
+          earlyBirdEnds: event.earlyBirdEnds ? localDateTime(event.earlyBirdEnds) : '',
+          vipPrice: event.vipPrice == null ? '' : String(event.vipPrice),
+          eventSlug: event.slug,
+          campaignTags: event.tags.join(', '),
+          organizerName: event.organizerName,
+          organizerEmail: event.organizerEmail,
+          organizerPhone: event.organizerPhone
+        };
+        Object.entries(values).forEach(([id, value]) => {
+          const input = document.getElementById(id);
+          if (input) input.value = value || '';
+        });
+        slugWasEdited = true;
+        if (event.poster) {
+          existingPoster.hidden = false;
+          existingPoster.textContent = 'Current poster will be kept unless you choose a replacement. ';
+          const link = document.createElement('a');
+          link.href = new URL(event.poster, window.valorEventsApiBase).href;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = 'View current poster';
+          existingPoster.appendChild(link);
+        }
+        feedback.textContent = 'Update the event details below, then save your changes.';
+        publishButton.disabled = false;
+        hostForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } catch (error) {
+        publishButton.disabled = true;
+        feedback.textContent = error.message;
+        feedback.classList.add('error');
+      }
+    }
+
+    loadEventForEditing();
 
     slugInput.addEventListener('input', () => { slugWasEdited = true; });
     titleInput.addEventListener('input', () => {
@@ -1240,6 +1315,7 @@
 
     hostForm.addEventListener('submit', (event) => {
       event.preventDefault();
+      if (editingEventId) return;
       feedback.classList.remove('error');
       const data = new FormData(hostForm);
       const draft = Object.fromEntries(data.entries());
@@ -1319,6 +1395,11 @@
         organizerEmail: data.get('organizerEmail'),
         organizerPhone: data.get('organizerPhone')
       };
+      if (!apiBase && editingEventId) {
+        feedback.textContent = 'The online event service is not connected. Event changes cannot be saved right now.';
+        feedback.classList.add('error');
+        return;
+      }
       if (!apiBase) {
         const subject = `Event submission: ${fields.title}`;
         const body = [
@@ -1363,13 +1444,18 @@
       const poster = data.get('eventImages');
       if (poster && poster.size > 0) submission.append('eventImage', poster);
       button.disabled = true;
-      feedback.textContent = 'Submitting your event for review…';
+      feedback.textContent = editingEventId ? 'Saving your event changes…' : 'Submitting your event…';
       try {
         const headers = {};
         const accountToken = window.sessionStorage.getItem('valor-account-token');
         if (accountToken) headers.Authorization = `Bearer ${accountToken}`;
-        const result = await window.valorEventsApi('/api/events/submissions', { method: 'POST', headers, body: submission });
-        feedback.textContent = `${result.message} View it at /event.html?slug=${result.slug}`;
+        const result = await window.valorEventsApi(
+          editingEventId ? `/api/events/mine/${encodeURIComponent(editingEventId)}` : '/api/events/submissions',
+          { method: editingEventId ? 'PATCH' : 'POST', headers, body: submission }
+        );
+        feedback.textContent = editingEventId
+          ? `${result.message} View it at event.html?slug=${result.slug}`
+          : `${result.message} View it at /event.html?slug=${result.slug}`;
         feedback.classList.remove('error');
       } catch (error) {
         feedback.textContent = error.message;

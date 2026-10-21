@@ -160,6 +160,31 @@ function submitEvent(title = 'Test Live Festival', auth = createTestAccountAuth(
   return auth ? submission.set(auth) : submission;
 }
 
+function createStoredTestEvent(title, auth) {
+  const token = auth.Authorization.slice('Bearer '.length);
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const account = db.prepare(`
+    SELECT a.id,a.email FROM account_sessions s JOIN accounts a ON a.id=s.account_id
+    WHERE s.token_hash=?
+  `).get(tokenHash);
+  const accountId = account.id;
+  const id = crypto.randomUUID();
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const startsAt = new Date(Date.now() + 7 * 86400000).toISOString();
+  const endsAt = new Date(Date.parse(startsAt) + 4 * 3600000).toISOString();
+  db.prepare(`
+    INSERT INTO events (
+      id,slug,title,description,category,format,timezone,starts_at,ends_at,venue_name,city,
+      regular_price,tags_json,organizer_name,organizer_email,organizer_phone,organizer_account_id,status
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'approved')
+  `).run(
+    id, slug, title, 'A live event description for tests.', 'Festivals', 'Physical', 'Africa/Nairobi',
+    startsAt, endsAt, 'Nairobi Hall', 'Nairobi', 1200, '["music"]', 'Event Organizer',
+    account.email, '0712345678', accountId
+  );
+  return { id, slug };
+}
+
 async function approveEvent(id) {
   return request(app).patch(`/api/events/admin/${id}/review`)
     .set(admin)
@@ -509,6 +534,67 @@ test('paid event ads do not consume ticket capacity', async () => {
     quantity: 1
   });
   assert.equal(ticket.status, 201);
+});
+
+test('organizers can edit and archive their events but cannot manage another account event', async () => {
+  const ownerEmail = 'event-editor@example.com';
+  const owner = createTestAccountAuth(ownerEmail);
+  const other = createTestAccountAuth('event-not-owner@example.com');
+  const created = createStoredTestEvent('Editable Festival', owner);
+  const future = Date.now() + 14 * 86400000;
+  const updated = await request(app).patch(`/api/events/mine/${created.id}`)
+    .set(owner)
+    .field('title', 'Updated Festival')
+    .field('description', 'Updated description for the festival.')
+    .field('category', 'Concerts')
+    .field('format', 'Hybrid')
+    .field('timezone', 'Africa/Nairobi')
+    .field('startsAt', new Date(future).toISOString())
+    .field('endsAt', new Date(future + 3 * 3600000).toISOString())
+    .field('venueName', 'Updated Hall')
+    .field('meetingUrl', 'https://meet.example.com/event')
+    .field('city', 'Nairobi')
+    .field('capacity', '40')
+    .field('regularPrice', '1500')
+    .field('earlyBirdPrice', '')
+    .field('earlyBirdEnds', '')
+    .field('vipPrice', '')
+    .field('slug', 'updated-festival')
+    .field('tags', 'live music')
+    .field('organizerName', 'Event Organizer')
+    .field('organizerEmail', 'organizer@example.com')
+    .field('organizerPhone', '0712345678');
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.slug, 'updated-festival');
+  assert.equal((await request(app).get('/api/events/by-slug/updated-festival')).body.event.title, 'Updated Festival');
+
+  assert.equal((await request(app).patch(`/api/events/mine/${created.id}`)).status, 401);
+  assert.equal((await request(app).patch(`/api/events/mine/${created.id}`).set(other).field('title', 'Not theirs')).status, 404);
+  assert.equal((await request(app).delete(`/api/events/mine/${created.id}`).set(other)).status, 404);
+  const archived = await request(app).delete(`/api/events/mine/${created.id}`).set(owner);
+  assert.equal(archived.status, 200);
+  assert.equal(archived.body.archived, true);
+  assert.equal((await request(app).get('/api/events/by-slug/updated-festival')).status, 404);
+  assert.equal((await request(app).get('/api/events')).body.events.some((event) => event.id === created.id), false);
+  const dashboard = await request(app).get('/api/events/mine').set(owner);
+  assert.equal(dashboard.body.events.find((event) => event.id === created.id).archived, true);
+  assert.equal((await request(app).delete(`/api/events/mine/${created.id}`).set(owner)).status, 404);
+});
+
+test('events with ticket orders cannot be edited or removed by organizers', async () => {
+  const ownerEmail = 'event-with-order@example.com';
+  const owner = createTestAccountAuth(ownerEmail);
+  const created = createStoredTestEvent('Event With Order', owner);
+  db.prepare(`
+    INSERT INTO orders (id,access_token_hash,order_type,event_id,buyer_name,phone,ticket_type,quantity,amount_kes)
+    VALUES (?,?,?,?,?,?,?,?,?)
+  `).run(crypto.randomUUID(), 'test-access-hash', 'ticket', created.id, 'Ticket Buyer', '254712345678', 'Regular', 1, 1200);
+  const deleted = await request(app).delete(`/api/events/mine/${created.id}`).set(owner);
+  assert.equal(deleted.status, 409);
+  assert.match(deleted.body.error, /ticket orders/i);
+  const edited = await request(app).patch(`/api/events/mine/${created.id}`).set(owner);
+  assert.equal(edited.status, 409);
+  assert.match(edited.body.error, /tickets sold/i);
 });
 
 test('free registrations require an account but do not require M-Pesa', async () => {

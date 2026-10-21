@@ -295,6 +295,12 @@ const eventColumns = db.prepare('PRAGMA table_info(events)').all();
 if (!eventColumns.some((column) => column.name === 'organizer_account_id')) {
   db.exec('ALTER TABLE events ADD COLUMN organizer_account_id TEXT REFERENCES accounts(id)');
 }
+if (!eventColumns.some((column) => column.name === 'deleted_at')) {
+  db.exec('ALTER TABLE events ADD COLUMN deleted_at TEXT');
+}
+if (!eventColumns.some((column) => column.name === 'updated_at')) {
+  db.exec('ALTER TABLE events ADD COLUMN updated_at TEXT');
+}
 db.exec('CREATE INDEX IF NOT EXISTS events_organizer ON events(organizer_account_id,created_at DESC)');
 
 const walletColumns = db.prepare('PRAGMA table_info(wallets)').all();

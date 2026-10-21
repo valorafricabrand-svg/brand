@@ -18,7 +18,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/events.css">
   <script src="scripts/events-api.js" defer></script>
-  <script src="scripts/events.js?v=host-form-fix-3" defer></script>
+  <script src="scripts/events.js?v=organizer-event-edit-1" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -155,8 +155,9 @@
           <div class="form-field">
             <label for="eventImages">Event poster <span style="font-weight:500;color:#8995a5;">(optional, up to 10 MB)</span></label>
             <input class="file-picker" id="eventImages" name="eventImages" type="file" accept="image/jpeg,image/png,image/gif,image/webp">
-            <p class="field-hint">Choose a JPEG, PNG, GIF, or WebP image up to 10 MB. Select it again when editing a saved draft.</p>
+            <p class="field-hint">Choose a JPEG, PNG, GIF, or WebP image up to 10 MB. During event editing, the current poster remains unless you choose a replacement.</p>
             <p class="file-list" id="imageNames">No images selected.</p>
+            <p class="field-hint" id="existingEventPoster" hidden></p>
           </div>
         </section>
 

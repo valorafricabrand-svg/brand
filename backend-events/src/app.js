@@ -1209,7 +1209,7 @@ function createApp(options = {}) {
 
   app.get('/api/events', (req, res) => {
     const rows = db.prepare(`
-      SELECT * FROM events WHERE status = 'approved'
+      SELECT * FROM events WHERE status = 'approved' AND deleted_at IS NULL
         AND julianday(starts_at) > julianday('now') AND julianday(ends_at) > julianday('now')
       ORDER BY starts_at ASC LIMIT 100
     `).all();
@@ -1218,7 +1218,7 @@ function createApp(options = {}) {
 
   app.get('/api/events/by-slug/:slug', (req, res) => {
     const row = db.prepare(`
-      SELECT * FROM events WHERE slug = ? AND status = 'approved'
+      SELECT * FROM events WHERE slug = ? AND status = 'approved' AND deleted_at IS NULL
     `).get(req.params.slug);
     if (!row) return res.status(404).json({ error: 'This event is not available.' });
     res.json({ event: publicEvent(row) });
@@ -1232,7 +1232,9 @@ function createApp(options = {}) {
         (SELECT COUNT(*) FROM tickets t
           WHERE t.event_id=e.id AND t.checked_in_at IS NOT NULL) AS checked_in,
         (SELECT COALESCE(SUM(o.amount_kes),0) FROM orders o
-          WHERE o.event_id=e.id AND o.order_type='ticket' AND o.status IN ('paid','confirmed')) AS gross_kes
+          WHERE o.event_id=e.id AND o.order_type='ticket' AND o.status IN ('paid','confirmed')) AS gross_kes,
+        (SELECT COUNT(*) FROM ad_bookings b
+          WHERE b.event_id=e.id AND b.status IN ('pending_payment','active')) AS active_promotions
       FROM events e
       WHERE e.organizer_account_id=?
       ORDER BY e.created_at DESC LIMIT 200
@@ -1243,9 +1245,146 @@ function createApp(options = {}) {
         reviewNote: event.review_note,
         ticketsSold: event.tickets_sold,
         checkedIn: event.checked_in,
-        grossKes: event.gross_kes
+        grossKes: event.gross_kes,
+        archived: Boolean(event.deleted_at),
+        regularPrice: event.regular_price,
+        earlyBirdPrice: event.early_bird_price,
+        earlyBirdEnds: event.early_bird_ends,
+        vipPrice: event.vip_price,
+        organizerName: event.organizer_name,
+        organizerEmail: event.organizer_email,
+        organizerPhone: event.organizer_phone,
+        hasActivePromotion: event.active_promotions > 0
       }))
     });
+  });
+
+  function eventHasActiveOrders(eventId) {
+    return Boolean(db.prepare(`
+      SELECT 1 FROM orders
+      WHERE event_id=? AND order_type='ticket' AND status IN ('pending','paid','confirmed','review')
+      LIMIT 1
+    `).get(eventId));
+  }
+
+  function eventHasActiveAdvertising(eventId) {
+    return Boolean(db.prepare(`
+      SELECT 1 FROM ad_bookings WHERE event_id=? AND status IN ('pending_payment','active') LIMIT 1
+    `).get(eventId));
+  }
+
+  app.patch('/api/events/mine/:id', requireAccount, (req, res, next) => {
+    imageUpload(req, res, (error) => {
+      if (error) return next(error);
+      const existing = db.prepare(`
+        SELECT * FROM events WHERE id=? AND organizer_account_id=? AND deleted_at IS NULL
+      `).get(req.params.id, req.account.id);
+      if (!existing) return res.status(404).json({ error: 'Event not found in your organizer account.' });
+      if (eventHasActiveOrders(existing.id)) {
+        return res.status(409).json({ error: 'This event has ticket orders in progress or tickets sold. Contact Valor Africa support before changing event details.' });
+      }
+      if (eventHasActiveAdvertising(existing.id)) {
+        return res.status(409).json({ error: 'This event has an active or pending promotion. Contact Valor Africa support before changing event details.' });
+      }
+      if (req.file && !validImage(req.file.buffer)) return res.status(400).json({ error: 'The uploaded file is not a supported image.' });
+      const input = {
+        title: req.body.title,
+        description: req.body.description,
+        category: req.body.category,
+        format: req.body.format,
+        timezone: req.body.timezone,
+        startsAt: req.body.startsAt,
+        endsAt: req.body.endsAt,
+        venueName: req.body.venueName || '',
+        meetingUrl: req.body.meetingUrl || '',
+        city: req.body.city,
+        capacity: req.body.capacity || '',
+        regularPrice: req.body.regularPrice,
+        earlyBirdPrice: req.body.earlyBirdPrice || '',
+        earlyBirdEnds: req.body.earlyBirdEnds || '',
+        vipPrice: req.body.vipPrice || '',
+        slug: req.body.slug || '',
+        tags: req.body.tags || '',
+        organizerName: req.body.organizerName,
+        organizerEmail: req.body.organizerEmail,
+        organizerPhone: req.body.organizerPhone
+      };
+      const invalid = validateEvent(input);
+      if (invalid) return res.status(400).json({ error: invalid });
+      const slug = input.slug.trim() || slugify(input.title);
+      const posterUrl = req.file
+        ? `/uploads/events/${req.params.id}-${crypto.randomUUID()}.${validImage(req.file.buffer)}`
+        : existing.poster_url;
+      if (req.file) {
+        try {
+          fs.writeFileSync(path.join(uploadDirectory, path.basename(posterUrl)), req.file.buffer);
+        } catch (writeError) {
+          return next(writeError);
+        }
+      }
+      try {
+        db.prepare(`
+          UPDATE events SET
+            slug=@slug,title=@title,description=@description,category=@category,format=@format,
+            timezone=@timezone,starts_at=@startsAt,ends_at=@endsAt,venue_name=@venueName,
+            meeting_url=@meetingUrl,city=@city,capacity=@capacity,regular_price=@regularPrice,
+            early_bird_price=@earlyBirdPrice,early_bird_ends=@earlyBirdEnds,vip_price=@vipPrice,
+            tags_json=@tags,poster_url=@posterUrl,organizer_name=@organizerName,
+            organizer_email=@organizerEmail,organizer_phone=@organizerPhone,updated_at=datetime('now')
+          WHERE id=@id AND organizer_account_id=@organizerAccountId AND deleted_at IS NULL
+        `).run({
+          ...input,
+          id: existing.id,
+          organizerAccountId: req.account.id,
+          slug,
+          startsAt: new Date(input.startsAt).toISOString(),
+          endsAt: new Date(input.endsAt).toISOString(),
+          capacity: input.capacity ? Number(input.capacity) : null,
+          regularPrice: Number(input.regularPrice),
+          earlyBirdPrice: input.earlyBirdPrice ? Number(input.earlyBirdPrice) : null,
+          earlyBirdEnds: input.earlyBirdPrice ? new Date(input.earlyBirdEnds).toISOString() : null,
+          vipPrice: input.vipPrice ? Number(input.vipPrice) : null,
+          tags: JSON.stringify(input.tags.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 12)),
+          posterUrl
+        });
+      } catch (updateError) {
+        if (req.file) {
+          try {
+            fs.unlinkSync(path.join(uploadDirectory, path.basename(posterUrl)));
+          } catch (cleanupError) {
+            console.error('Could not remove an unlinked event poster:', cleanupError.message);
+          }
+        }
+        if (updateError.errcode === 2067 || updateError.code === 'SQLITE_CONSTRAINT_UNIQUE' || /UNIQUE constraint failed/.test(updateError.message)) {
+          return res.status(409).json({ error: 'That event URL is already in use. Choose a different slug.' });
+        }
+        throw updateError;
+      }
+      if (req.file && existing.poster_url.startsWith('/uploads/events/')) {
+        try {
+          fs.unlinkSync(path.join(uploadDirectory, path.basename(existing.poster_url)));
+        } catch (cleanupError) {
+          if (cleanupError.code !== 'ENOENT') console.error('Could not remove the replaced event poster:', cleanupError.message);
+        }
+      }
+      res.json({ id: existing.id, slug, status: existing.status, message: 'Your event changes have been saved.' });
+    });
+  });
+
+  app.delete('/api/events/mine/:id', requireAccount, (req, res) => {
+    const existing = db.prepare(`
+      SELECT id FROM events WHERE id=? AND organizer_account_id=? AND deleted_at IS NULL
+    `).get(req.params.id, req.account.id);
+    if (!existing) return res.status(404).json({ error: 'Event not found in your organizer account.' });
+    if (eventHasActiveOrders(existing.id)) {
+      return res.status(409).json({ error: 'This event has ticket orders in progress or tickets sold. Contact Valor Africa support before removing it.' });
+    }
+    if (eventHasActiveAdvertising(existing.id)) {
+      return res.status(409).json({ error: 'This event has an active or pending promotion. Contact Valor Africa support before removing it.' });
+    }
+    db.prepare('UPDATE events SET deleted_at=datetime(\'now\'),updated_at=datetime(\'now\') WHERE id=? AND organizer_account_id=?')
+      .run(existing.id, req.account.id);
+    res.json({ id: existing.id, archived: true, message: 'The event has been removed from public listings. Its records have been retained.' });
   });
 
   app.post('/api/events/submissions', requireAccount, submissionLimiter, (req, res, next) => {
@@ -1481,7 +1620,7 @@ function createApp(options = {}) {
     const rows = db.prepare(`
       SELECT DISTINCT e.* FROM events e
       INNER JOIN ad_bookings b ON b.event_id = e.id
-      WHERE e.status = 'approved' AND b.status = 'active'
+      WHERE e.status = 'approved' AND e.deleted_at IS NULL AND b.status = 'active'
         AND julianday(b.starts_at) <= julianday('now')
         AND julianday(b.ends_at) > julianday('now')
         AND julianday(e.ends_at) > julianday('now')
@@ -1678,7 +1817,7 @@ function createApp(options = {}) {
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the ticket buyer’s name.' });
       if (!phone) return res.status(400).json({ error: 'Enter a valid Safaricom number, for example 0712345678.' });
       if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 10) return res.status(400).json({ error: 'Ticket quantity must be 1–10.' });
-      const event = db.prepare("SELECT * FROM events WHERE id = ? AND status = 'approved'").get(eventId);
+      const event = db.prepare("SELECT * FROM events WHERE id = ? AND status = 'approved' AND deleted_at IS NULL").get(eventId);
       if (!event) return res.status(404).json({ error: 'This event is not available for ticket sales.' });
       if (Date.parse(event.starts_at) <= Date.now()) return res.status(409).json({ error: 'Ticket sales for this event have closed.' });
       let price;
@@ -1803,7 +1942,7 @@ function createApp(options = {}) {
       if (typeof eventId !== 'string' || !eventId || typeof packageId !== 'string' || !packageId) return res.status(400).json({ error: 'Choose an approved event and advertising package.' });
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the advertiser’s name.' });
       if (!phone) return res.status(400).json({ error: 'Enter a valid Safaricom number, for example 0712345678.' });
-      const event = db.prepare("SELECT id FROM events WHERE id = ? AND status = 'approved' AND julianday(starts_at) > julianday('now')").get(eventId);
+      const event = db.prepare("SELECT id FROM events WHERE id = ? AND status = 'approved' AND deleted_at IS NULL AND julianday(starts_at) > julianday('now')").get(eventId);
       if (!event) return res.status(404).json({ error: 'Only approved events can be advertised.' });
       const packageRow = db.prepare('SELECT * FROM ad_packages WHERE id = ? AND active = 1').get(packageId);
       if (!packageRow) return res.status(404).json({ error: 'This advertising package is not available.' });
