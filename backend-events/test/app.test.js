@@ -16,14 +16,17 @@ const request = require('supertest');
 const db = require('../src/db');
 const { createApp, initializeAdmin } = require('../src/app');
 const { login } = require('../src/auth');
+const { normalizeKenyanPhone } = require('../src/kenyan-phone');
 
 initializeAdmin();
 
 let checkoutNumber = 0;
 const paymentGateway = {
   enabled: true,
+  lastOrder: null,
   async initiateStkPush(order) {
     checkoutNumber += 1;
+    this.lastOrder = order;
     return {
       checkoutRequestId: `checkout-${checkoutNumber}`,
       merchantRequestId: `merchant-${checkoutNumber}`,
@@ -270,6 +273,24 @@ test('signed-in event submissions publish immediately and admins can unpublish t
   assert.equal((await request(app).get('/api/events')).body.events.length, 1);
 });
 
+test('Kenyan M-Pesa phone formats normalize to Daraja international format', () => {
+  for (const [input, expected] of [
+    ['0712345678', '254712345678'],
+    ['0712 345 678', '254712345678'],
+    ['+254712345678', '254712345678'],
+    ['+254 712-345-678', '254712345678'],
+    ['0113665283', '254113665283'],
+    ['011 366 5283', '254113665283'],
+    ['+254113665283', '254113665283'],
+    ['+254 113-665-283', '254113665283']
+  ]) {
+    assert.equal(normalizeKenyanPhone(input), expected, input);
+  }
+  for (const input of ['', '071234567', '254812345678', 'abc0712345678', '+254 712 345 678 ext 1']) {
+    assert.equal(normalizeKenyanPhone(input), null, input);
+  }
+});
+
 test('admin dashboard origin can call its same-origin API', async () => {
   const response = await request(app).get('/api/health')
     .set('Host', '127.0.0.1')
@@ -441,8 +462,9 @@ test('paid ticket order issues only after Daraja verifies the callback', async (
   const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
   const accountAuth = await ticketAccountAuth();
   const checkout = await request(app).post('/api/orders/tickets').set(accountAuth)
-    .send({ eventId: event.id, ticketType: 'Early bird', buyerName: 'Buyer', phone: '0712345678', quantity: 2 });
+    .send({ eventId: event.id, ticketType: 'Early bird', buyerName: 'Buyer', phone: '+254 113-665-283', quantity: 2 });
   assert.equal(checkout.status, 201);
+  assert.equal(paymentGateway.lastOrder.phone, '254113665283');
   assert.equal(db.prepare('SELECT account_id FROM orders WHERE id=?').get(checkout.body.orderId).account_id,
     (await request(app).get('/api/auth/account').set(accountAuth)).body.account.id);
   assert.equal((await request(app).get(`/api/orders/${checkout.body.orderId}`)

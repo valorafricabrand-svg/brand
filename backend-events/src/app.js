@@ -12,6 +12,7 @@ const mpesa = require('./mpesa');
 const stripe = require('./stripe');
 const walletSms = require('./wallet-sms');
 const accountEmail = require('./account-email');
+const { normalizeKenyanPhone } = require('./kenyan-phone');
 
 const allowedCategories = new Set(['Concerts','Festivals','Community','Food & Drink','Arts & Culture','Sports','Business','Other']);
 const allowedTimezones = new Set(['Africa/Nairobi','UTC','Africa/Lagos','Africa/Accra']);
@@ -75,10 +76,7 @@ function publicMerchandiseProduct(row) {
 }
 
 function normalizePhone(value) {
-  const digits = String(value || '').replace(/[^\d]/g, '');
-  if (/^0[17]\d{8}$/.test(digits)) return `254${digits.slice(1)}`;
-  if (/^(?:254)[17]\d{8}$/.test(digits)) return digits;
-  return null;
+  return normalizeKenyanPhone(value);
 }
 
 function validImage(buffer) {
@@ -1715,7 +1713,9 @@ function createApp(options = {}) {
       db.prepare('UPDATE orders SET status = ?, result_description = ? WHERE id = ? AND status = ?')
         .run('failed', 'Could not start M-Pesa checkout.', order.id, 'pending');
       console.error('M-Pesa checkout could not be started:', error.message);
-      res.status(502).json({ error: 'M-Pesa could not start the payment prompt. Check the phone number and try again.' });
+      res.status(502).json({
+        error: 'M-Pesa could not start the prompt. Check that this is an active Safaricom M-Pesa number. Use a Daraja test number in Sandbox, or check your Daraja setup for live payments.'
+      });
     }
   }
 
@@ -1818,7 +1818,7 @@ function createApp(options = {}) {
       const phone = paymentMethod === 'wallet' ? req.wallet.phone : normalizePhone(inputPhone);
       if (typeof eventId !== 'string' || !eventId || typeof ticketType !== 'string' || !ticketType) return res.status(400).json({ error: 'Choose a published event and ticket type.' });
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the ticket buyer’s name.' });
-      if (!phone) return res.status(400).json({ error: 'Enter a valid Safaricom number, for example 0712345678.' });
+      if (!phone) return res.status(400).json({ error: 'Enter a Kenyan Safaricom M-Pesa number: 0712345678, 0112345678, or +254712345678.' });
       if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 10) return res.status(400).json({ error: 'Ticket quantity must be 1–10.' });
       const event = db.prepare("SELECT * FROM events WHERE id = ? AND status = 'approved' AND deleted_at IS NULL").get(eventId);
       if (!event) return res.status(404).json({ error: 'This event is not available for ticket sales.' });
@@ -1944,7 +1944,7 @@ function createApp(options = {}) {
       const phone = paymentMethod === 'wallet' ? req.wallet.phone : normalizePhone(inputPhone);
       if (typeof eventId !== 'string' || !eventId || typeof packageId !== 'string' || !packageId) return res.status(400).json({ error: 'Choose an approved event and advertising package.' });
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the advertiser’s name.' });
-      if (!phone) return res.status(400).json({ error: 'Enter a valid Safaricom number, for example 0712345678.' });
+      if (!phone) return res.status(400).json({ error: 'Enter a Kenyan Safaricom M-Pesa number: 0712345678, 0112345678, or +254712345678.' });
       const event = db.prepare("SELECT id FROM events WHERE id = ? AND status = 'approved' AND deleted_at IS NULL AND julianday(starts_at) > julianday('now')").get(eventId);
       if (!event) return res.status(404).json({ error: 'Only approved events can be advertised.' });
       const packageRow = db.prepare('SELECT * FROM ad_packages WHERE id = ? AND active = 1').get(packageId);
