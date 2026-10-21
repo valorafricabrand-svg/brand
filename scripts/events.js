@@ -858,10 +858,14 @@
     const paymentLabel = usesWallet ? 'Valor Wallet' : usesStripe ? 'Stripe Checkout' : 'M-Pesa';
     ticketForm.querySelector('[type=submit]').innerHTML = `Pay with ${paymentLabel} <span aria-hidden="true">→</span>`;
   }
-  const stripeTicketOption = paymentMethodSelect.querySelector('option[value="stripe"]');
-  stripeTicketOption.disabled = !stripeCheckoutEnabled;
-  stripeTicketOption.textContent = stripeCheckoutEnabled ? 'Card (Stripe Checkout)' : 'Card (Stripe Checkout; coming soon)';
-  paymentMethodSelect.addEventListener('change', updateTicketPaymentMethod);
+  if (paymentMethodSelect && buyerPhoneInput && ticketPaymentNote && ticketForm) {
+    const stripeTicketOption = paymentMethodSelect.querySelector('option[value="stripe"]');
+    if (stripeTicketOption) {
+      stripeTicketOption.disabled = !stripeCheckoutEnabled;
+      stripeTicketOption.textContent = stripeCheckoutEnabled ? 'Card (Stripe Checkout)' : 'Card (Stripe Checkout; coming soon)';
+    }
+    paymentMethodSelect.addEventListener('change', updateTicketPaymentMethod);
+  }
   let activeEvent = null;
   function openTicketDialog(eventId, draft = null) {
     if (!ticketDialog || !ticketSelect || !ticketForm) {
