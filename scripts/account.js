@@ -2,6 +2,8 @@
   'use strict';
 
   const accountTokenKey = 'valor-account-token';
+  const accountReturnToKey = 'valor-account-return-to';
+  const accountPagePath = new URL('account.html', window.location.href).pathname;
   const pendingPhoneKey = 'valor-wallet-link-phone';
   const accountSignedOut = document.getElementById('accountSignedOut');
   const accountSignedIn = document.getElementById('accountSignedIn');
@@ -34,11 +36,17 @@
 
   function redirectAfterSignIn() {
     const returnTo = new URLSearchParams(window.location.search).get('returnTo');
-    if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) return;
-    const target = new URL(returnTo, window.location.origin);
-    if (target.origin === window.location.origin && target.pathname !== '/account.html') {
-      window.location.assign(target.href);
-    }
+    const rememberedPath = window.sessionStorage.getItem(accountReturnToKey);
+    const destination = [returnTo, rememberedPath].find((value) => {
+      if (!value || !value.startsWith('/') || value.startsWith('//')) return false;
+      try {
+        const target = new URL(value, window.location.origin);
+        return target.origin === window.location.origin && target.pathname !== accountPagePath;
+      } catch (error) {
+        return false;
+      }
+    });
+    if (destination) window.location.assign(new URL(destination, window.location.origin).href);
   }
 
   function setEmailMode(mode) {
@@ -248,20 +256,33 @@
   });
 
   document.getElementById('accountSignOut').addEventListener('click', async () => {
+    let revokeError = null;
     try {
       await window.valorEventsApi('/api/auth/account/logout', {
         method: 'POST',
         headers: accountAuthHeaders()
       });
     } catch (error) {
-      setFeedback(signOutFeedback || emailFeedback, `Could not revoke your session: ${error.message}`, true);
-      return;
+      revokeError = error;
     }
     window.sessionStorage.removeItem(accountTokenKey);
     accountSignedIn.hidden = true;
     accountSignedOut.hidden = false;
     setFeedback(emailFeedback, '');
     notifySession(null);
+    setFeedback(
+      signOutFeedback || emailFeedback,
+      revokeError
+        ? `Signed out on this device; server session could not be revoked: ${revokeError.message}`
+        : 'You are signed out.',
+      Boolean(revokeError)
+    );
+  });
+
+  document.addEventListener('valor:account-session', (event) => {
+    if (event.detail && event.detail.account) return;
+    if (accountSignedIn) accountSignedIn.hidden = true;
+    if (accountSignedOut) accountSignedOut.hidden = false;
   });
 
   async function initializeAccount() {

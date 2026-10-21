@@ -24,6 +24,117 @@
     return body;
   };
   window.valorEventsApiBase = base;
+  const accountTokenKey = 'valor-account-token';
+  const accountReturnToKey = 'valor-account-return-to';
+  const accountPath = new URL('account.html', window.location.href).pathname;
+
+  function buildAccountHref() {
+    const url = new URL('account.html', window.location.href);
+    if (window.location.pathname !== accountPath) {
+      const currentPage = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.sessionStorage.setItem(accountReturnToKey, currentPage);
+      url.searchParams.set('returnTo', currentPage);
+    }
+    return url.href;
+  }
+
+  function updateAccountNavigation(isSignedIn) {
+    const nav = document.querySelector('.service-nav, .nav-links');
+    if (!nav) return;
+    let accountLink = Array.from(nav.querySelectorAll('a')).find((link) => link.pathname === accountPath);
+    if (!accountLink) {
+      accountLink = document.createElement('a');
+      nav.appendChild(accountLink);
+    }
+    accountLink.href = buildAccountHref();
+    accountLink.textContent = isSignedIn ? 'My account' : 'Sign in';
+
+    let signOutButton = nav.querySelector('.nav-account-signout');
+    if (!signOutButton) {
+      signOutButton = document.createElement('button');
+      signOutButton.type = 'button';
+      signOutButton.className = 'nav-account-signout';
+      signOutButton.textContent = 'Sign out';
+      nav.appendChild(signOutButton);
+      const status = document.createElement('span');
+      status.className = 'nav-account-status';
+      status.setAttribute('role', 'status');
+      status.hidden = true;
+      nav.appendChild(status);
+      signOutButton.addEventListener('click', async () => {
+        const token = window.sessionStorage.getItem(accountTokenKey);
+        let revokeError = null;
+        if (token) {
+          try {
+            await window.valorEventsApi('/api/auth/account/logout', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` }
+            });
+          } catch (error) {
+            revokeError = error;
+          }
+        }
+        window.sessionStorage.removeItem(accountTokenKey);
+        window.sessionStorage.removeItem('valor-wallet-token');
+        window.sessionStorage.removeItem('valor-wallet-link-phone');
+        document.dispatchEvent(new CustomEvent('valor:account-session', { detail: { account: null } }));
+        const status = nav.querySelector('.nav-account-status');
+        if (status) {
+          status.textContent = revokeError
+            ? `Signed out on this device; server session could not be revoked: ${revokeError.message}`
+            : 'You are signed out.';
+          status.hidden = false;
+        }
+      });
+    }
+    signOutButton.hidden = !isSignedIn;
+  }
+
+  function rememberCurrentPage() {
+    if (window.location.pathname !== accountPath) {
+      window.sessionStorage.setItem(
+        accountReturnToKey,
+        `${window.location.pathname}${window.location.search}${window.location.hash}`
+      );
+    }
+  }
+
+  rememberCurrentPage();
+  window.addEventListener('hashchange', rememberCurrentPage);
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('a[href]').forEach((link) => {
+      if (link.pathname === accountPath) {
+        link.href = buildAccountHref();
+      }
+    });
+    const token = window.sessionStorage.getItem(accountTokenKey);
+    updateAccountNavigation(Boolean(token));
+    if (token) {
+      window.valorEventsApi('/api/auth/account', {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(() => {
+        updateAccountNavigation(true);
+      }).catch((error) => {
+        if (/sign in|session has expired/i.test(error.message)) {
+          window.sessionStorage.removeItem(accountTokenKey);
+          window.sessionStorage.removeItem('valor-wallet-token');
+          window.sessionStorage.removeItem('valor-wallet-link-phone');
+          document.dispatchEvent(new CustomEvent('valor:account-session', { detail: { account: null } }));
+          updateAccountNavigation(false);
+        }
+      });
+    }
+  });
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('a[href]');
+    if (link && link.pathname === accountPath && window.location.pathname !== accountPath) {
+      link.href = buildAccountHref();
+    }
+  }, true);
+  document.addEventListener('valor:account-session', (event) => {
+    updateAccountNavigation(Boolean(event.detail && event.detail.account));
+  });
+
   const affiliateReferralStorageKey = 'valor-affiliate-referral';
   const referralCode = new URLSearchParams(window.location.search).get('ref');
   if (referralCode && /^[a-f0-9]{10}$/i.test(referralCode)) {
