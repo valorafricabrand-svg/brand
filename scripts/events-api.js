@@ -2,7 +2,9 @@
   'use strict';
   const localHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
   // Set VALOR_EVENTS_API before this file on the deployed site.
-  const base = (window.VALOR_EVENTS_API || (localHost ? 'http://localhost:4001' : '')).replace(/\/+$/, '');
+  const base = (window.VALOR_EVENTS_API || (localHost
+    ? 'http://localhost:4001'
+    : 'https://valor-events-api-odp2.onrender.com')).replace(/\/+$/, '');
   window.valorEventsApi = async function (path, options = {}) {
     if (!base) throw new Error('The Valor Africa event service is not configured for this website yet.');
     const headers = new Headers(options.headers || {});
