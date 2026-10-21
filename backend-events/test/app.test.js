@@ -589,6 +589,9 @@ test('events with ticket orders cannot be edited or removed by organizers', asyn
     INSERT INTO orders (id,access_token_hash,order_type,event_id,buyer_name,phone,ticket_type,quantity,amount_kes)
     VALUES (?,?,?,?,?,?,?,?,?)
   `).run(crypto.randomUUID(), 'test-access-hash', 'ticket', created.id, 'Ticket Buyer', '254712345678', 'Regular', 1, 1200);
+  const ownerEvent = (await request(app).get('/api/events/mine').set(owner)).body.events
+    .find((event) => event.id === created.id);
+  assert.equal(ownerEvent.hasActiveOrders, true);
   const deleted = await request(app).delete(`/api/events/mine/${created.id}`).set(owner);
   assert.equal(deleted.status, 409);
   assert.match(deleted.body.error, /ticket orders/i);

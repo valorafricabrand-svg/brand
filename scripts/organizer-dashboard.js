@@ -56,9 +56,13 @@
         const metrics = document.createElement('p');
         metrics.textContent = `Tickets sold: ${event.ticketsSold} · Checked in: ${event.checkedIn} · Gross sales: KES ${Number(event.grossKes).toLocaleString('en-KE')}`;
         card.append(title, status, details, metrics);
-        if (event.hasActivePromotion) {
+        if (event.hasActiveOrders || event.hasActivePromotion) {
           const promotionNote = document.createElement('p');
-          promotionNote.textContent = 'This event has an active or pending promotion. Contact Valor Africa support to edit or remove it.';
+          promotionNote.textContent = event.hasActiveOrders && event.hasActivePromotion
+            ? 'This event has ticket orders and an active or pending promotion. Contact Valor Africa support to edit or remove it.'
+            : event.hasActiveOrders
+              ? 'This event has ticket orders in progress or tickets sold. Contact Valor Africa support to edit or remove it.'
+              : 'This event has an active or pending promotion. Contact Valor Africa support to edit or remove it.';
           card.appendChild(promotionNote);
         }
         if (event.reviewNote) {
@@ -72,10 +76,10 @@
           link.textContent = 'View event page';
           card.appendChild(link);
         }
-        if (!event.archived) {
+        if (!event.archived && !event.hasActiveOrders && !event.hasActivePromotion) {
           const actions = document.createElement('div');
           actions.className = 'organizer-event-actions';
-          if (!event.hasActivePromotion && Date.parse(event.startsAt) > Date.now()) {
+          if (Date.parse(event.startsAt) > Date.now()) {
             const edit = document.createElement('a');
             edit.href = `host.html?editEvent=${encodeURIComponent(event.id)}`;
             edit.className = 'button button-primary';

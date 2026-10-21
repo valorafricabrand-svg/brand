@@ -1233,6 +1233,8 @@ function createApp(options = {}) {
           WHERE t.event_id=e.id AND t.checked_in_at IS NOT NULL) AS checked_in,
         (SELECT COALESCE(SUM(o.amount_kes),0) FROM orders o
           WHERE o.event_id=e.id AND o.order_type='ticket' AND o.status IN ('paid','confirmed')) AS gross_kes,
+        (SELECT COUNT(*) FROM orders o
+          WHERE o.event_id=e.id AND o.order_type='ticket' AND o.status IN ('pending','paid','confirmed','review')) AS active_orders,
         (SELECT COUNT(*) FROM ad_bookings b
           WHERE b.event_id=e.id AND b.status IN ('pending_payment','active')) AS active_promotions
       FROM events e
@@ -1254,6 +1256,7 @@ function createApp(options = {}) {
         organizerName: event.organizer_name,
         organizerEmail: event.organizer_email,
         organizerPhone: event.organizer_phone,
+        hasActiveOrders: event.active_orders > 0,
         hasActivePromotion: event.active_promotions > 0
       }))
     });
