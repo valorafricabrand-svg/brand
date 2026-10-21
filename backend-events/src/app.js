@@ -956,7 +956,7 @@ function createApp(options = {}) {
     });
   });
 
-  app.post('/api/events/submissions', submissionLimiter, optionalAccount, (req, res, next) => {
+  app.post('/api/events/submissions', requireAccount, submissionLimiter, (req, res, next) => {
     imageUpload(req, res, (error) => {
       if (error) return next(error);
       if (req.body.website) return res.status(400).json({ error: 'Invalid event submission.' });
@@ -1005,12 +1005,12 @@ function createApp(options = {}) {
             id, slug, title, description, category, format, timezone, starts_at, ends_at,
             venue_name, meeting_url, city, capacity, regular_price, early_bird_price,
             early_bird_ends, vip_price, tags_json, poster_url, organizer_name, organizer_email,
-            organizer_phone, organizer_account_id
+            organizer_phone, organizer_account_id, status
           ) VALUES (
             @id, @slug, @title, @description, @category, @format, @timezone, @startsAt, @endsAt,
             @venueName, @meetingUrl, @city, @capacity, @regularPrice, @earlyBirdPrice,
             @earlyBirdEnds, @vipPrice, @tags, @posterUrl, @organizerName, @organizerEmail,
-            @organizerPhone, @organizerAccountId
+            @organizerPhone, @organizerAccountId, 'approved'
           )
         `).run({
           ...input,
@@ -1025,7 +1025,7 @@ function createApp(options = {}) {
           vipPrice: input.vipPrice ? Number(input.vipPrice) : null,
           tags: JSON.stringify(input.tags.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 12)),
           posterUrl,
-          organizerAccountId: req.account ? req.account.id : null
+          organizerAccountId: req.account.id
         });
       } catch (error) {
         if (posterUrl) {
@@ -1040,11 +1040,11 @@ function createApp(options = {}) {
         }
         throw error;
       }
-      res.status(202).json({
+      res.status(201).json({
         id,
         slug,
-        status: 'pending',
-        message: 'Your event was submitted for review. It will appear publicly after Valor Africa approves it.'
+        status: 'approved',
+        message: 'Your event is now live on Valor Africa.'
       });
     });
   });
@@ -1168,7 +1168,9 @@ function createApp(options = {}) {
     if (typeof reviewNote !== 'string' || reviewNote.length > 1000) return res.status(400).json({ error: 'Review notes must be 1,000 characters or fewer.' });
     const existing = db.prepare('SELECT id,status FROM events WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Event submission not found.' });
-    if (existing.status !== 'pending') return res.status(409).json({ error: 'Only pending event submissions can be reviewed.' });
+    if (existing.status !== 'pending' && !(existing.status === 'approved' && status === 'rejected')) {
+      return res.status(409).json({ error: 'Only pending events can be approved; live events may be unpublished.' });
+    }
     db.prepare(`
       UPDATE events SET status = ?, review_note = ?, reviewed_at = datetime('now') WHERE id = ?
     `).run(status, reviewNote.trim(), req.params.id);

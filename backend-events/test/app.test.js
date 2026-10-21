@@ -133,11 +133,11 @@ function createTestAccountAuth(email) {
   return { Authorization: `Bearer ${token}` };
 }
 
-function submitEvent(title = 'Test Live Festival') {
+function submitEvent(title = 'Test Live Festival', auth = createTestAccountAuth(`event-submitter-${crypto.randomUUID()}@example.com`)) {
   const future = Date.now() + 7 * 86400000;
   const starts = new Date(future).toISOString();
   const ends = new Date(future + 4 * 3600000).toISOString();
-  return request(app).post('/api/events/submissions')
+  const submission = request(app).post('/api/events/submissions')
     .field('title', title)
     .field('description', 'A live event description for a test festival.')
     .field('category', 'Festivals')
@@ -157,6 +157,7 @@ function submitEvent(title = 'Test Live Festival') {
     .field('organizerName', 'Event Organizer')
     .field('organizerEmail', 'organizer@example.com')
     .field('organizerPhone', '0712345678');
+  return auth ? submission.set(auth) : submission;
 }
 
 async function approveEvent(id) {
@@ -191,20 +192,26 @@ function stripeWebhook(session, type = 'checkout.session.completed') {
     }));
 }
 
-test('event submissions remain private until an admin approves them', async () => {
+test('signed-in event submissions publish immediately and admins can unpublish them', async () => {
   const owner = createTestAccountAuth('organizer-owner@example.com');
   const otherAccount = createTestAccountAuth('different-organizer@example.com');
+  const anonymous = await submitEvent('Anonymous Event', null);
+  assert.equal(anonymous.status, 401);
+
   const created = await submitEvent().set(owner);
-  assert.equal(created.status, 202);
-  assert.equal(created.body.status, 'pending');
-  assert.equal((await request(app).get('/api/events')).body.events.length, 0);
-  assert.equal((await request(app).get(`/api/events/by-slug/${created.body.slug}`)).status, 404);
+  assert.equal(created.status, 201);
+  assert.equal(created.body.status, 'approved');
+  assert.match(created.body.message, /now live/i);
+  const publicEvents = await request(app).get('/api/events');
+  assert.equal(publicEvents.body.events.length, 1);
+  assert.equal(publicEvents.body.events[0].title, 'Test Live Festival');
+  assert.equal((await request(app).get(`/api/events/by-slug/${created.body.slug}`)).status, 200);
 
   assert.equal((await request(app).get('/api/events/mine')).status, 401);
   const ownerEvents = await request(app).get('/api/events/mine').set(owner);
   assert.equal(ownerEvents.status, 200);
   const ownedEvent = ownerEvents.body.events.find((item) => item.id === created.body.id);
-  assert.equal(ownedEvent.status, 'pending');
+  assert.equal(ownedEvent.status, 'approved');
   assert.equal(ownedEvent.ticketsSold, 0);
   assert.equal(ownedEvent.checkedIn, 0);
   assert.equal(ownedEvent.grossKes, 0);
@@ -215,24 +222,26 @@ test('event submissions remain private until an admin approves them', async () =
   assert.equal(unauthorized.status, 401);
   const pending = await request(app).get('/api/events/admin/submissions?status=pending').set(admin);
   assert.equal(pending.status, 200);
-  assert.equal(pending.body.events[0].organizer.email, 'organizer@example.com');
-
-  const approved = await approveEvent(created.body.id);
-  assert.equal(approved.body.status, 'approved');
+  assert.equal(pending.body.events.some((item) => item.id === created.body.id), false);
   const listing = await request(app).get('/api/events');
-  assert.equal(listing.body.events.length, 1);
-  assert.equal(listing.body.events[0].title, 'Test Live Festival');
   assert.equal(listing.body.events[0].tickets[0].name, 'Early bird');
   assert.equal(JSON.stringify(listing.body).includes('organizer@example.com'), false);
-  assert.equal((await request(app).get(`/api/events/by-slug/${created.body.slug}`)).body.event.slug, created.body.slug);
 
-  const rejected = await submitEvent('Rejected Test Event');
-  const decision = await request(app).patch(`/api/events/admin/${rejected.body.id}/review`)
+  const legacyPending = await submitEvent('Legacy Pending Event', owner);
+  assert.equal(legacyPending.status, 201);
+  db.prepare("UPDATE events SET status='pending' WHERE id=?").run(legacyPending.body.id);
+  const pendingAfterLegacy = await request(app).get('/api/events/admin/submissions?status=pending').set(admin);
+  assert.equal(pendingAfterLegacy.body.events[0].organizer.email, 'organizer@example.com');
+  const approvedLegacy = await approveEvent(legacyPending.body.id);
+  assert.equal(approvedLegacy.body.status, 'approved');
+
+  const decision = await request(app).patch(`/api/events/admin/${legacyPending.body.id}/review`)
     .set(admin)
     .send({ status: 'rejected', reviewNote: 'Please update the event details.' });
   assert.equal(decision.status, 200);
   assert.equal(decision.body.status, 'rejected');
-  assert.equal((await request(app).get(`/api/events/by-slug/${rejected.body.slug}`)).status, 404);
+  assert.equal((await request(app).get(`/api/events/by-slug/${legacyPending.body.slug}`)).status, 404);
+  assert.equal((await request(app).get(`/api/events/by-slug/${created.body.slug}`)).status, 200);
   assert.equal((await request(app).get('/api/events')).body.events.length, 1);
 });
 
@@ -481,9 +490,8 @@ test('organizers can pay for an admin-priced package and publish its event ad', 
 
 test('paid event ads do not consume ticket capacity', async () => {
   const submitted = await submitEvent('Separate Ad And Ticket Capacity');
-  assert.equal(submitted.status, 202);
+  assert.equal(submitted.status, 201);
   db.prepare('UPDATE events SET capacity=1 WHERE id=?').run(submitted.body.id);
-  assert.equal((await approveEvent(submitted.body.id)).status, 200);
   const packageRow = db.prepare("SELECT id FROM ad_packages WHERE name='Homepage feature'").get();
   const ad = await request(app).post('/api/orders/ads').send({
     eventId: submitted.body.id,
@@ -505,12 +513,11 @@ test('paid event ads do not consume ticket capacity', async () => {
 
 test('free registrations require an account but do not require M-Pesa', async () => {
   const submitted = await submitEvent('Free Ticket Registration');
-  assert.equal(submitted.status, 202);
+  assert.equal(submitted.status, 201);
   db.prepare(`
     UPDATE events SET capacity=2,regular_price=0,early_bird_price=NULL,
       early_bird_ends=NULL,vip_price=NULL WHERE id=?
   `).run(submitted.body.id);
-  assert.equal((await approveEvent(submitted.body.id)).status, 200);
   paymentGateway.enabled = false;
   const accountAuth = await ticketAccountAuth();
   const anonymous = await request(app).post('/api/orders/tickets').send({

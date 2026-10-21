@@ -79,22 +79,26 @@
         card.appendChild(poster);
       }
       if (event.reviewNote) addText(card, 'p', 'record-contact', `Review note: ${event.reviewNote}`);
-      if (event.status === 'pending') {
+      if (event.status === 'pending' || event.status === 'approved') {
         const actions = document.createElement('div');
         actions.className = 'record-actions';
-        const approve = document.createElement('button');
-        approve.type = 'button';
-        approve.className = 'button primary';
-        approve.dataset.reviewEvent = event.id;
-        approve.dataset.reviewStatus = 'approved';
-        approve.textContent = 'Approve & publish';
+        if (event.status === 'pending') {
+          const approve = document.createElement('button');
+          approve.type = 'button';
+          approve.className = 'button primary';
+          approve.dataset.reviewEvent = event.id;
+          approve.dataset.reviewStatus = 'approved';
+          approve.textContent = 'Approve & publish';
+          actions.appendChild(approve);
+        }
         const reject = document.createElement('button');
         reject.type = 'button';
         reject.className = 'button reject';
         reject.dataset.reviewEvent = event.id;
         reject.dataset.reviewStatus = 'rejected';
-        reject.textContent = 'Reject';
-        actions.append(approve, reject);
+        reject.dataset.currentStatus = event.status;
+        reject.textContent = event.status === 'approved' ? 'Unpublish' : 'Reject';
+        actions.appendChild(reject);
         card.appendChild(actions);
       }
       list.appendChild(card);
@@ -256,8 +260,11 @@
     if (!button) return;
     let reviewNote = '';
     if (button.dataset.reviewStatus === 'rejected') {
-      reviewNote = window.prompt('Optional: tell the organizer why this event was rejected.') || '';
-      if (!window.confirm('Reject this event submission?')) return;
+      const isLive = button.dataset.currentStatus === 'approved';
+      reviewNote = window.prompt(isLive
+        ? 'Optional: tell the organizer why this live event is being unpublished.'
+        : 'Optional: tell the organizer why this event was rejected.') || '';
+      if (!window.confirm(isLive ? 'Unpublish this live event?' : 'Reject this event submission?')) return;
     } else if (!window.confirm('Approve and publish this event on Valor Africa?')) {
       return;
     }
@@ -267,7 +274,9 @@
         method: 'PATCH',
         body: JSON.stringify({ status: button.dataset.reviewStatus, reviewNote })
       });
-      setFeedback(feedback, button.dataset.reviewStatus === 'approved' ? 'Event approved and published.' : 'Event submission rejected.');
+      setFeedback(feedback, button.dataset.reviewStatus === 'approved'
+        ? 'Event approved and published.'
+        : 'Event unpublished from Valor Africa.');
       await loadSubmissions();
     } catch (error) {
       button.disabled = false;

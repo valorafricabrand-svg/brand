@@ -47,7 +47,7 @@
         const title = document.createElement('h2');
         title.textContent = event.title;
         const status = document.createElement('p');
-        status.textContent = `Status: ${event.status === 'approved' ? 'Approved' : event.status === 'rejected' ? 'Not approved' : 'Awaiting review'}`;
+        status.textContent = `Status: ${event.status === 'approved' ? 'Live' : event.status === 'rejected' ? 'Unpublished' : 'Awaiting review'}`;
         const details = document.createElement('p');
         details.textContent = `${formatDate(event.startsAt, event.timezone)} · ${event.location}`;
         const metrics = document.createElement('p');

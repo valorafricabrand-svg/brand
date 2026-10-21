@@ -1064,7 +1064,7 @@
       } else {
         window.valorEventsApi('/api/health').then((health) => {
           if (!health.ok) throw new Error('The event service did not confirm it is ready.');
-          serviceNotice.textContent = 'Online event service connected. Send your event for review; checkout availability depends on payment setup.';
+          serviceNotice.textContent = 'Online event service connected. Publishing makes your event visible immediately; paid checkout depends on payment setup.';
         }).catch((error) => {
           serviceNotice.textContent = `Could not reach the online event service: ${error.message} You can save a draft on this device and try again later.`;
         });
@@ -1163,7 +1163,7 @@
         else drafts[currentIndex] = draft;
         window.localStorage.setItem(storageKey, JSON.stringify(drafts));
         editingId = draft.id;
-        feedback.textContent = 'Event draft saved on this device. Submit it for review when you are ready to publish.';
+        feedback.textContent = 'Event draft saved on this device. Publish it when you are ready.';
         feedback.classList.remove('error');
         renderDrafts();
       } catch (error) {
@@ -1259,7 +1259,7 @@
         const accountToken = window.sessionStorage.getItem('valor-account-token');
         if (accountToken) headers.Authorization = `Bearer ${accountToken}`;
         const result = await window.valorEventsApi('/api/events/submissions', { method: 'POST', headers, body: submission });
-        feedback.textContent = `${result.message} Your event page will be /event.html?slug=${result.slug}`;
+        feedback.textContent = `${result.message} View it at /event.html?slug=${result.slug}`;
         feedback.classList.remove('error');
       } catch (error) {
         feedback.textContent = error.message;
