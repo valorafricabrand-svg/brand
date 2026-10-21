@@ -191,6 +191,40 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS account_sessions_expiry ON account_sessions(expires_at);
 
+  CREATE TABLE IF NOT EXISTS affiliate_partners (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL UNIQUE REFERENCES accounts(id) ON DELETE CASCADE,
+    social_platform TEXT NOT NULL,
+    profile_url TEXT NOT NULL,
+    audience_description TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','suspended')),
+    referral_code TEXT UNIQUE,
+    commission_percent REAL CHECK (commission_percent IS NULL OR commission_percent BETWEEN 0.01 AND 100),
+    admin_note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    reviewed_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS affiliate_referral_visits (
+    token_hash TEXT PRIMARY KEY,
+    partner_id TEXT NOT NULL REFERENCES affiliate_partners(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS affiliate_referral_visits_partner ON affiliate_referral_visits(partner_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS affiliate_payouts (
+    id TEXT PRIMARY KEY,
+    partner_id TEXT NOT NULL REFERENCES affiliate_partners(id),
+    amount_kes INTEGER NOT NULL CHECK (amount_kes > 0),
+    reference TEXT NOT NULL COLLATE NOCASE,
+    note TEXT NOT NULL DEFAULT '',
+    admin_id INTEGER NOT NULL REFERENCES admins(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (partner_id,reference)
+  );
+
   CREATE TABLE IF NOT EXISTS tickets (
     code TEXT PRIMARY KEY,
     order_id TEXT NOT NULL REFERENCES orders(id),
@@ -273,6 +307,16 @@ if (!orderColumns.some((column) => column.name === 'ticket_email_attempted_at'))
 if (!orderColumns.some((column) => column.name === 'ticket_email_error')) {
   db.exec("ALTER TABLE orders ADD COLUMN ticket_email_error TEXT NOT NULL DEFAULT ''");
 }
+if (!orderColumns.some((column) => column.name === 'affiliate_partner_id')) {
+  db.exec('ALTER TABLE orders ADD COLUMN affiliate_partner_id TEXT');
+}
+if (!orderColumns.some((column) => column.name === 'affiliate_commission_percent')) {
+  db.exec('ALTER TABLE orders ADD COLUMN affiliate_commission_percent REAL');
+}
+if (!orderColumns.some((column) => column.name === 'affiliate_referral_token_hash')) {
+  db.exec('ALTER TABLE orders ADD COLUMN affiliate_referral_token_hash TEXT');
+}
+db.exec('CREATE INDEX IF NOT EXISTS orders_affiliate_partner ON orders(affiliate_partner_id, status, paid_at)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS wallets_account ON wallets(account_id)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_session ON orders(stripe_session_id) WHERE stripe_session_id IS NOT NULL');
 db.exec('DROP TABLE IF EXISTS wallet_sessions');

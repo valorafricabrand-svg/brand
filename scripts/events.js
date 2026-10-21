@@ -1049,6 +1049,7 @@
           ? 'Paying with your Valor Wallet…'
           : paymentMethod === 'stripe' ? 'Starting Stripe Checkout…' : 'Sending an M-Pesa payment prompt…';
       try {
+        await window.valorAffiliateReferralReady;
         const order = await window.valorEventsApi('/api/orders/tickets', {
           method: 'POST',
           headers: { Authorization: `Bearer ${accountToken}` },
@@ -1058,7 +1059,8 @@
             quantity: Number(data.get('quantity')),
             buyerName: data.get('name'),
             phone: data.get('phone'),
-            paymentMethod
+            paymentMethod,
+            affiliateReferralToken: window.valorAffiliateReferralToken()
           })
         });
         if (order.checkoutUrl) {

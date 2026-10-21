@@ -10,8 +10,9 @@ Valor Africa is an event discovery, publishing, ticketing, and event-promotion p
 - `my-tickets.html` and `organizer-dashboard.html` — account-linked ticket QR passes and organizer submission, review, and sales summaries.
 - `wallet.html` — one-time phone-wallet linking, M-Pesa deposits, and transaction history.
 - `host.html` — organizer event submission and local draft saving.
+- `partnership.html` — creator applications, unique referral links, commission reporting, and payout history alongside investor, sponsor, and organizer partnership information.
 - `event.html`, `order.html`, `ticket.html`, and `advertise.html` — public event details, payment status and ticket confirmations, ticket verification, and paid ad booking.
-- `backend-events/` — API and admin dashboard for publishing, review, event orders, tickets, ad packages, and the merchandise catalog with Valor Wallet checkout.
+- `backend-events/` — API and admin dashboard for publishing, review, event orders, tickets, creator affiliate referrals, ad packages, and the merchandise catalog with Valor Wallet checkout.
 
 ## Run locally
 
@@ -42,7 +43,9 @@ Set the Daraja callback to a public HTTPS URL ending in `/api/mpesa/callback`. U
 
 Buyers and organizers can sign in from the Account page, which is linked throughout the public site. Authentication uses a verified Google or email account. Email accounts require email verification; passwords must be 8–128 characters, and reset codes expire after 10 minutes. Google ID tokens are verified by the API against `GOOGLE_CLIENT_ID`. Every ticket checkout—including free registrations, M-Pesa, Stripe, and Valor Wallet—requires an authenticated account session, and ticket orders are available only to the account that placed them. Confirmed ticket QR passes are listed on `my-tickets.html`. Signed-in organizers can publish events immediately; their events appear in `organizer-dashboard.html` and on the public site. Administrators can unpublish live events. To access a wallet, users sign in first and verify their Kenyan phone number by SMS once. This links any existing phone wallet—including its balance and transaction history—to the account; if no wallet exists for that number, one is created. Phone numbers already linked to another account cannot be claimed. SMS is not used for sign-in. Deposits are KES 100–150,000 per transaction. Users can then deposit M-Pesa funds or choose Valor Wallet during ticket checkout or event promotion booking.
 
-Use the admin dashboard to manage live event listings and advertising-package names, durations, and KES prices. Back up the SQLite database and uploaded-poster directory together.
+Use the admin dashboard to manage live event listings, advertising-package names, durations, and KES prices, and creator partner applications and commissions. Back up the SQLite database and uploaded-poster directory together.
+
+Creator/affiliate partners apply while signed in from `partnership.html`. Administrators review each application and record its individually agreed commission rate before activating a unique referral link. The latest valid referral click is attributed for 30 days; commission is calculated on ticket subtotal, excluding payment fees, and credited only after a ticket order is paid or confirmed. A partner cannot earn commission on ticket orders from their own account. The admin dashboard reports link visits, paid ticket orders, earned commission, and balances due. Payouts are manual: an administrator records the amount and transfer reference after sending funds; the system does not initiate affiliate payments.
 
 With the API configured, the Valor Ads carousel displays events with active paid bookings. The static-only preview still contains sample artwork/listings and cannot publish events, accept checkout, or issue tickets. Existing animated artwork and configured video previews can be used; campaign-video upload management and impression analytics are not included yet.
 

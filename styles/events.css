@@ -358,6 +358,32 @@ img { display: block; max-width: 100%; }
 .partnership-requirement { margin: 0; padding: 18px 28px; color: #697990; background: #f3f6f9; font-size: 13px; }
 .partnership-requirement strong { color: #4d5b71; }
 .partnership-investor { --partnership-accent: #2563eb; order: 3; }
+.partnership-member-area { margin-top: 36px; padding: clamp(24px, 5vw, 40px); border: 1px solid #dfe6ee; border-radius: 12px; background: #fff; }
+.partnership-member-area > .eyebrow { margin: 0 0 8px; color: #087f5b; font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+.partnership-member-area > h2 { margin: 0 0 8px; font: 800 clamp(22px, 3vw, 30px)/1.2 Manrope, sans-serif; }
+.partnership-member-intro { max-width: 800px; color: #596a82; }
+.partnership-application-form { display: grid; max-width: 680px; gap: 10px; margin-top: 22px; }
+.partnership-application-form label, .partnership-member-dashboard label { color: #33445b; font-size: 13px; font-weight: 700; }
+.partnership-application-form input, .partnership-application-form select, .partnership-application-form textarea, .partnership-referral-link input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); background: #fff; font: inherit; }
+.partnership-application-form textarea { min-height: 120px; resize: vertical; }
+.partnership-application-form .button { width: fit-content; margin-top: 8px; }
+.partnership-account-name { color: #596a82; font-size: 13px; }
+.partnership-member-feedback { min-height: 0; color: var(--green-dark); font-size: 13px; }
+.partnership-member-feedback:empty { display: none; }
+.partnership-member-feedback.error { color: #b42318; }
+.partnership-member-dashboard { max-width: 860px; margin-top: 20px; }
+.partnership-member-dashboard h3 { margin: 0 0 8px; font: 800 18px Manrope, sans-serif; }
+.partnership-member-dashboard > p { color: #596a82; }
+.partnership-referral-link { display: flex; gap: 8px; margin-top: 7px; }
+.partnership-referral-link .button { flex: 0 0 auto; color: var(--green-dark); background: #edf7f2; }
+.partnership-share-whatsapp { display: inline-block; margin: 8px 0 20px; color: var(--green-dark); font-weight: 800; text-decoration: underline; }
+.partnership-partner-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 20px 0; }
+.partnership-partner-stats > div { padding: 15px; border-radius: 9px; background: #f3f6f9; }
+.partnership-partner-stats dt { color: #596a82; font-size: 12px; }
+.partnership-partner-stats dd { margin: 7px 0 0; color: var(--green-dark); font: 800 19px Manrope, sans-serif; }
+.partnership-member-dashboard #partnerPayoutHistory p { color: #596a82; font-size: 13px; }
+.partnership-member-dashboard > .button { color: var(--green-dark); background: #edf7f2; }
+.partnership-member-dashboard [hidden], .partnership-application-form[hidden], #partnerSignedOut[hidden] { display: none; }
 .partnership-influencer { --partnership-accent: #9333ea; order: 4; }
 .partnership-brand { --partnership-accent: #16a34a; order: 2; }
 .partnership-organizer { --partnership-accent: #087f5b; order: 1; }
@@ -604,6 +630,9 @@ img { display: block; max-width: 100%; }
   .partnership-benefits { padding: 20px 24px 16px; }
   .partnership-apply { margin: 0 24px 20px; }
   .partnership-requirement { padding: 16px 24px; }
+  .partnership-partner-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .partnership-referral-link { align-items: stretch; flex-direction: column; }
+  .partnership-application-form .button { width: 100%; }
   .page-intro { padding-top: 34px; }
   .about-page { padding-bottom: 48px; }
   .about-hero { padding: 58px 0 62px; }

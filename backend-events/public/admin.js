@@ -44,6 +44,7 @@
     await loadProducts();
     await loadPackages();
     await loadOrders();
+    await loadPartners();
   }
 
   function addText(parent, tag, className, value) {
@@ -222,6 +223,119 @@
     });
   }
 
+  async function loadPartners() {
+    const list = document.getElementById('partnersList');
+    list.replaceChildren();
+    const { partners } = await api('/api/partners/admin');
+    if (!partners.length) return addText(list, 'p', 'empty', 'No creator partner applications have been received.');
+    partners.forEach((partner) => {
+      const card = document.createElement('article');
+      card.className = 'record';
+      card.dataset.partnerId = partner.id;
+      card.dataset.adminNote = partner.adminNote || '';
+      addText(card, 'h3', '', `${partner.displayName || 'Creator'} · ${partner.status.toUpperCase()}`);
+      addText(card, 'p', 'record-meta', `${partner.email} · ${partner.socialPlatform} · Applied ${new Date(partner.createdAt).toLocaleString()}`);
+      addText(card, 'p', 'record-contact', partner.profileUrl);
+      addText(card, 'p', 'record-description', partner.audienceDescription);
+      if (partner.adminNote) addText(card, 'p', 'record-contact', `Admin note: ${partner.adminNote}`);
+      if (partner.referralUrl) addText(card, 'p', 'record-meta', `Referral link: ${partner.referralUrl}`);
+      addText(card, 'p', 'record-meta',
+        `${Number(partner.clicks).toLocaleString('en-KE')} link visits · ${Number(partner.conversions).toLocaleString('en-KE')} paid ticket orders · KES ${Number(partner.earnedKes).toLocaleString('en-KE')} earned · KES ${Number(partner.paidKes).toLocaleString('en-KE')} paid · KES ${Number(partner.dueKes).toLocaleString('en-KE')} due`);
+
+      const actions = document.createElement('div');
+      actions.className = 'record-actions';
+      if (partner.status === 'pending' || partner.status === 'rejected') {
+        const rateLabel = document.createElement('label');
+        rateLabel.textContent = 'Agreed commission (%)';
+        const rateInput = document.createElement('input');
+        rateInput.type = 'number';
+        rateInput.min = '0.01';
+        rateInput.max = '100';
+        rateInput.step = '0.01';
+        rateInput.value = partner.commissionPercent || '';
+        rateInput.dataset.commissionPercent = '';
+        rateLabel.appendChild(rateInput);
+        const approve = document.createElement('button');
+        approve.type = 'button';
+        approve.className = 'button primary';
+        approve.dataset.partnerStatus = 'approved';
+        approve.textContent = 'Approve & activate';
+        actions.append(rateLabel, approve);
+      }
+      if (partner.status === 'approved') {
+        const rateLabel = document.createElement('label');
+        rateLabel.textContent = 'Agreed commission (%)';
+        const rateInput = document.createElement('input');
+        rateInput.type = 'number';
+        rateInput.min = '0.01';
+        rateInput.max = '100';
+        rateInput.step = '0.01';
+        rateInput.value = partner.commissionPercent || '';
+        rateInput.dataset.commissionPercent = '';
+        rateLabel.appendChild(rateInput);
+        const saveRate = document.createElement('button');
+        saveRate.type = 'button';
+        saveRate.className = 'button secondary';
+        saveRate.dataset.partnerStatus = 'approved';
+        saveRate.textContent = 'Save agreed rate';
+        actions.append(rateLabel, saveRate);
+      }
+      if (partner.status === 'pending' || partner.status === 'approved') {
+        const reject = document.createElement('button');
+        reject.type = 'button';
+        reject.className = 'button reject';
+        reject.dataset.partnerStatus = partner.status === 'approved' ? 'suspended' : 'rejected';
+        reject.textContent = partner.status === 'approved' ? 'Pause referrals' : 'Reject application';
+        actions.appendChild(reject);
+      } else if (partner.status === 'suspended') {
+        const reactivate = document.createElement('button');
+        reactivate.type = 'button';
+        reactivate.className = 'button primary';
+        reactivate.dataset.partnerStatus = 'approved';
+        reactivate.textContent = 'Reactivate partner';
+        actions.appendChild(reactivate);
+        const rateLabel = document.createElement('label');
+        rateLabel.textContent = 'Agreed commission (%)';
+        const rateInput = document.createElement('input');
+        rateInput.type = 'number';
+        rateInput.min = '0.01';
+        rateInput.max = '100';
+        rateInput.step = '0.01';
+        rateInput.value = partner.commissionPercent || '';
+        rateInput.dataset.commissionPercent = '';
+        rateLabel.appendChild(rateInput);
+        actions.appendChild(rateLabel);
+      }
+      if (partner.dueKes > 0) {
+        const payoutAmount = document.createElement('input');
+        payoutAmount.type = 'number';
+        payoutAmount.min = '1';
+        payoutAmount.max = String(partner.dueKes);
+        payoutAmount.step = '1';
+        payoutAmount.placeholder = `Payout amount, max KES ${partner.dueKes}`;
+        payoutAmount.dataset.payoutAmount = '';
+        const payoutReference = document.createElement('input');
+        payoutReference.type = 'text';
+        payoutReference.maxLength = 120;
+        payoutReference.placeholder = 'Manual transfer receipt/reference';
+        payoutReference.dataset.payoutReference = '';
+        const payoutNote = document.createElement('input');
+        payoutNote.type = 'text';
+        payoutNote.maxLength = 500;
+        payoutNote.placeholder = 'Optional payout note';
+        payoutNote.dataset.payoutNote = '';
+        const recordPayout = document.createElement('button');
+        recordPayout.type = 'button';
+        recordPayout.className = 'button secondary';
+        recordPayout.dataset.recordPartnerPayout = '';
+        recordPayout.textContent = 'Record manual payout';
+        actions.append(payoutAmount, payoutReference, payoutNote, recordPayout);
+      }
+      if (actions.children.length) card.appendChild(actions);
+      list.appendChild(card);
+    });
+  }
+
   document.getElementById('loginForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const loginForm = event.currentTarget;
@@ -253,6 +367,59 @@
     document.getElementById('merchandiseSection').hidden = button.dataset.adminTab !== 'merchandise';
     document.getElementById('packagesSection').hidden = button.dataset.adminTab !== 'packages';
     document.getElementById('ordersSection').hidden = button.dataset.adminTab !== 'orders';
+    document.getElementById('partnersSection').hidden = button.dataset.adminTab !== 'partners';
+    if (button.dataset.adminTab === 'partners') {
+      loadPartners().catch((error) => setFeedback(feedback, error.message, true));
+    }
+  });
+
+  document.getElementById('partnersList').addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-partner-status], [data-record-partner-payout]');
+    if (!button) return;
+    const card = button.closest('[data-partner-id]');
+    button.disabled = true;
+    try {
+      if (button.hasAttribute('data-partner-status')) {
+        const status = button.dataset.partnerStatus;
+        const rateInput = card.querySelector('[data-commission-percent]');
+        const adminNote = window.prompt(status === 'approved'
+          ? 'Optional note for the partner about the agreed commission terms:'
+          : 'Optional note for the partner:', card.dataset.adminNote || '');
+        if (adminNote === null) {
+          button.disabled = false;
+          return;
+        }
+        const body = {
+          status,
+          adminNote
+        };
+        if (status === 'approved') {
+          const rate = Number(rateInput && rateInput.value);
+          if (!Number.isFinite(rate) || rate <= 0 || rate > 100) {
+            throw new Error('Enter the commission rate agreed with this creator before activating the link.');
+          }
+          body.commissionPercent = rate;
+        }
+        await api(`/api/partners/admin/${encodeURIComponent(card.dataset.partnerId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(body)
+        });
+        setFeedback(feedback, status === 'approved' ? 'Creator partner activated.' : `Creator partner ${status}.`);
+      } else {
+        const amountKes = Number(card.querySelector('[data-payout-amount]').value);
+        const reference = card.querySelector('[data-payout-reference]').value;
+        const note = card.querySelector('[data-payout-note]').value;
+        await api(`/api/partners/admin/${encodeURIComponent(card.dataset.partnerId)}/payout`, {
+          method: 'POST',
+          body: JSON.stringify({ amountKes, reference, note })
+        });
+        setFeedback(feedback, 'Manual payout recorded. This action records a transfer already made; it does not send money.');
+      }
+      await loadPartners();
+    } catch (error) {
+      button.disabled = false;
+      setFeedback(feedback, error.message, true);
+    }
   });
 
   document.getElementById('submissionsList').addEventListener('click', async (event) => {

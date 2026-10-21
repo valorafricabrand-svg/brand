@@ -148,7 +148,7 @@ function slugify(value) {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 90) || 'event';
 }
 
-function createSubmissionLimiter() {
+function createSubmissionLimiter(maximum = 5, description = 'event submissions') {
   const attempts = new Map();
   const windowMs = 30 * 60 * 1000;
   return function submissionLimiter(req, res, next) {
@@ -159,7 +159,7 @@ function createSubmissionLimiter() {
       attempts.set(req.ip, entry);
     }
     entry.count += 1;
-    if (entry.count > 5) return res.status(429).json({ error: 'Too many event submissions. Please try again later.' });
+    if (entry.count > maximum) return res.status(429).json({ error: `Too many ${description}. Please try again later.` });
     next();
   };
 }
@@ -304,6 +304,8 @@ function createApp(options = {}) {
   const loginLimiter = createLoginLimiter();
   const accountLoginLimiter = createLoginLimiter(20);
   const submissionLimiter = createSubmissionLimiter();
+  const partnerApplicationLimiter = createSubmissionLimiter(5, 'partnership applications');
+  const partnerReferralLimiter = createSubmissionLimiter(1000, 'referral visits');
   const walletOtpAttempts = new Map();
   const accountCodeAttempts = new Map();
   function normalizedEmail(value) {
@@ -915,6 +917,194 @@ function createApp(options = {}) {
     res.json({ signedOut: true });
   });
 
+  function affiliateEarnings(partnerId) {
+    const earnedKes = db.prepare(`
+      SELECT COALESCE(SUM(ROUND(amount_kes * affiliate_commission_percent / 100.0)),0) AS amount
+      FROM orders
+      WHERE affiliate_partner_id=? AND order_type='ticket' AND status IN ('paid','confirmed')
+    `).get(partnerId).amount;
+    const paidKes = db.prepare('SELECT COALESCE(SUM(amount_kes),0) AS amount FROM affiliate_payouts WHERE partner_id=?')
+      .get(partnerId).amount;
+    return { earnedKes, paidKes, dueKes: Math.max(0, earnedKes - paidKes) };
+  }
+
+  app.post('/api/partners/visit', partnerReferralLimiter, (req, res) => {
+    const code = typeof req.body?.code === 'string' ? req.body.code.trim().toUpperCase() : '';
+    if (!/^[A-F0-9]{10}$/.test(code)) return res.status(400).json({ error: 'Enter a valid partner referral link.' });
+    const partner = db.prepare(`
+      SELECT id FROM affiliate_partners
+      WHERE referral_code=? AND status='approved' AND commission_percent IS NOT NULL
+    `).get(code);
+    if (!partner) return res.status(404).json({ error: 'This partner referral link is not active.' });
+    const token = crypto.randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + 30 * 86400000).toISOString();
+    db.prepare(`
+      INSERT INTO affiliate_referral_visits (token_hash,partner_id,expires_at)
+      VALUES (?,?,?)
+    `).run(sha256(token), partner.id, expiresAt);
+    res.status(201).json({ referralToken: token, expiresAt });
+  });
+
+  app.get('/api/partners/me', requireAccount, (req, res) => {
+    const partner = db.prepare(`
+      SELECT id,social_platform AS socialPlatform,profile_url AS profileUrl,
+        audience_description AS audienceDescription,status,referral_code AS referralCode,
+        commission_percent AS commissionPercent,admin_note AS adminNote,
+        created_at AS createdAt,reviewed_at AS reviewedAt
+      FROM affiliate_partners WHERE account_id=?
+    `).get(req.account.id);
+    if (!partner) return res.json({ partner: null });
+    const totals = affiliateEarnings(partner.id);
+    const clicks = db.prepare('SELECT COUNT(*) AS count FROM affiliate_referral_visits WHERE partner_id=?')
+      .get(partner.id).count;
+    const conversions = db.prepare(`
+      SELECT COUNT(*) AS count FROM orders
+      WHERE affiliate_partner_id=? AND order_type='ticket' AND amount_kes>0 AND status IN ('paid','confirmed')
+    `).get(partner.id).count;
+    const payouts = db.prepare(`
+      SELECT amount_kes AS amountKes,reference,note,created_at AS createdAt
+      FROM affiliate_payouts WHERE partner_id=? ORDER BY created_at DESC LIMIT 50
+    `).all(partner.id);
+    res.json({
+      partner: {
+        ...partner,
+        referralUrl: partner.referralCode ? `${publicSiteUrl}/events.html?ref=${partner.referralCode}` : null,
+        clicks,
+        conversions,
+        ...totals,
+        payouts
+      }
+    });
+  });
+
+  app.post('/api/partners/apply', requireAccount, partnerApplicationLimiter, (req, res) => {
+    const socialPlatform = req.body?.socialPlatform;
+    const profileUrl = typeof req.body?.profileUrl === 'string' ? req.body.profileUrl.trim() : '';
+    const audienceDescription = typeof req.body?.audienceDescription === 'string' ? req.body.audienceDescription.trim() : '';
+    if (!['Instagram','TikTok','YouTube','Facebook','Other'].includes(socialPlatform)) {
+      return res.status(400).json({ error: 'Choose a supported social platform.' });
+    }
+    if (profileUrl.length > 2048) return res.status(400).json({ error: 'Profile link must be 2,048 characters or fewer.' });
+    try {
+      const url = new URL(profileUrl);
+      if (url.protocol !== 'https:') return res.status(400).json({ error: 'Use a secure HTTPS link to your public profile.' });
+    } catch (error) {
+      return res.status(400).json({ error: 'Enter a valid public social profile link.' });
+    }
+    if (audienceDescription.length < 20 || audienceDescription.length > 1500) {
+      return res.status(400).json({ error: 'Describe your audience and how you would promote events (20–1,500 characters).' });
+    }
+    const existing = db.prepare('SELECT id,status FROM affiliate_partners WHERE account_id=?').get(req.account.id);
+    if (existing && existing.status !== 'rejected') {
+      return res.status(409).json({ error: 'You already have a creator partnership application or account.' });
+    }
+    const id = existing ? existing.id : crypto.randomUUID();
+    if (existing) {
+      db.prepare(`
+        UPDATE affiliate_partners SET social_platform=?,profile_url=?,audience_description=?,
+          status='pending',admin_note='',reviewed_at=NULL WHERE id=?
+      `).run(socialPlatform, profileUrl, audienceDescription, id);
+    } else {
+      db.prepare(`
+        INSERT INTO affiliate_partners (id,account_id,social_platform,profile_url,audience_description)
+        VALUES (?,?,?,?,?)
+      `).run(id, req.account.id, socialPlatform, profileUrl, audienceDescription);
+    }
+    res.status(201).json({ message: 'Your creator partnership application was received. We will review it and agree any commission terms before activation.' });
+  });
+
+  app.get('/api/partners/admin', requireAdmin, (req, res) => {
+    const partners = db.prepare(`
+      SELECT p.id,p.account_id AS accountId,a.email,a.display_name AS displayName,
+        p.social_platform AS socialPlatform,p.profile_url AS profileUrl,
+        p.audience_description AS audienceDescription,p.status,p.referral_code AS referralCode,
+        p.commission_percent AS commissionPercent,p.admin_note AS adminNote,
+        p.created_at AS createdAt,p.reviewed_at AS reviewedAt,
+        (SELECT COUNT(*) FROM affiliate_referral_visits v WHERE v.partner_id=p.id) AS clicks,
+        (SELECT COUNT(*) FROM orders o WHERE o.affiliate_partner_id=p.id AND o.order_type='ticket'
+          AND o.amount_kes>0 AND o.status IN ('paid','confirmed')) AS conversions,
+        (SELECT COALESCE(SUM(ROUND(o.amount_kes * o.affiliate_commission_percent / 100.0)),0)
+          FROM orders o WHERE o.affiliate_partner_id=p.id AND o.order_type='ticket'
+          AND o.status IN ('paid','confirmed')) AS earnedKes,
+        (SELECT COALESCE(SUM(amount_kes),0) FROM affiliate_payouts ap WHERE ap.partner_id=p.id) AS paidKes
+      FROM affiliate_partners p JOIN accounts a ON a.id=p.account_id
+      ORDER BY CASE p.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,p.created_at DESC
+      LIMIT 500
+    `).all();
+    res.json({
+      partners: partners.map((partner) => ({
+        ...partner,
+        dueKes: Math.max(0, partner.earnedKes - partner.paidKes),
+        referralUrl: partner.referralCode ? `${publicSiteUrl}/events.html?ref=${partner.referralCode}` : null
+      }))
+    });
+  });
+
+  app.patch('/api/partners/admin/:id', requireAdmin, (req, res) => {
+    const existing = db.prepare('SELECT * FROM affiliate_partners WHERE id=?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Creator partner not found.' });
+    const { status, commissionPercent, adminNote = '' } = req.body || {};
+    if (!['approved','rejected','suspended'].includes(status)) {
+      return res.status(400).json({ error: 'Choose approved, rejected, or suspended status.' });
+    }
+    if (typeof adminNote !== 'string' || adminNote.length > 1000) {
+      return res.status(400).json({ error: 'Admin note must be 1,000 characters or fewer.' });
+    }
+    if (status === 'approved' && (!Number.isFinite(commissionPercent) || commissionPercent <= 0 || commissionPercent > 100)) {
+      return res.status(400).json({ error: 'Enter the individually agreed commission rate (greater than 0 and no more than 100 percent).' });
+    }
+    let referralCode = existing.referral_code;
+    if (status === 'approved' && !referralCode) {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const candidate = crypto.randomBytes(5).toString('hex').toUpperCase();
+        if (!db.prepare('SELECT 1 FROM affiliate_partners WHERE referral_code=?').get(candidate)) {
+          referralCode = candidate;
+          break;
+        }
+      }
+      if (!referralCode) return res.status(503).json({ error: 'Could not allocate a unique referral code. Please retry.' });
+    }
+    db.prepare(`
+      UPDATE affiliate_partners SET status=?,commission_percent=?,referral_code=?,admin_note=?,
+        reviewed_at=datetime('now') WHERE id=?
+    `).run(status, status === 'approved' ? commissionPercent : existing.commission_percent, referralCode, adminNote.trim(), existing.id);
+    res.json({ id: existing.id, status, commissionPercent: status === 'approved' ? commissionPercent : existing.commission_percent, referralCode });
+  });
+
+  app.post('/api/partners/admin/:id/payout', requireAdmin, (req, res) => {
+    const partner = db.prepare('SELECT id,status FROM affiliate_partners WHERE id=?').get(req.params.id);
+    if (!partner) return res.status(404).json({ error: 'Creator partner not found.' });
+    const { amountKes, reference, note = '' } = req.body || {};
+    if (!Number.isSafeInteger(amountKes) || amountKes < 1) {
+      return res.status(400).json({ error: 'Payout amount must be a positive whole KES amount.' });
+    }
+    if (typeof reference !== 'string' || !reference.trim() || reference.trim().length > 120) {
+      return res.status(400).json({ error: 'Enter the payout receipt or reference (120 characters maximum).' });
+    }
+    if (typeof note !== 'string' || note.length > 500) {
+      return res.status(400).json({ error: 'Payout note must be 500 characters or fewer.' });
+    }
+    try {
+      db.transaction(() => {
+        const totals = affiliateEarnings(partner.id);
+        if (db.prepare('SELECT 1 FROM affiliate_payouts WHERE partner_id=? AND reference=?').get(partner.id, reference.trim())) {
+          throw Object.assign(new Error('That payout reference has already been recorded for this partner.'), { statusCode: 409 });
+        }
+        if (amountKes > totals.dueKes) {
+          throw Object.assign(new Error(`Payout cannot exceed the KES ${totals.dueKes.toLocaleString('en-KE')} balance due.`), { statusCode: 409 });
+        }
+        db.prepare(`
+          INSERT INTO affiliate_payouts (id,partner_id,amount_kes,reference,note,admin_id)
+          VALUES (?,?,?,?,?,?)
+        `).run(crypto.randomUUID(), partner.id, amountKes, reference.trim(), note.trim(), req.admin.sub);
+      })();
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
+    res.status(201).json({ message: 'Manual payout recorded.' });
+  });
+
   app.get('/api/events', (req, res) => {
     const rows = db.prepare(`
       SELECT * FROM events WHERE status = 'approved'
@@ -1238,18 +1428,24 @@ function createApp(options = {}) {
     return true;
   }
 
-  function createPendingOrder({ orderType, eventId = null, adBookingId = null, accountId = null, buyerName, phone, ticketType = '', quantity = 1, amountKes, paymentMethod = 'mpesa' }) {
+  function createPendingOrder({
+    orderType, eventId = null, adBookingId = null, accountId = null, buyerName, phone,
+    ticketType = '', quantity = 1, amountKes, paymentMethod = 'mpesa',
+    affiliatePartnerId = null, affiliateCommissionPercent = null, affiliateReferralTokenHash = null
+  }) {
     const id = crypto.randomUUID();
     const accessToken = crypto.randomBytes(32).toString('base64url');
     db.prepare(`
       INSERT INTO orders (
         id,access_token_hash,order_type,event_id,ad_booking_id,account_id,buyer_name,phone,
-        ticket_type,quantity,amount_kes,payment_method,ticket_email_status
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ticket_type,quantity,amount_kes,payment_method,ticket_email_status,
+        affiliate_partner_id,affiliate_commission_percent,affiliate_referral_token_hash
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(
       id, sha256(accessToken), orderType, eventId, adBookingId, accountId, buyerName.trim(),
       phone, ticketType, quantity, amountKes, paymentMethod,
-      orderType === 'ticket' ? 'not_sent' : 'not_applicable'
+      orderType === 'ticket' ? 'not_sent' : 'not_applicable',
+      affiliatePartnerId, affiliateCommissionPercent, affiliateReferralTokenHash
     );
     return { id, accessToken };
   }
@@ -1393,6 +1589,10 @@ function createApp(options = {}) {
       if (price > 0 && paymentMethod === 'stripe' && !stripeGateway.isConfigured()) {
         return res.status(503).json({ error: 'Stripe Checkout is not enabled yet. Valor Africa must configure its Stripe keys and webhook secret.' });
       }
+      const referralToken = typeof req.body?.affiliateReferralToken === 'string' &&
+        req.body.affiliateReferralToken.length <= 100
+        ? req.body.affiliateReferralToken
+        : '';
 
       let order;
       try {
@@ -1411,9 +1611,22 @@ function createApp(options = {}) {
                 `).get(eventId).total;
             if (reserved + quantity > event.capacity) throw Object.assign(new Error('There are not enough tickets remaining.'), { statusCode: 409 });
           }
+          let affiliate = null;
+          if (referralToken) {
+            const visit = db.prepare(`
+            SELECT v.token_hash,p.id,p.account_id,p.commission_percent
+            FROM affiliate_referral_visits v JOIN affiliate_partners p ON p.id=v.partner_id
+            WHERE v.token_hash=? AND julianday(v.expires_at)>julianday('now')
+              AND p.status='approved' AND p.commission_percent IS NOT NULL
+            `).get(sha256(referralToken));
+            if (visit && visit.account_id !== req.account.id) affiliate = visit;
+          }
           const created = createPendingOrder({
             orderType: 'ticket', eventId, accountId: req.account.id, buyerName, phone, ticketType, quantity,
-            amountKes: price * quantity, paymentMethod: price === 0 ? 'free' : paymentMethod
+            amountKes: price * quantity, paymentMethod: price === 0 ? 'free' : paymentMethod,
+            affiliatePartnerId: affiliate?.id || null,
+            affiliateCommissionPercent: affiliate?.commission_percent ?? null,
+            affiliateReferralTokenHash: affiliate?.token_hash || null
           });
           if (price === 0) {
             db.prepare("UPDATE orders SET status='confirmed',result_description=?,paid_at=datetime('now') WHERE id=?")

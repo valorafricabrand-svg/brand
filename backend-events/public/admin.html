@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Event admin | Valor Africa</title>
-  <link rel="stylesheet" href="/admin-assets/admin.css">
-  <script src="/admin-assets/admin.js" defer></script>
+  <link rel="stylesheet" href="/admin-assets/admin.css?v=creator-affiliate-1">
+  <script src="/admin-assets/admin.js?v=creator-affiliate-1" defer></script>
 </head>
 <body>
   <main class="admin-shell">
@@ -20,7 +20,7 @@
     <section class="card login-card" id="loginPanel">
       <p class="kicker">SECURE ORGANIZER TOOLS</p>
       <h1>Manage event listings</h1>
-      <p>Sign in to manage event listings, merchandise, advertising, and orders.</p>
+      <p>Sign in to manage event listings, merchandise, advertising, orders, and creator partners.</p>
       <form id="loginForm">
         <label for="username">Admin username</label>
         <input id="username" name="username" autocomplete="username" required>
@@ -34,13 +34,14 @@
       <div class="dashboard-heading">
         <p class="kicker">VALOR AFRICA EVENTS</p>
         <h1>Organizer dashboard</h1>
-        <p>Manage live event listings and review legacy pending submissions.</p>
+        <p>Manage event listings, orders, advertising, and the creator partner program.</p>
       </div>
       <nav class="tabs" aria-label="Admin sections">
         <button class="tab is-active" type="button" data-admin-tab="submissions">Event submissions</button>
         <button class="tab" type="button" data-admin-tab="merchandise">Merchandise</button>
         <button class="tab" type="button" data-admin-tab="packages">Ad packages</button>
         <button class="tab" type="button" data-admin-tab="orders">All orders</button>
+        <button class="tab" type="button" data-admin-tab="partners">Creator partners</button>
       </nav>
       <section class="card admin-section" id="submissionsSection">
         <div class="section-heading">
@@ -80,6 +81,10 @@
       <section class="card admin-section" id="ordersSection" hidden>
         <div class="section-heading"><div><h2>All orders</h2><p>Review ticket, advertising, and merchandise order payments.</p></div></div>
         <div class="record-list" id="ordersList"></div>
+      </section>
+      <section class="card admin-section" id="partnersSection" hidden>
+        <div class="section-heading"><div><h2>Creator &amp; affiliate partners</h2><p>Review applications, set individually agreed commission rates, and record manual payouts. Referral commissions count confirmed paid ticket orders only.</p></div></div>
+        <div class="record-list" id="partnersList"></div>
       </section>
       <p class="feedback" id="dashboardFeedback" aria-live="polite"></p>
     </section>

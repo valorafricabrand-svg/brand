@@ -16,7 +16,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/events.css">
+  <link rel="stylesheet" href="styles/events.css?v=affiliate-referrals-1">
+  <script src="scripts/events-api.js?v=affiliate-referrals-1" defer></script>
+  <script src="scripts/partnership.js?v=affiliate-referrals-1" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -127,12 +129,71 @@
             <p>Help your community discover events they’ll love through tracked referrals.</p>
           </div>
           <ul class="partnership-benefits">
-            <li>Referral commissions agreed before each campaign</li><li>Trackable links or campaign codes</li><li>Event access and promotional assets where available</li><li>Performance reviewed against real referrals</li>
+            <li>Referral commissions agreed before activation</li><li>Unique trackable event links</li><li>Event access and promotional assets where available</li><li>Performance reviewed against paid referrals</li>
           </ul>
-          <a class="partnership-apply" href="mailto:hello@valorafrica.co.ke?subject=Valor%20Africa%20Creator%20Partnership">Explore a creator partnership</a>
+          <a class="partnership-apply" href="#creator-application">Apply to become a creator partner</a>
           <p class="partnership-requirement">We value audience relevance and engagement—not a fixed follower count.</p>
         </article>
       </div>
+      <section class="partnership-member-area" id="creator-application" aria-labelledby="creator-application-title">
+        <p class="eyebrow">CREATOR &amp; AFFILIATE PROGRAM</p>
+        <h2 id="creator-application-title">Apply and track your referrals</h2>
+        <p class="partnership-member-intro">Applications are reviewed before activation. Your commission rate is agreed individually; it is not earned until an attributed ticket order is paid. Payouts are handled and recorded manually.</p>
+        <p class="partnership-member-feedback" id="partnerFeedback" role="status" aria-live="polite"></p>
+        <div id="partnerSignedOut" hidden>
+          <p>Sign in to apply or view your creator partner account.</p>
+          <a class="button button-primary" href="account.html?returnTo=%2Fpartnership.html%23creator-application">Sign in to continue</a>
+        </div>
+        <form class="partnership-application-form" id="partnerApplicationForm" hidden>
+          <p id="partnerAccountName" class="partnership-account-name"></p>
+          <label for="partnerSocialPlatform">Main platform</label>
+          <select id="partnerSocialPlatform" name="socialPlatform" required>
+            <option value="">Choose a platform</option>
+            <option>Instagram</option><option>TikTok</option><option>YouTube</option><option>Facebook</option><option>Other</option>
+          </select>
+          <label for="partnerProfileUrl">Public profile link</label>
+          <input id="partnerProfileUrl" name="profileUrl" type="url" maxlength="2048" placeholder="https://..." required>
+          <label for="partnerAudienceDescription">Tell us about your audience and how you would promote events</label>
+          <textarea id="partnerAudienceDescription" name="audienceDescription" minlength="20" maxlength="1500" rows="5" required></textarea>
+          <button class="button button-primary" type="submit">Submit creator application</button>
+        </form>
+        <div class="partnership-member-dashboard" id="partnerDashboard" hidden>
+          <h3 id="partnerStatusHeading"></h3>
+          <p id="partnerStatusDescription"></p>
+          <p id="partnerAdminNote" hidden></p>
+          <div id="partnerApprovedDetails" hidden>
+            <label for="partnerReferralUrl">Your referral link</label>
+            <div class="partnership-referral-link"><input id="partnerReferralUrl" type="url" readonly><button class="button" id="copyPartnerLink" type="button">Copy link</button></div>
+            <p class="field-hint">Last valid link click is attributed for 30 days. Commission is calculated on paid ticket subtotal only, excluding payment fees.</p>
+            <a class="partnership-share-whatsapp" id="sharePartnerWhatsapp" target="_blank" rel="noopener noreferrer">Share your link on WhatsApp</a>
+            <dl class="partnership-partner-stats">
+              <div><dt>Link visits</dt><dd id="partnerClicks">0</dd></div>
+              <div><dt>Paid ticket orders</dt><dd id="partnerConversions">0</dd></div>
+              <div><dt>Agreed commission</dt><dd id="partnerRate">—</dd></div>
+              <div><dt>Earned</dt><dd id="partnerEarned">KES 0</dd></div>
+              <div><dt>Paid out</dt><dd id="partnerPaid">KES 0</dd></div>
+              <div><dt>Balance due</dt><dd id="partnerDue">KES 0</dd></div>
+            </dl>
+            <div>
+              <h3>Manual payout history</h3>
+              <div id="partnerPayoutHistory"><p>No payouts have been recorded yet.</p></div>
+            </div>
+          </div>
+          <button class="button" id="editPartnerApplication" type="button" hidden>Update application</button>
+          <form class="partnership-application-form" id="partnerUpdateForm" hidden>
+            <label for="partnerUpdatePlatform">Main platform</label>
+            <select id="partnerUpdatePlatform" name="socialPlatform" required>
+              <option value="">Choose a platform</option>
+              <option>Instagram</option><option>TikTok</option><option>YouTube</option><option>Facebook</option><option>Other</option>
+            </select>
+            <label for="partnerUpdateProfileUrl">Public profile link</label>
+            <input id="partnerUpdateProfileUrl" name="profileUrl" type="url" maxlength="2048" required>
+            <label for="partnerUpdateAudience">Tell us about your audience and how you would promote events</label>
+            <textarea id="partnerUpdateAudience" name="audienceDescription" minlength="20" maxlength="1500" rows="5" required></textarea>
+            <button class="button button-primary" type="submit">Resubmit application</button>
+          </form>
+        </div>
+      </section>
     </section>
   </main>
   <footer class="site-footer">

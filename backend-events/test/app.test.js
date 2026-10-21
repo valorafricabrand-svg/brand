@@ -792,6 +792,108 @@ test('email verification, password reset, and Google sign-in create separate acc
   emailGateway.enabled = true;
 });
 
+test('creator partners earn attributable commissions only on paid ticket orders and admins record payouts', async () => {
+  const creatorAuth = createTestAccountAuth('creator-partner@example.com');
+  assert.equal((await request(app).post('/api/partners/apply').send({})).status, 401);
+  const invalidApplication = await request(app).post('/api/partners/apply').set(creatorAuth).send({
+    socialPlatform: 'Instagram',
+    profileUrl: 'http://instagram.example/creator',
+    audienceDescription: 'I share events with my local community.'
+  });
+  assert.equal(invalidApplication.status, 400);
+  const application = await request(app).post('/api/partners/apply').set(creatorAuth).send({
+    socialPlatform: 'Instagram',
+    profileUrl: 'https://instagram.example/creator',
+    audienceDescription: 'I share Nairobi music and community events with my local audience.'
+  });
+  assert.equal(application.status, 201);
+  assert.equal((await request(app).get('/api/partners/me').set(creatorAuth)).body.partner.status, 'pending');
+  const partnerId = db.prepare('SELECT id FROM affiliate_partners WHERE account_id=?')
+    .get(db.prepare('SELECT id FROM accounts WHERE email=?').get('creator-partner@example.com').id).id;
+  const missingRate = await request(app).patch(`/api/partners/admin/${partnerId}`).set(admin).send({ status: 'approved' });
+  assert.equal(missingRate.status, 400);
+  const approval = await request(app).patch(`/api/partners/admin/${partnerId}`).set(admin).send({
+    status: 'approved',
+    commissionPercent: 10
+  });
+  assert.equal(approval.status, 200);
+  assert.match(approval.body.referralCode, /^[A-F0-9]{10}$/);
+  assert.equal((await request(app).get('/api/partners/admin')).status, 401);
+  const adminPartnerList = await request(app).get('/api/partners/admin').set(admin);
+  assert.equal(adminPartnerList.status, 200);
+  assert.equal(adminPartnerList.body.partners.find((partner) => partner.id === partnerId).commissionPercent, 10);
+
+  const visit = await request(app).post('/api/partners/visit').send({ code: approval.body.referralCode });
+  assert.equal(visit.status, 201);
+  const inactiveVisit = await request(app).post('/api/partners/visit').send({ code: '0000000000' });
+  assert.equal(inactiveVisit.status, 404);
+  const submitted = await submitEvent('Creator Referral Festival')
+    .set('X-Forwarded-For', '198.51.100.44');
+  assert.equal(submitted.status, 201);
+  const buyerAuth = createTestAccountAuth('referred-buyer@example.com');
+  const ticketOrder = await request(app).post('/api/orders/tickets').set(buyerAuth).send({
+    eventId: submitted.body.id,
+    ticketType: 'Regular',
+    quantity: 2,
+    buyerName: 'Referred Buyer',
+    phone: '0712345678',
+    paymentMethod: 'mpesa',
+    affiliateReferralToken: visit.body.referralToken
+  });
+  assert.equal(ticketOrder.status, 201);
+  const order = db.prepare('SELECT * FROM orders WHERE id=?').get(ticketOrder.body.orderId);
+  assert.equal(order.affiliate_partner_id, partnerId);
+  assert.equal(order.affiliate_commission_percent, 10);
+  assert.equal((await request(app).get('/api/partners/me').set(creatorAuth)).body.partner.earnedKes, 0);
+  const updatedRate = await request(app).patch(`/api/partners/admin/${partnerId}`).set(admin).send({
+    status: 'approved',
+    commissionPercent: 15
+  });
+  assert.equal(updatedRate.status, 200);
+  const paid = await completePayment(order.checkout_request_id, order.merchant_request_id, 2400, 'AFFILIATE01');
+  assert.equal(paid.status, 200);
+  const creatorDashboard = await request(app).get('/api/partners/me').set(creatorAuth);
+  assert.equal(creatorDashboard.body.partner.clicks, 1);
+  assert.equal(creatorDashboard.body.partner.conversions, 1);
+  assert.equal(creatorDashboard.body.partner.earnedKes, 240);
+  assert.equal(creatorDashboard.body.partner.dueKes, 240);
+
+  const excessPayout = await request(app).post(`/api/partners/admin/${partnerId}/payout`).set(admin).send({
+    amountKes: 241,
+    reference: 'MPESA-REF-1'
+  });
+  assert.equal(excessPayout.status, 409);
+  const payout = await request(app).post(`/api/partners/admin/${partnerId}/payout`).set(admin).send({
+    amountKes: 100,
+    reference: 'MPESA-REF-1',
+    note: 'Manual payout test'
+  });
+  assert.equal(payout.status, 201);
+  const afterPayout = await request(app).get('/api/partners/me').set(creatorAuth);
+  assert.equal(afterPayout.body.partner.paidKes, 100);
+  assert.equal(afterPayout.body.partner.dueKes, 140);
+  const finalAdminPartner = await request(app).get('/api/partners/admin').set(admin);
+  assert.equal(finalAdminPartner.body.partners.find((partner) => partner.id === partnerId).dueKes, 140);
+  const duplicatePayout = await request(app).post(`/api/partners/admin/${partnerId}/payout`).set(admin).send({
+    amountKes: 1,
+    reference: 'mpesa-ref-1'
+  });
+  assert.equal(duplicatePayout.status, 409);
+
+  const selfOrder = await request(app).post('/api/orders/tickets').set(creatorAuth).send({
+    eventId: submitted.body.id,
+    ticketType: 'Regular',
+    quantity: 1,
+    buyerName: 'Creator Self Purchase',
+    phone: '0712345678',
+    paymentMethod: 'mpesa',
+    affiliateReferralToken: visit.body.referralToken
+  });
+  assert.equal(selfOrder.status, 201);
+  const selfOrderRow = db.prepare('SELECT * FROM orders WHERE id=?').get(selfOrder.body.orderId);
+  assert.equal(selfOrderRow.affiliate_partner_id, null);
+});
+
 after(() => {
   db.close();
   fs.rmSync(path.join(__dirname, '..', '.test-uploads'), { recursive: true, force: true });

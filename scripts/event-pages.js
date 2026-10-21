@@ -217,13 +217,15 @@
           button.disabled = false;
           return;
         }
+        await window.valorAffiliateReferralReady;
         await startCheckout('/api/orders/tickets', {
           eventId: event.id,
           ticketType: select.value,
           quantity: Number(form.elements.quantity.value),
           buyerName: form.elements.buyerName.value,
           phone: form.elements.phone.value,
-          paymentMethod: selectedMethod
+          paymentMethod: selectedMethod,
+          affiliateReferralToken: window.valorAffiliateReferralToken()
         }, document.getElementById('pageFeedback'), currentAccountToken);
         button.disabled = false;
       });
