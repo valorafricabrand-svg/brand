@@ -1035,6 +1035,9 @@
     const slugInput = document.getElementById('eventSlug');
     const startsInput = document.getElementById('eventStarts');
     const endsInput = document.getElementById('eventEnds');
+    const earlyBirdPriceInput = document.getElementById('earlyBirdPrice');
+    const earlyBirdEndsInput = document.getElementById('earlyBirdEnds');
+    const publishWithoutEarlyBirdButton = document.getElementById('publishWithoutEarlyBirdButton');
     let editingId = null;
     let slugWasEdited = false;
 
@@ -1050,7 +1053,20 @@
     });
     startsInput.addEventListener('change', () => {
       endsInput.min = startsInput.value;
-      document.getElementById('earlyBirdEnds').max = startsInput.value;
+      earlyBirdEndsInput.max = startsInput.value;
+    });
+    const hideEarlyBirdFallback = () => {
+      publishWithoutEarlyBirdButton.hidden = true;
+    };
+    [earlyBirdPriceInput, earlyBirdEndsInput].forEach((input) => {
+      input.addEventListener('input', hideEarlyBirdFallback);
+      input.addEventListener('change', hideEarlyBirdFallback);
+    });
+    publishWithoutEarlyBirdButton.addEventListener('click', () => {
+      earlyBirdPriceInput.value = '';
+      earlyBirdEndsInput.value = '';
+      hideEarlyBirdFallback();
+      document.getElementById('publishEventButton').click();
     });
     const updateImageNames = () => {
       const files = Array.from(imageInput.files || []);
@@ -1160,6 +1176,27 @@
         endsInput.focus();
         return;
       }
+      const earlyBirdPrice = data.get('earlyBirdPrice');
+      if (earlyBirdPrice) {
+        const earlyBirdAmount = Number(earlyBirdPrice);
+        const regularPrice = Number(data.get('ticketPrice'));
+        if (!Number.isSafeInteger(earlyBirdAmount) || earlyBirdAmount < 0 || earlyBirdAmount >= regularPrice) {
+          feedback.textContent = 'Early-bird price must be a whole KES amount below the regular ticket price.';
+          feedback.classList.add('error');
+          publishWithoutEarlyBirdButton.hidden = false;
+          earlyBirdPriceInput.focus();
+          return;
+        }
+        if (!earlyBirdEnds || !Number.isFinite(earlyBirdEnds.getTime()) || earlyBirdEnds <= new Date() || earlyBirdEnds >= startsAt) {
+          feedback.textContent = 'Choose an early-bird end time in the future and before the event starts.';
+          feedback.classList.add('error');
+          publishWithoutEarlyBirdButton.hidden = false;
+          earlyBirdEndsInput.focus();
+          return;
+        }
+      } else {
+        hideEarlyBirdFallback();
+      }
       const submission = new FormData();
       const fields = {
         title: data.get('eventTitle'),
@@ -1238,6 +1275,9 @@
       } catch (error) {
         feedback.textContent = error.message;
         feedback.classList.add('error');
+        if (/early-bird price must be below the regular price/i.test(error.message)) {
+          publishWithoutEarlyBirdButton.hidden = false;
+        }
       } finally {
         button.disabled = false;
       }
