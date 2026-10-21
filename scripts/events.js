@@ -1026,6 +1026,7 @@
     const draftList = document.getElementById('draftList');
     const imageInput = document.getElementById('eventImages');
     const imageNames = document.getElementById('imageNames');
+    const serviceNotice = document.getElementById('hostServiceNotice');
     const titleInput = document.getElementById('eventTitle');
     const slugInput = document.getElementById('eventSlug');
     const startsInput = document.getElementById('eventStarts');
@@ -1047,12 +1048,28 @@
       endsInput.min = startsInput.value;
       document.getElementById('earlyBirdEnds').max = startsInput.value;
     });
-    imageInput.addEventListener('change', () => {
+    const updateImageNames = () => {
       const files = Array.from(imageInput.files || []);
       imageNames.textContent = files.length
         ? `${files.length} selected: ${files.map((file) => file.name).join(', ')}`
         : 'No images selected.';
-    });
+    };
+    imageInput.addEventListener('input', updateImageNames);
+    imageInput.addEventListener('change', updateImageNames);
+    updateImageNames();
+
+    if (serviceNotice) {
+      if (!apiBase) {
+        serviceNotice.textContent = 'The online event service is not connected. You can save a draft on this device or email your event to Valor Africa for manual review.';
+      } else {
+        window.valorEventsApi('/api/health').then((health) => {
+          if (!health.ok) throw new Error('The event service did not confirm it is ready.');
+          serviceNotice.textContent = 'Online event service connected. Send your event for review; checkout availability depends on payment setup.';
+        }).catch((error) => {
+          serviceNotice.textContent = `Could not reach the online event service: ${error.message} You can save a draft on this device and try again later.`;
+        });
+      }
+    }
 
     function readDrafts() {
       const raw = window.localStorage.getItem(storageKey);
