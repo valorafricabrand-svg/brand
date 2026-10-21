@@ -16,9 +16,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/events.css?v=affiliate-referrals-1">
+  <link rel="stylesheet" href="styles/events.css?v=partnership-applications-1">
   <script src="scripts/events-api.js?v=affiliate-referrals-1" defer></script>
-  <script src="scripts/partnership.js?v=affiliate-referrals-1" defer></script>
+  <script src="scripts/partnership.js?v=partnership-applications-1" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -107,7 +107,7 @@
           <ul class="partnership-benefits">
             <li>Sponsored event or city campaigns</li><li>Co-branded promotion and event activations</li><li>Deliverables, audience, and budget agreed up front</li><li>Post-campaign reporting against agreed goals</li>
           </ul>
-          <a class="partnership-apply" href="mailto:hello@valorafrica.co.ke?subject=Valor%20Africa%20Event%20Sponsorship">Discuss event sponsorship</a>
+          <a class="partnership-apply" href="#sponsor-application">Apply for event sponsorship</a>
           <p class="partnership-requirement">Sponsors fund visibility or activations; sponsorship is not an investment in Valor Africa.</p>
         </article>
         <article class="partnership-card partnership-organizer">
@@ -119,7 +119,7 @@
           <ul class="partnership-benefits">
             <li>Event listings and ticketing tools</li><li>Promotional support and audience discovery</li><li>Discuss launch or volume-based fee arrangements</li><li>Bring your community and grow with each event</li>
           </ul>
-          <a class="partnership-apply" href="host.html">Talk to us about listing an event</a>
+          <a class="partnership-apply" href="#organizer-application">Apply as an organizer partner</a>
           <p class="partnership-requirement">Fees and any introductory terms are agreed before an event is listed.</p>
         </article>
         <article class="partnership-card partnership-influencer">
@@ -135,6 +135,51 @@
           <p class="partnership-requirement">We value audience relevance and engagement—not a fixed follower count.</p>
         </article>
       </div>
+      <section class="partnership-member-area business-partnership-applications" aria-labelledby="business-partnership-title">
+        <p class="eyebrow">ORGANIZER &amp; SPONSOR PARTNERSHIPS</p>
+        <h2 id="business-partnership-title">Start a partnership conversation</h2>
+        <p class="partnership-member-intro">Submit an inquiry and track follow-up here. Applications are reviewed individually. Fees, campaign budgets, deliverables, and any other commercial terms must be discussed and agreed separately; submitting an application does not commit either party.</p>
+        <div id="businessPartnerSignedOut" hidden>
+          <p>Sign in to submit an inquiry and track its status.</p>
+          <a class="button button-primary" href="account.html?returnTo=%2Fpartnership.html%23organizer-application">Sign in to continue</a>
+        </div>
+        <div class="business-partnership-grid">
+          <section class="business-partnership-form-card" id="organizer-application" aria-labelledby="organizer-application-title">
+            <h3 id="organizer-application-title">Organizer partner application</h3>
+            <p>Tell us about your organization, event program, and the support you are exploring.</p>
+            <p id="organizerApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
+            <div id="organizerApplicationStatus" class="partnership-application-status" hidden></div>
+            <form class="partnership-application-form business-partnership-form" id="organizerPartnerApplication" data-partnership-type="organizer" hidden>
+              <label for="organizerOrganizationName">Organization or organizer name</label>
+              <input id="organizerOrganizationName" name="organizationName" maxlength="160" required>
+              <label for="organizerWebsite">Website or event profile (optional)</label>
+              <input id="organizerWebsite" name="websiteUrl" type="url" maxlength="2048" placeholder="https://...">
+              <label for="organizerDetails">Tell us about your events, audience, and partnership idea</label>
+              <textarea id="organizerDetails" name="applicationDetails" minlength="30" maxlength="3000" rows="5" required></textarea>
+              <label for="organizerSupport">What support are you interested in? (optional)</label>
+              <textarea id="organizerSupport" name="requestedSupport" maxlength="1000" rows="3"></textarea>
+              <button class="button button-primary" type="submit">Submit organizer inquiry</button>
+            </form>
+          </section>
+          <section class="business-partnership-form-card" id="sponsor-application" aria-labelledby="sponsor-application-title">
+            <h3 id="sponsor-application-title">Event sponsor inquiry</h3>
+            <p>Tell us about your brand, audience, campaign goals, and preferred timing.</p>
+            <p id="sponsorApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
+            <div id="sponsorApplicationStatus" class="partnership-application-status" hidden></div>
+            <form class="partnership-application-form business-partnership-form" id="sponsorPartnerApplication" data-partnership-type="sponsor" hidden>
+              <label for="sponsorOrganizationName">Brand or organization name</label>
+              <input id="sponsorOrganizationName" name="organizationName" maxlength="160" required>
+              <label for="sponsorWebsite">Website (optional)</label>
+              <input id="sponsorWebsite" name="websiteUrl" type="url" maxlength="2048" placeholder="https://...">
+              <label for="sponsorDetails">Describe your audience, campaign goals, and ideal timing</label>
+              <textarea id="sponsorDetails" name="applicationDetails" minlength="30" maxlength="3000" rows="5" required></textarea>
+              <label for="sponsorSupport">Events, locations, or activations you are interested in (optional)</label>
+              <textarea id="sponsorSupport" name="requestedSupport" maxlength="1000" rows="3"></textarea>
+              <button class="button button-primary" type="submit">Submit sponsor inquiry</button>
+            </form>
+          </section>
+        </div>
+      </section>
       <section class="partnership-member-area" id="creator-application" aria-labelledby="creator-application-title">
         <p class="eyebrow">CREATOR &amp; AFFILIATE PROGRAM</p>
         <h2 id="creator-application-title">Apply and track your referrals</h2>

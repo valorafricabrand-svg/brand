@@ -45,6 +45,7 @@
     await loadPackages();
     await loadOrders();
     await loadPartners();
+    await loadPartnershipApplications();
   }
 
   function addText(parent, tag, className, value) {
@@ -336,6 +337,52 @@
     });
   }
 
+  async function loadPartnershipApplications() {
+    const list = document.getElementById('partnershipApplicationsList');
+    list.replaceChildren();
+    const { applications } = await api('/api/partnership-applications/admin');
+    if (!applications.length) return addText(list, 'p', 'empty', 'No organizer or sponsor inquiries have been received.');
+    applications.forEach((application) => {
+      const card = document.createElement('article');
+      card.className = 'record';
+      card.dataset.partnershipApplicationId = application.id;
+      addText(card, 'h3', '', `${application.type === 'organizer' ? 'Organizer partner' : 'Event sponsor'} · ${application.organizationName}`);
+      addText(card, 'p', 'record-meta', `${application.status.toUpperCase()} · ${application.displayName || 'Account'} · ${application.email} · Submitted ${new Date(application.createdAt).toLocaleString()}`);
+      if (application.websiteUrl) addText(card, 'p', 'record-contact', application.websiteUrl);
+      addText(card, 'p', 'record-description', application.applicationDetails);
+      if (application.requestedSupport) addText(card, 'p', 'record-contact',
+        `${application.type === 'organizer' ? 'Interested support' : 'Events or activations'}: ${application.requestedSupport}`);
+      const label = document.createElement('label');
+      label.textContent = 'Follow-up status';
+      const status = document.createElement('select');
+      status.dataset.applicationStatus = '';
+      ['pending','contacted','approved','rejected','closed'].forEach((value) => {
+        const option = new Option(value[0].toUpperCase() + value.slice(1), value);
+        option.selected = value === application.status;
+        status.appendChild(option);
+      });
+      label.appendChild(status);
+      const noteLabel = document.createElement('label');
+      noteLabel.textContent = 'Applicant-facing follow-up note (1,000 characters maximum)';
+      const note = document.createElement('textarea');
+      note.rows = 3;
+      note.maxLength = 1000;
+      note.value = application.adminNote || '';
+      note.dataset.applicationNote = '';
+      noteLabel.appendChild(note);
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'button primary';
+      save.dataset.savePartnershipApplication = '';
+      save.textContent = 'Save follow-up update';
+      const actions = document.createElement('div');
+      actions.className = 'record-actions';
+      actions.append(label, noteLabel, save);
+      card.appendChild(actions);
+      list.appendChild(card);
+    });
+  }
+
   document.getElementById('loginForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const loginForm = event.currentTarget;
@@ -368,8 +415,12 @@
     document.getElementById('packagesSection').hidden = button.dataset.adminTab !== 'packages';
     document.getElementById('ordersSection').hidden = button.dataset.adminTab !== 'orders';
     document.getElementById('partnersSection').hidden = button.dataset.adminTab !== 'partners';
+    document.getElementById('partnershipApplicationsSection').hidden = button.dataset.adminTab !== 'partnership-applications';
     if (button.dataset.adminTab === 'partners') {
       loadPartners().catch((error) => setFeedback(feedback, error.message, true));
+    }
+    if (button.dataset.adminTab === 'partnership-applications') {
+      loadPartnershipApplications().catch((error) => setFeedback(feedback, error.message, true));
     }
   });
 
@@ -416,6 +467,27 @@
         setFeedback(feedback, 'Manual payout recorded. This action records a transfer already made; it does not send money.');
       }
       await loadPartners();
+    } catch (error) {
+      button.disabled = false;
+      setFeedback(feedback, error.message, true);
+    }
+  });
+
+  document.getElementById('partnershipApplicationsList').addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-save-partnership-application]');
+    if (!button) return;
+    const card = button.closest('[data-partnership-application-id]');
+    button.disabled = true;
+    try {
+      const result = await api(`/api/partnership-applications/admin/${encodeURIComponent(card.dataset.partnershipApplicationId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: card.querySelector('[data-application-status]').value,
+          adminNote: card.querySelector('[data-application-note]').value
+        })
+      });
+      setFeedback(feedback, result.message);
+      await loadPartnershipApplications();
     } catch (error) {
       button.disabled = false;
       setFeedback(feedback, error.message, true);

@@ -141,6 +141,106 @@
     }
   });
 
+  const businessSignedOut = document.getElementById('businessPartnerSignedOut');
+  const businessApplications = [
+    { type: 'organizer', form: document.getElementById('organizerPartnerApplication') },
+    { type: 'sponsor', form: document.getElementById('sponsorPartnerApplication') }
+  ];
+
+  function renderBusinessApplication(entry, application) {
+    const status = document.getElementById(`${entry.type}ApplicationStatus`);
+    const feedbackElement = document.getElementById(`${entry.type}ApplicationFeedback`);
+    if (!application) {
+      status.hidden = true;
+      entry.form.hidden = false;
+      return;
+    }
+    status.hidden = false;
+    status.replaceChildren();
+    const heading = document.createElement('strong');
+    const copy = document.createElement('p');
+    const note = document.createElement('p');
+    heading.textContent = `Application status: ${application.status}`;
+    copy.textContent = application.status === 'pending'
+      ? 'Your inquiry is in the review queue. We will follow up using your Valor Africa account email.'
+      : application.status === 'contacted'
+        ? 'Our team has started follow-up. Check the review note below or your account email.'
+        : application.status === 'approved'
+          ? 'Your partnership inquiry is approved for follow-up. Confirm any fees, deliverables, budget, and agreement directly with Valor Africa before proceeding.'
+          : application.status === 'rejected'
+            ? 'Your inquiry needs an update. Review the note and edit your details below before resubmitting.'
+            : 'This inquiry is closed. Contact Valor Africa if you would like to start a new conversation.';
+    note.textContent = application.adminNote ? `Review note: ${application.adminNote}` : '';
+    status.append(heading, copy);
+    if (application.adminNote) status.appendChild(note);
+    feedbackElement.textContent = '';
+    entry.form.hidden = application.status !== 'rejected';
+    if (application.status === 'rejected') {
+      entry.form.elements.organizationName.value = application.organizationName;
+      entry.form.elements.websiteUrl.value = application.websiteUrl;
+      entry.form.elements.applicationDetails.value = application.applicationDetails;
+      entry.form.elements.requestedSupport.value = application.requestedSupport;
+      entry.form.querySelector('[type="submit"]').textContent = 'Update and resubmit inquiry';
+    } else {
+      entry.form.querySelector('[type="submit"]').textContent =
+        entry.type === 'organizer' ? 'Submit organizer inquiry' : 'Submit sponsor inquiry';
+    }
+  }
+
+  async function loadBusinessApplications() {
+    if (!token) {
+      businessSignedOut.hidden = false;
+      businessApplications.forEach((entry) => {
+        entry.form.hidden = true;
+        document.getElementById(`${entry.type}ApplicationStatus`).hidden = true;
+      });
+      return;
+    }
+    try {
+      const result = await window.valorEventsApi('/api/partnership-applications/me', { headers: tokenHeaders });
+      businessSignedOut.hidden = true;
+      businessApplications.forEach((entry) => {
+        const application = result.applications.find((item) => item.type === entry.type) || null;
+        renderBusinessApplication(entry, application);
+      });
+    } catch (error) {
+      if (/sign in to your valor africa account|session has expired/i.test(error.message)) {
+        businessSignedOut.hidden = false;
+        return;
+      }
+      businessApplications.forEach((entry) => {
+        document.getElementById(`${entry.type}ApplicationFeedback`).textContent = error.message;
+        document.getElementById(`${entry.type}ApplicationFeedback`).classList.add('error');
+      });
+    }
+  }
+
+  businessApplications.forEach((entry) => {
+    entry.form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = entry.form.querySelector('[type="submit"]');
+      const feedbackElement = document.getElementById(`${entry.type}ApplicationFeedback`);
+      const values = Object.fromEntries(new FormData(entry.form));
+      button.disabled = true;
+      try {
+        const result = await window.valorEventsApi('/api/partnership-applications', {
+          method: 'POST',
+          headers: tokenHeaders,
+          body: JSON.stringify({ ...values, type: entry.type })
+        });
+        feedbackElement.textContent = result.message;
+        feedbackElement.classList.remove('error');
+        await loadBusinessApplications();
+      } catch (error) {
+        feedbackElement.textContent = error.message;
+        feedbackElement.classList.add('error');
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
   if (token) loadPartner();
   else signedOut.hidden = false;
+  loadBusinessApplications();
 })();

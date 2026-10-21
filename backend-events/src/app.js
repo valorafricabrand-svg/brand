@@ -304,7 +304,7 @@ function createApp(options = {}) {
   const loginLimiter = createLoginLimiter();
   const accountLoginLimiter = createLoginLimiter(20);
   const submissionLimiter = createSubmissionLimiter();
-  const partnerApplicationLimiter = createSubmissionLimiter(5, 'partnership applications');
+  const partnerApplicationLimiter = createSubmissionLimiter(10, 'partnership applications');
   const partnerReferralLimiter = createSubmissionLimiter(1000, 'referral visits');
   const walletOtpAttempts = new Map();
   const accountCodeAttempts = new Map();
@@ -1011,6 +1011,108 @@ function createApp(options = {}) {
       `).run(id, req.account.id, socialPlatform, profileUrl, audienceDescription);
     }
     res.status(201).json({ message: 'Your creator partnership application was received. We will review it and agree any commission terms before activation.' });
+  });
+
+  app.get('/api/partnership-applications/me', requireAccount, (req, res) => {
+    const applications = db.prepare(`
+      SELECT id,application_type AS type,organization_name AS organizationName,
+        website_url AS websiteUrl,application_details AS applicationDetails,
+        requested_support AS requestedSupport,status,admin_note AS adminNote,
+        created_at AS createdAt,updated_at AS updatedAt,reviewed_at AS reviewedAt
+      FROM partnership_applications WHERE account_id=? ORDER BY application_type
+    `).all(req.account.id);
+    res.json({ applications });
+  });
+
+  app.post('/api/partnership-applications', requireAccount, partnerApplicationLimiter, (req, res) => {
+    const type = req.body?.type;
+    const organizationName = typeof req.body?.organizationName === 'string' ? req.body.organizationName.trim() : '';
+    const websiteUrl = typeof req.body?.websiteUrl === 'string' ? req.body.websiteUrl.trim() : '';
+    const applicationDetails = typeof req.body?.applicationDetails === 'string' ? req.body.applicationDetails.trim() : '';
+    const requestedSupport = typeof req.body?.requestedSupport === 'string' ? req.body.requestedSupport.trim() : '';
+    if (!['organizer','sponsor'].includes(type)) return res.status(400).json({ error: 'Choose organizer partner or event sponsor.' });
+    if (!organizationName || organizationName.length > 160) {
+      return res.status(400).json({ error: 'Organization name is required and must be 160 characters or fewer.' });
+    }
+    if (websiteUrl) {
+      if (websiteUrl.length > 2048) return res.status(400).json({ error: 'Website link must be 2,048 characters or fewer.' });
+      try {
+        if (new URL(websiteUrl).protocol !== 'https:') return res.status(400).json({ error: 'Website links must use HTTPS.' });
+      } catch (error) {
+        return res.status(400).json({ error: 'Enter a valid HTTPS website link.' });
+      }
+    }
+    if (applicationDetails.length < 30 || applicationDetails.length > 3000) {
+      return res.status(400).json({ error: 'Tell us about your organization and proposal (30–3,000 characters).' });
+    }
+    if (requestedSupport.length > 1000) return res.status(400).json({ error: 'Requested support must be 1,000 characters or fewer.' });
+    const existing = db.prepare(`
+      SELECT id,status FROM partnership_applications WHERE account_id=? AND application_type=?
+    `).get(req.account.id, type);
+    if (existing && existing.status !== 'rejected') {
+      return res.status(409).json({ error: `You already have a ${type} partnership inquiry in progress.` });
+    }
+    const id = existing ? existing.id : crypto.randomUUID();
+    if (existing) {
+      db.prepare(`
+        UPDATE partnership_applications SET organization_name=?,website_url=?,application_details=?,
+          requested_support=?,status='pending',admin_note='',updated_at=datetime('now'),
+          reviewed_at=NULL WHERE id=?
+      `).run(organizationName, websiteUrl, applicationDetails, requestedSupport, id);
+    } else {
+      db.prepare(`
+        INSERT INTO partnership_applications
+          (id,account_id,application_type,organization_name,website_url,application_details,requested_support)
+        VALUES (?,?,?,?,?,?,?)
+      `).run(id, req.account.id, type, organizationName, websiteUrl, applicationDetails, requestedSupport);
+    }
+    res.status(201).json({
+      id,
+      status: 'pending',
+      message: `Your ${type === 'organizer' ? 'organizer partnership' : 'sponsorship'} inquiry was received. Our team will contact you to discuss fit and any terms; no package or price is committed by this application.`
+    });
+  });
+
+  app.get('/api/partnership-applications/admin', requireAdmin, (req, res) => {
+    const type = ['organizer','sponsor'].includes(req.query.type) ? req.query.type : null;
+    const applications = (type
+      ? db.prepare(`
+          SELECT p.id,p.account_id AS accountId,a.email,a.display_name AS displayName,
+            p.application_type AS type,p.organization_name AS organizationName,
+            p.website_url AS websiteUrl,p.application_details AS applicationDetails,
+            p.requested_support AS requestedSupport,p.status,p.admin_note AS adminNote,
+            p.created_at AS createdAt,p.updated_at AS updatedAt
+          FROM partnership_applications p JOIN accounts a ON a.id=p.account_id
+          WHERE p.application_type=? ORDER BY p.created_at DESC LIMIT 500
+        `).all(type)
+      : db.prepare(`
+          SELECT p.id,p.account_id AS accountId,a.email,a.display_name AS displayName,
+            p.application_type AS type,p.organization_name AS organizationName,
+            p.website_url AS websiteUrl,p.application_details AS applicationDetails,
+            p.requested_support AS requestedSupport,p.status,p.admin_note AS adminNote,
+            p.created_at AS createdAt,p.updated_at AS updatedAt
+          FROM partnership_applications p JOIN accounts a ON a.id=p.account_id
+          ORDER BY CASE p.status WHEN 'pending' THEN 0 WHEN 'contacted' THEN 1 ELSE 2 END,p.created_at DESC
+          LIMIT 500
+        `).all());
+    res.json({ applications });
+  });
+
+  app.patch('/api/partnership-applications/admin/:id', requireAdmin, (req, res) => {
+    const existing = db.prepare('SELECT id FROM partnership_applications WHERE id=?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Partnership application not found.' });
+    const { status, adminNote = '' } = req.body || {};
+    if (!['contacted','approved','rejected','closed'].includes(status)) {
+      return res.status(400).json({ error: 'Choose contacted, approved, rejected, or closed status.' });
+    }
+    if (typeof adminNote !== 'string' || adminNote.length > 1000) {
+      return res.status(400).json({ error: 'Admin note must be 1,000 characters or fewer.' });
+    }
+    db.prepare(`
+      UPDATE partnership_applications SET status=?,admin_note=?,updated_at=datetime('now'),
+        reviewed_at=datetime('now') WHERE id=?
+    `).run(status, adminNote.trim(), existing.id);
+    res.json({ id: existing.id, status, message: 'Partnership application updated.' });
   });
 
   app.get('/api/partners/admin', requireAdmin, (req, res) => {

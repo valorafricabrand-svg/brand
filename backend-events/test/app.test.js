@@ -894,6 +894,95 @@ test('creator partners earn attributable commissions only on paid ticket orders 
   assert.equal(selfOrderRow.affiliate_partner_id, null);
 });
 
+test('organizer and sponsor partnership applications support secure follow-up and resubmission', async () => {
+  const applicantAuth = createTestAccountAuth('partnership-applicant@example.com');
+  assert.equal((await request(app).get('/api/partnership-applications/me')).status, 401);
+  const invalidWebsite = await request(app).post('/api/partnership-applications')
+    .set(applicantAuth)
+    .set('X-Forwarded-For', '198.51.100.50')
+    .send({
+      type: 'sponsor',
+      organizationName: 'Sample Brand',
+      websiteUrl: 'http://brand.example',
+      applicationDetails: 'We want to reach local event communities with a campaign.'
+    });
+  assert.equal(invalidWebsite.status, 400);
+
+  const organizer = await request(app).post('/api/partnership-applications')
+    .set(applicantAuth)
+    .set('X-Forwarded-For', '198.51.100.50')
+    .send({
+      type: 'organizer',
+      organizationName: 'Nairobi Events Collective',
+      websiteUrl: 'https://events.example',
+      applicationDetails: 'We organize regular community and music events in Nairobi and would like to discuss listing and promotion.',
+      requestedSupport: 'Event discovery and launch promotion.'
+    });
+  assert.equal(organizer.status, 201);
+  assert.equal(organizer.body.status, 'pending');
+  assert.match(organizer.body.message, /no package or price is committed/);
+  const duplicate = await request(app).post('/api/partnership-applications')
+    .set(applicantAuth)
+    .set('X-Forwarded-For', '198.51.100.50')
+    .send({
+      type: 'organizer',
+      organizationName: 'Nairobi Events Collective',
+      applicationDetails: 'We organize regular community and music events in Nairobi and would like to discuss listing and promotion.'
+    });
+  assert.equal(duplicate.status, 409);
+
+  const sponsor = await request(app).post('/api/partnership-applications')
+    .set(applicantAuth)
+    .set('X-Forwarded-For', '198.51.100.50')
+    .send({
+      type: 'sponsor',
+      organizationName: 'Sample Brand',
+      applicationDetails: 'We want to reach local event communities with a brand campaign and discuss possible activations.',
+      requestedSupport: 'Nairobi event sponsorship and brand activations.'
+    });
+  assert.equal(sponsor.status, 201);
+  const mine = await request(app).get('/api/partnership-applications/me').set(applicantAuth);
+  assert.equal(mine.status, 200);
+  assert.deepEqual(mine.body.applications.map((application) => application.type), ['organizer','sponsor']);
+
+  assert.equal((await request(app).get('/api/partnership-applications/admin')).status, 401);
+  const adminList = await request(app).get('/api/partnership-applications/admin').set(admin);
+  assert.equal(adminList.status, 200);
+  assert.equal(adminList.body.applications.length, 2);
+  assert.equal((await request(app).get('/api/partnership-applications/admin?type=sponsor').set(admin)).body.applications.length, 1);
+  const invalidStatus = await request(app)
+    .patch(`/api/partnership-applications/admin/${organizer.body.id}`)
+    .set(admin).send({ status: 'paid' });
+  assert.equal(invalidStatus.status, 400);
+  const contacted = await request(app)
+    .patch(`/api/partnership-applications/admin/${organizer.body.id}`)
+    .set(admin).send({ status: 'contacted', adminNote: 'We will email to arrange a call.' });
+  assert.equal(contacted.status, 200);
+  const visibleToApplicant = await request(app).get('/api/partnership-applications/me').set(applicantAuth);
+  const organizerStatus = visibleToApplicant.body.applications.find((application) => application.type === 'organizer');
+  assert.equal(organizerStatus.status, 'contacted');
+  assert.equal(organizerStatus.adminNote, 'We will email to arrange a call.');
+
+  const rejected = await request(app)
+    .patch(`/api/partnership-applications/admin/${sponsor.body.id}`)
+    .set(admin).send({ status: 'rejected', adminNote: 'Please provide a campaign date range.' });
+  assert.equal(rejected.status, 200);
+  const resubmittedSponsor = await request(app).post('/api/partnership-applications')
+    .set(applicantAuth)
+    .set('X-Forwarded-For', '198.51.100.50')
+    .send({
+      type: 'sponsor',
+      organizationName: 'Sample Brand',
+      applicationDetails: 'We want to reach local event communities with a brand campaign and discuss possible activations.',
+      requestedSupport: 'Nairobi event sponsorship and brand activations.'
+    });
+  assert.equal(resubmittedSponsor.status, 201);
+  const updatedSponsor = (await request(app).get('/api/partnership-applications/me')
+    .set(applicantAuth)).body.applications.find((application) => application.type === 'sponsor');
+  assert.equal(updatedSponsor.status, 'pending');
+  assert.equal(updatedSponsor.adminNote, '');
+});
+
 after(() => {
   db.close();
   fs.rmSync(path.join(__dirname, '..', '.test-uploads'), { recursive: true, force: true });

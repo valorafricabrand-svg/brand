@@ -384,6 +384,15 @@ img { display: block; max-width: 100%; }
 .partnership-member-dashboard #partnerPayoutHistory p { color: #596a82; font-size: 13px; }
 .partnership-member-dashboard > .button { color: var(--green-dark); background: #edf7f2; }
 .partnership-member-dashboard [hidden], .partnership-application-form[hidden], #partnerSignedOut[hidden] { display: none; }
+.business-partnership-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 22px; }
+.business-partnership-form-card { min-width: 0; padding: 20px; border: 1px solid #e3eaf0; border-radius: 10px; background: #fbfcfd; }
+.business-partnership-form-card h3 { margin: 0 0 6px; color: var(--ink); font: 800 18px Manrope, sans-serif; }
+.business-partnership-form-card > p:not(.partnership-member-feedback) { color: #596a82; font-size: 13px; }
+.business-partnership-form { max-width: none; }
+.business-partnership-form .button { width: 100%; }
+.partnership-application-status { margin: 18px 0; padding: 16px; border: 1px solid #dce8e2; border-radius: 9px; background: #f2fbf6; }
+.partnership-application-status strong { color: var(--green-dark); text-transform: capitalize; }
+.partnership-application-status p { margin: 8px 0 0; color: #596a82; font-size: 13px; }
 .partnership-influencer { --partnership-accent: #9333ea; order: 4; }
 .partnership-brand { --partnership-accent: #16a34a; order: 2; }
 .partnership-organizer { --partnership-accent: #087f5b; order: 1; }
@@ -622,6 +631,8 @@ img { display: block; max-width: 100%; }
   .shop-cart { margin-top: 30px; padding: 18px; }
   .shop-section-heading { align-items: center; }
   .partnership-cards { grid-template-columns: 1fr; gap: 16px; }
+  .business-partnership-grid { grid-template-columns: 1fr; gap: 12px; }
+  .business-partnership-form-card { padding: 16px; }
   .partnership-proof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .partnership-fund-split { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .partnership-investment-priorities { grid-template-columns: 1fr; gap: 16px; margin: 20px 0; }

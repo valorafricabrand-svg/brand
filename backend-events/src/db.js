@@ -225,6 +225,25 @@ db.exec(`
     UNIQUE (partner_id,reference)
   );
 
+  CREATE TABLE IF NOT EXISTS partnership_applications (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    application_type TEXT NOT NULL CHECK (application_type IN ('organizer','sponsor')),
+    organization_name TEXT NOT NULL,
+    website_url TEXT NOT NULL DEFAULT '',
+    application_details TEXT NOT NULL,
+    requested_support TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','contacted','approved','rejected','closed')),
+    admin_note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    reviewed_at TEXT,
+    UNIQUE (account_id,application_type)
+  );
+
+  CREATE INDEX IF NOT EXISTS partnership_applications_status_created
+    ON partnership_applications(application_type,status,created_at DESC);
+
   CREATE TABLE IF NOT EXISTS tickets (
     code TEXT PRIMARY KEY,
     order_id TEXT NOT NULL REFERENCES orders(id),
