@@ -340,14 +340,10 @@
     const body = document.createElement('div');
     body.className = 'event-card-body';
     const heading = document.createElement('h3');
-    if (event.slug) {
-      const eventLink = document.createElement('a');
-      eventLink.href = `event.html?slug=${encodeURIComponent(event.slug)}`;
-      eventLink.textContent = event.title;
-      heading.appendChild(eventLink);
-    } else {
-      heading.textContent = event.title;
-    }
+    const eventLink = document.createElement('a');
+    setEventDetailsLink(eventLink, event);
+    eventLink.textContent = event.title;
+    heading.appendChild(eventLink);
     heading.title = event.title;
     body.appendChild(heading);
 
@@ -384,14 +380,24 @@
       body.appendChild(bird);
     }
 
-    const buy = document.createElement('button');
-    buy.type = 'button';
+    const buy = document.createElement('a');
+    setEventDetailsLink(buy, event);
     buy.className = 'ticket-link';
-    buy.dataset.buyEvent = event.id;
     buy.innerHTML = '<span aria-hidden="true">▣</span> Get tickets';
     body.appendChild(buy);
     article.append(poster, body);
     return article;
+  }
+
+  function setEventDetailsLink(link, event) {
+    link.href = event.slug
+      ? `event.html?slug=${encodeURIComponent(event.slug)}`
+      : `event.html?preview=${encodeURIComponent(event.id)}`;
+    if (!event.slug) {
+      link.addEventListener('click', () => {
+        window.sessionStorage.setItem(`valor-preview-event-${event.id}`, JSON.stringify(event));
+      });
+    }
   }
 
   function renderEvents(container, list) {
@@ -547,11 +553,15 @@
     const price = document.createElement('p');
     price.className = 'ad-price';
     price.textContent = `Tickets from ${formatMoney(saleActive ? ticket.price : ticket.regularPrice || ticket.price, ticket.currency)}`;
-    const cta = document.createElement('button');
-    cta.type = 'button';
+    const cta = document.createElement('a');
+    cta.href = event.isPlatformPromo
+      ? event.isTicketBuyerPromo ? 'events.html' : 'host.html'
+      : '#';
+    if (!event.isPlatformPromo) setEventDetailsLink(cta, event);
     cta.className = 'ad-ticket-cta';
-    cta.dataset.buyEvent = event.id;
-    cta.innerHTML = `<span>Get tickets</span><span aria-hidden="true">→</span>`;
+    cta.innerHTML = event.isPlatformPromo
+      ? `<span>${event.isTicketBuyerPromo ? 'Browse events' : 'Host an event'}</span><span aria-hidden="true">→</span>`
+      : '<span>Get tickets</span><span aria-hidden="true">→</span>';
     content.append(category, title, details, price, cta);
     slide.append(visual, content);
     slide.style.setProperty('--ad-index', String(index));

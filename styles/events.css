@@ -39,11 +39,40 @@ img { display: block; max-width: 100%; }
 .service-meta { color: var(--muted); font-weight: 700; }
 .service-poster { width: min(100%, 620px); max-height: 420px; margin: 0 auto 24px; border-radius: 13px; object-fit: cover; }
 .service-ticket-list { display: grid; gap: 7px; padding-left: 22px; }
+.event-page { width: min(1180px, calc(100% - 48px)); }
+.event-detail-card { padding: 0; overflow: hidden; }
+.event-detail-layout { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); gap: clamp(28px, 5vw, 64px); padding: clamp(22px, 4vw, 44px); }
+.event-detail-poster-wrap { align-self: start; padding: 10px; border: 1px solid #edf0f4; border-radius: 18px; background: #fff; box-shadow: var(--shadow); }
+.event-detail-poster { width: 100%; max-height: 620px; border-radius: 12px; object-fit: cover; }
+.event-detail-copy { min-width: 0; }
+.event-detail-categories { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.event-detail-categories span { padding: 5px 12px; border: 1px solid #ecd7c2; border-radius: 999px; color: #9a4c08; background: #fff8ef; font-size: 12px; font-weight: 800; }
+.event-detail-copy h1 { margin: 0 0 28px; color: #1c1c1c; font: 900 clamp(32px, 5.4vw, 62px)/1.06 Manrope, sans-serif; letter-spacing: -.045em; text-transform: uppercase; }
+.event-detail-facts { display: grid; margin-bottom: 26px; }
+.event-detail-fact { display: grid; gap: 3px; padding: 13px 0; border-bottom: 1px solid #e7e7e4; }
+.event-detail-fact span, .event-detail-price > span { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.event-detail-fact strong { color: var(--ink); font-size: 16px; font-weight: 600; }
+.event-detail-price { display: flex; align-items: baseline; flex-wrap: wrap; gap: 14px; margin-top: 18px; }
+.event-detail-price strong { color: #1c1c1c; font: 900 clamp(26px, 4vw, 38px)/1 Manrope, sans-serif; }
+.event-detail-ticket-list { display: grid; gap: 8px; margin: 16px 0 22px; padding: 0; list-style: none; }
+.event-detail-ticket-list li { display: flex; justify-content: space-between; gap: 16px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: #fbfcfd; }
+.event-detail-ticket-list strong { white-space: nowrap; }
+.event-detail-book { margin-top: 0; min-width: 160px; justify-content: center; text-transform: none; }
+.event-detail-secure-note, .event-detail-description { color: var(--muted); font-size: 13px; }
+.event-detail-secure-note { margin: 12px 0 0; }
+.event-detail-description { margin: 24px 0 0; font-size: 15px; line-height: 1.75; }
 .service-form { display: grid; gap: 13px; }
 .service-form label { display: grid; gap: 6px; color: #35445a; font-size: 13px; font-weight: 700; }
 .service-form input, .service-form select { width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: #fff; color: var(--ink); }
 .service-form .button { justify-self: start; }
 .service-form .button:disabled { cursor: not-allowed; opacity: .6; }
+@media (max-width: 720px) {
+  .event-page { width: min(100% - 32px, 560px); padding-top: 24px; }
+  .event-detail-layout { grid-template-columns: 1fr; gap: 28px; padding: 18px; }
+  .event-detail-poster-wrap { width: min(100%, 380px); justify-self: center; }
+  .event-detail-poster { max-height: 480px; }
+  .event-detail-copy h1 { margin-bottom: 18px; }
+}
 .button.secondary { border: 1px solid var(--border); color: #35445a; background: #fff; }
 .service-nav { display: flex; align-items: center; gap: 16px; color: var(--green-dark); font-size: 14px; font-weight: 800; }
 .service-nav a:hover { color: var(--green); }

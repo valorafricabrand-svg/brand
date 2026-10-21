@@ -13,32 +13,134 @@
     const root = document.getElementById('eventDetails');
     if (!root) return;
     try {
-      const slug = new URLSearchParams(window.location.search).get('slug');
-      if (!slug) throw new Error('This event link is incomplete.');
-      const { event } = await api(`/api/events/by-slug/${encodeURIComponent(slug)}`);
+      const params = new URLSearchParams(window.location.search);
+      const slug = params.get('slug');
+      const previewId = params.get('preview');
+      let event;
+      if (slug) {
+        ({ event } = await api(`/api/events/by-slug/${encodeURIComponent(slug)}`));
+      } else if (previewId) {
+        const preview = window.sessionStorage.getItem(`valor-preview-event-${previewId}`);
+        if (!preview) throw new Error('This event preview has expired. Browse events and select it again.');
+        event = JSON.parse(preview);
+      } else {
+        throw new Error('This event link is incomplete.');
+      }
+      root.classList.add('event-detail-card');
       const heading = document.createElement('h1');
       heading.textContent = event.title;
-      const meta = document.createElement('p');
-      meta.className = 'service-meta';
-      meta.textContent = `${event.category} · ${event.location} · ${escapeDate(event.startsAt)}`;
+      const copy = document.createElement('div');
+      copy.className = 'event-detail-copy';
+      const categories = document.createElement('div');
+      categories.className = 'event-detail-categories';
+      [event.category, ...(event.tags || [])].filter(Boolean).slice(0, 4).forEach((category) => {
+        const tag = document.createElement('span');
+        tag.textContent = category;
+        categories.appendChild(tag);
+      });
+      const details = document.createElement('div');
+      details.className = 'event-detail-facts';
+      const addFact = (label, value) => {
+        if (!value) return;
+        const fact = document.createElement('div');
+        fact.className = 'event-detail-fact';
+        const title = document.createElement('span');
+        title.textContent = label;
+        const text = document.createElement('strong');
+        text.textContent = value;
+        fact.append(title, text);
+        details.appendChild(fact);
+      };
+      const timeZone = event.timezone || 'Africa/Nairobi';
+      const start = new Date(event.startsAt);
+      const end = event.endsAt ? new Date(event.endsAt) : null;
+      const formatDate = (date) => new Intl.DateTimeFormat('en-KE', {
+        weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone
+      }).format(date);
+      const startDateLabel = formatDate(start);
+      const endDateLabel = end && formatDate(end);
+      const dateLabel = endDateLabel && endDateLabel !== startDateLabel
+        ? `${startDateLabel} to ${endDateLabel}`
+        : startDateLabel;
+      const timeLabel = new Intl.DateTimeFormat('en-KE', {
+        hour: 'numeric', minute: '2-digit', timeZone
+      }).format(start);
+      const endTimeLabel = end && new Intl.DateTimeFormat('en-KE', {
+        hour: 'numeric', minute: '2-digit', timeZone
+      }).format(end);
+      addFact('Date', dateLabel);
+      addFact('Time', endTimeLabel ? `${timeLabel} – ${endTimeLabel}` : timeLabel);
+      addFact('Venue', event.location);
       const description = document.createElement('p');
+      description.className = 'event-detail-description';
       description.textContent = event.description;
       const image = document.createElement('img');
-      image.className = 'service-poster';
-      image.src = event.poster ? new URL(event.poster, window.valorEventsApiBase).href : 'images/events/concert-crowd.svg';
+      image.className = 'event-detail-poster';
+      image.src = event.poster
+        ? new URL(event.poster, window.valorEventsApiBase || window.location.href).href
+        : 'images/events/concert-crowd.svg';
       image.alt = `${event.title} poster`;
+      const posterWrap = document.createElement('div');
+      posterWrap.className = 'event-detail-poster-wrap';
+      posterWrap.appendChild(image);
       const tickets = document.createElement('ul');
-      tickets.className = 'service-ticket-list';
+      tickets.className = 'event-detail-ticket-list';
+      const priceLabel = document.createElement('div');
+      priceLabel.className = 'event-detail-price';
+      const priceCaption = document.createElement('span');
+      priceCaption.textContent = 'Tickets from';
+      if (event.tickets.length) {
+        const lowestPrice = Math.min(...event.tickets.map((ticket) => Number(ticket.price)));
+        const price = document.createElement('strong');
+        price.textContent = new Intl.NumberFormat('en-KE', {
+          style: 'currency',
+          currency: event.tickets[0].currency || 'KES',
+          maximumFractionDigits: 0
+        }).format(lowestPrice);
+        priceLabel.append(priceCaption, price);
+      }
       event.tickets.forEach((ticket) => {
         const item = document.createElement('li');
-        item.textContent = `${ticket.name}: KES ${Number(ticket.price).toLocaleString('en-KE')}`;
+        const name = document.createElement('span');
+        name.textContent = ticket.name;
+        const amount = document.createElement('strong');
+        amount.textContent = new Intl.NumberFormat('en-KE', {
+          style: 'currency',
+          currency: ticket.currency || 'KES',
+          maximumFractionDigits: 0
+        }).format(Number(ticket.price));
+        item.append(name, amount);
         tickets.appendChild(item);
       });
-      root.replaceChildren(image, heading, meta, description, tickets);
+      const bookLink = document.createElement('a');
+      bookLink.className = 'button button-primary event-detail-book';
+      bookLink.href = '#eventTicketForm';
+      bookLink.textContent = 'Book tickets';
+      const secureNote = document.createElement('p');
+      secureNote.className = 'event-detail-secure-note';
+      secureNote.textContent = 'Secure checkout · Tickets are confirmed after payment.';
+      copy.append(categories, heading, details, priceLabel, tickets);
+      if (slug) copy.append(bookLink, secureNote);
+      else {
+        const previewNote = document.createElement('p');
+        previewNote.className = 'event-detail-secure-note';
+        previewNote.textContent = 'This is a preview listing. Ticket checkout is available for events published through Valor Africa.';
+        copy.appendChild(previewNote);
+      }
+      copy.appendChild(description);
+      const layout = document.createElement('div');
+      layout.className = 'event-detail-layout';
+      layout.append(posterWrap, copy);
+      root.replaceChildren(layout);
+      if (!slug) return;
       const form = document.getElementById('eventTicketForm');
       const select = form.elements.ticketType;
       select.replaceChildren(...event.tickets.map((ticket) => new Option(
-        `${ticket.name} · KES ${Number(ticket.price).toLocaleString('en-KE')}`,
+        `${ticket.name} · ${new Intl.NumberFormat('en-KE', {
+          style: 'currency',
+          currency: ticket.currency || 'KES',
+          maximumFractionDigits: 0
+        }).format(Number(ticket.price))}`,
         ticket.name
       )));
       form.hidden = false;
