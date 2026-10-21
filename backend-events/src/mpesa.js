@@ -3,6 +3,7 @@ const crypto = require('crypto');
 function settings() {
   const environment = process.env.MPESA_ENV === 'production' ? 'production' : 'sandbox';
   return {
+    environment,
     baseUrl: environment === 'production'
       ? 'https://api.safaricom.co.ke'
       : 'https://sandbox.safaricom.co.ke',
@@ -24,6 +25,10 @@ function isConfigured() {
   } catch (error) {
     return false;
   }
+}
+
+function environment() {
+  return settings().environment;
 }
 
 async function requestJson(url, options) {
@@ -122,4 +127,4 @@ function equalId(left, right) {
   return first.length === second.length && crypto.timingSafeEqual(first, second);
 }
 
-module.exports = { equalId, initiateStkPush, isConfigured, queryStkPush };
+module.exports = { equalId, environment, initiateStkPush, isConfigured, queryStkPush };

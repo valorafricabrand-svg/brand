@@ -16,6 +16,7 @@ const request = require('supertest');
 const db = require('../src/db');
 const { createApp, initializeAdmin } = require('../src/app');
 const { login } = require('../src/auth');
+const mpesa = require('../src/mpesa');
 const { normalizeKenyanPhone } = require('../src/kenyan-phone');
 
 initializeAdmin();
@@ -35,6 +36,9 @@ const paymentGateway = {
   },
   isConfigured() {
     return this.enabled;
+  },
+  environment() {
+    return 'sandbox';
   },
   async queryStkPush(checkoutRequestId) {
     return { CheckoutRequestID: checkoutRequestId, ResultCode: '0' };
@@ -291,12 +295,26 @@ test('Kenyan M-Pesa phone formats normalize to Daraja international format', () 
   }
 });
 
+test('M-Pesa health diagnostics report the configured environment without credentials', () => {
+  const originalEnvironment = process.env.MPESA_ENV;
+  try {
+    process.env.MPESA_ENV = 'sandbox';
+    assert.equal(mpesa.environment(), 'sandbox');
+    process.env.MPESA_ENV = 'production';
+    assert.equal(mpesa.environment(), 'production');
+  } finally {
+    if (originalEnvironment === undefined) delete process.env.MPESA_ENV;
+    else process.env.MPESA_ENV = originalEnvironment;
+  }
+});
+
 test('admin dashboard origin can call its same-origin API', async () => {
   const response = await request(app).get('/api/health')
     .set('Host', '127.0.0.1')
     .set('Origin', 'http://127.0.0.1');
   assert.equal(response.status, 200);
   assert.equal(response.body.ticketEmailsConfigured, true);
+  assert.equal(response.body.mpesaEnvironment, 'sandbox');
   assert.equal(response.headers['access-control-allow-origin'], 'http://127.0.0.1');
   const orders = await request(app).get('/api/orders/admin').set(admin);
   assert.equal(orders.status, 200);

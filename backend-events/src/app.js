@@ -463,6 +463,7 @@ function createApp(options = {}) {
     res.json({
       ok: true,
       paymentsConfigured: paymentGateway.isConfigured(),
+      mpesaEnvironment: typeof paymentGateway.environment === 'function' ? paymentGateway.environment() : null,
       stripePaymentsConfigured: stripeGateway.isConfigured(),
       phoneLinkSmsConfigured: smsGateway.isConfigured(),
       emailAuthConfigured: emailGateway.isConfigured(),
