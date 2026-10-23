@@ -21,7 +21,7 @@ The public site is currently focused on discoverable events in Kenya. The home a
 
 Meta Pixel uses the configured ID in `scripts/privacy-consent.js` and loads only after a visitor accepts optional cookies. Public discovery, event, organizer, and marketing pages record page views, published event views, and clicks to start ticket checkout. The order-status page can send a Purchase event only after payment is confirmed and only with consent; it does not send a PageView. Account, wallet, ticket, and organizer-dashboard pages remain excluded. Purchase events are deduplicated in the browser by order ID. Visitors can reject or withdraw consent using the persistent Cookie settings control. Review `privacy-policy.html` against your actual data practices and legal obligations for the countries you serve.
 
-Signed-in buyers with confirmed or paid tickets can save one loved state, an optional 1–5 star rating, and a review of up to 1,200 characters per event from `my-tickets.html`. Feedback is private to the buyer's account; it is not published publicly.
+Signed-in buyers with confirmed or paid tickets can save one loved state, an optional 1–5 star rating, and a review of up to 1,200 characters per event from `my-tickets.html`. Feedback is private to the buyer's account; it is not published publicly. Older paid/confirmed tickets that predate account linking are also shown after the buyer verifies and links the same phone number used for the ticket order.
 
 ## Run locally
 

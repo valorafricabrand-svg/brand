@@ -648,7 +648,7 @@ test('free registrations require an account but do not require M-Pesa', async ()
       early_bird_ends=NULL,vip_price=NULL WHERE id=?
   `).run(submitted.body.id);
   paymentGateway.enabled = false;
-  const accountAuth = await ticketAccountAuth();
+  const accountAuth = createTestAccountAuth(`free-ticket-buyer-${crypto.randomUUID()}@example.com`);
   const anonymous = await request(app).post('/api/orders/tickets').send({
     eventId: submitted.body.id,
     ticketType: 'Regular',
@@ -701,6 +701,29 @@ test('free registrations require an account but do not require M-Pesa', async ()
   const unrelatedTickets = await request(app).get('/api/account/tickets')
     .set(unrelatedAuth);
   assert.equal(unrelatedTickets.body.tickets.some((ticket) => ticket.orderId === registration.body.orderId), false);
+
+  const accountId = db.prepare(`
+    SELECT account_id FROM account_sessions WHERE token_hash=?
+  `).get(crypto.createHash('sha256').update(accountAuth.Authorization.slice('Bearer '.length)).digest('hex')).account_id;
+  const legacyPhone = `2547${crypto.randomInt(10000000, 99999999)}`;
+  db.prepare('INSERT INTO wallets (id,phone,account_type,account_id) VALUES (?,?,?,?)')
+    .run(crypto.randomUUID(), legacyPhone, 'buyer', accountId);
+  const legacyOrderId = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO orders (
+      id,access_token_hash,order_type,event_id,buyer_name,phone,ticket_type,quantity,
+      amount_kes,payment_method,status
+    ) VALUES (?,?,'ticket',?,'Legacy Buyer',?,'Regular',1,1200,'mpesa','paid')
+  `).run(legacyOrderId, crypto.randomBytes(32).toString('hex'), submitted.body.id, legacyPhone);
+  db.prepare('INSERT INTO tickets (code,order_id,event_id,ticket_type) VALUES (?,?,?,?)')
+    .run(crypto.randomUUID(), legacyOrderId, submitted.body.id, 'Regular');
+  const restoredTickets = await request(app).get('/api/account/tickets').set(accountAuth);
+  assert.equal(restoredTickets.status, 200);
+  assert.ok(restoredTickets.body.tickets.some((ticket) => ticket.orderId === legacyOrderId));
+  const restoredFeedback = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
+    .set(accountAuth).send({ loved: true, rating: 4, review: 'Loved this older ticket.' });
+  assert.equal(restoredFeedback.status, 200);
+
   const verification = await request(app).get(`/api/tickets/${order.body.tickets[0].code}/verify`);
   assert.equal(verification.body.valid, true);
   paymentGateway.enabled = true;

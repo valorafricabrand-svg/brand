@@ -2007,10 +2007,16 @@ function createApp(options = {}) {
         FROM tickets t
         JOIN orders o ON o.id=t.order_id
         JOIN events e ON e.id=t.event_id
-        LEFT JOIN event_feedback f ON f.event_id=e.id AND f.account_id=o.account_id
-        WHERE o.account_id=? AND o.order_type='ticket' AND o.status IN ('paid','confirmed')
+        LEFT JOIN event_feedback f ON f.event_id=e.id AND f.account_id=?
+        WHERE (
+          o.account_id=? OR (
+            o.account_id IS NULL AND EXISTS (
+              SELECT 1 FROM wallets w WHERE w.account_id=? AND w.phone=o.phone
+            )
+          )
+        ) AND o.order_type='ticket' AND o.status IN ('paid','confirmed')
         ORDER BY e.starts_at ASC,t.created_at ASC
-      `).all(req.account.id);
+      `).all(req.account.id, req.account.id, req.account.id);
       res.json({
         tickets: await Promise.all(tickets.map(async (ticket) => ({
           ...ticket,
@@ -2039,9 +2045,16 @@ function createApp(options = {}) {
     }
     const purchasedEvent = db.prepare(`
       SELECT 1 FROM orders
-      WHERE account_id=? AND event_id=? AND order_type='ticket' AND status IN ('paid','confirmed')
+      WHERE event_id=? AND order_type='ticket' AND status IN ('paid','confirmed')
+        AND (
+          account_id=? OR (
+            account_id IS NULL AND EXISTS (
+              SELECT 1 FROM wallets w WHERE w.account_id=? AND w.phone=orders.phone
+            )
+          )
+        )
       LIMIT 1
-    `).get(req.account.id, req.params.eventId);
+    `).get(req.params.eventId, req.account.id, req.account.id);
     if (!purchasedEvent) return res.status(404).json({ error: 'You need a confirmed ticket for this event to leave feedback.' });
 
     try {
