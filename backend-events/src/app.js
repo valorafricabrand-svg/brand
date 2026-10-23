@@ -2002,10 +2002,12 @@ function createApp(options = {}) {
         SELECT t.code,t.ticket_type AS ticketType,t.created_at AS issuedAt,
           o.id AS orderId,o.status AS orderStatus,o.ticket_email_status AS ticketEmailStatus,o.quantity,
           e.id AS eventId,e.title AS eventTitle,e.slug AS eventSlug,e.starts_at AS startsAt,
-          e.venue_name AS venueName,e.city,e.timezone
+          e.venue_name AS venueName,e.city,e.timezone,
+          COALESCE(f.loved,0) AS loved,f.rating,f.review
         FROM tickets t
         JOIN orders o ON o.id=t.order_id
         JOIN events e ON e.id=t.event_id
+        LEFT JOIN event_feedback f ON f.event_id=e.id AND f.account_id=o.account_id
         WHERE o.account_id=? AND o.order_type='ticket' AND o.status IN ('paid','confirmed')
         ORDER BY e.starts_at ASC,t.created_at ASC
       `).all(req.account.id);
@@ -2018,6 +2020,38 @@ function createApp(options = {}) {
           )
         })))
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/account/events/:eventId/feedback', requireAccount, (req, res, next) => {
+    const { loved, rating, review } = req.body || {};
+    const normalizedRating = rating === undefined || rating === null || rating === '' ? null : rating;
+    if (typeof loved !== 'boolean') {
+      return res.status(400).json({ error: 'Choose whether you loved this event.' });
+    }
+    if (normalizedRating !== null && (!Number.isInteger(normalizedRating) || normalizedRating < 1 || normalizedRating > 5)) {
+      return res.status(400).json({ error: 'Rating must be a whole number from 1 to 5, or left blank.' });
+    }
+    if (typeof review !== 'string' || review.length > 1200) {
+      return res.status(400).json({ error: 'Review must be text of 1,200 characters or fewer.' });
+    }
+    const purchasedEvent = db.prepare(`
+      SELECT 1 FROM orders
+      WHERE account_id=? AND event_id=? AND order_type='ticket' AND status IN ('paid','confirmed')
+      LIMIT 1
+    `).get(req.account.id, req.params.eventId);
+    if (!purchasedEvent) return res.status(404).json({ error: 'You need a confirmed ticket for this event to leave feedback.' });
+
+    try {
+      db.prepare(`
+        INSERT INTO event_feedback (account_id,event_id,loved,rating,review,updated_at)
+        VALUES (?,?,?,?,?,datetime('now'))
+        ON CONFLICT(account_id,event_id) DO UPDATE SET
+          loved=excluded.loved,rating=excluded.rating,review=excluded.review,updated_at=datetime('now')
+      `).run(req.account.id, req.params.eventId, loved ? 1 : 0, normalizedRating, review.trim());
+      res.json({ loved, rating: normalizedRating, review: review.trim() });
     } catch (error) {
       next(error);
     }

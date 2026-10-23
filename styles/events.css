@@ -117,6 +117,21 @@ img { display: block; max-width: 100%; }
 .issued-ticket { display: grid; justify-items: center; gap: 8px; margin-top: 20px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; text-align: center; }
 .issued-ticket h2, .issued-ticket p { margin: 0; }
 .issued-ticket img { width: 220px; height: 220px; margin-top: 8px; image-rendering: pixelated; }
+.ticket-feedback { display: grid; justify-items: center; gap: 16px; width: min(100%, 520px); margin-top: 14px; padding-top: 16px; border-top: 1px solid var(--border); text-align: left; }
+.ticket-love { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 46px; padding: 8px 16px; border: 1px solid #d7dce3; border-radius: 999px; color: #344054; background: #fff; font: 700 15px Manrope, sans-serif; cursor: pointer; transition: color .18s ease, border-color .18s ease, transform .18s ease; }
+.ticket-love:hover { transform: translateY(-1px); border-color: #d92d45; }
+.ticket-love[aria-pressed="true"] { color: #c51636; border-color: #c51636; background: #fff4f5; }
+.ticket-love-icon { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: fill .18s ease, transform .18s ease; }
+.ticket-love[aria-pressed="true"] .ticket-love-icon { fill: #e11d48; stroke: #e11d48; transform: scale(1.08); }
+.ticket-review-form { display: grid; gap: 10px; width: 100%; }
+.ticket-review-form h3 { margin: 0; font: 800 18px Manrope, sans-serif; }
+.ticket-review-form label { display: grid; gap: 6px; color: #35445a; font-size: 13px; font-weight: 700; }
+.ticket-review-form select, .ticket-review-form textarea { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; color: var(--ink); background: #fff; font: inherit; }
+.ticket-review-form textarea { resize: vertical; }
+.ticket-review-form .button { justify-self: start; width: auto; }
+.ticket-review-form button:disabled, .ticket-love:disabled { cursor: wait; opacity: .6; }
+.ticket-feedback-status { min-height: 1.5em; color: #067647; }
+.ticket-feedback-status.error { color: #b42318; }
 .organizer-event-list { display: grid; gap: 14px; }
 .organizer-event-card { justify-items: start; margin-top: 0; text-align: left; }
 .organizer-event-archived { opacity: .72; }

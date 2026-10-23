@@ -253,6 +253,16 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS event_feedback (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    loved INTEGER NOT NULL DEFAULT 0 CHECK (loved IN (0,1)),
+    rating INTEGER CHECK (rating IS NULL OR rating BETWEEN 1 AND 5),
+    review TEXT NOT NULL DEFAULT '' CHECK (length(review) <= 1200),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (account_id,event_id)
+  );
+
   CREATE TABLE IF NOT EXISTS merchandise_products (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,

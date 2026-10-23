@@ -679,9 +679,27 @@ test('free registrations require an account but do not require M-Pesa', async ()
   const accountTicket = accountTickets.body.tickets.find((ticket) => ticket.orderId === registration.body.orderId);
   assert.ok(accountTicket);
   assert.equal(accountTicket.ticketEmailStatus, 'sent');
+  assert.equal(accountTicket.loved, 0);
   assert.match(accountTicket.qr, /^data:image\/png;base64,/);
+  const loved = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
+    .set(accountAuth).send({ loved: true, rating: 5, review: 'Really enjoyed this event.' });
+  assert.equal(loved.status, 200);
+  assert.deepEqual(loved.body, { loved: true, rating: 5, review: 'Really enjoyed this event.' });
+  const updatedTicket = await request(app).get('/api/account/tickets').set(accountAuth);
+  const reviewedTicket = updatedTicket.body.tickets.find((ticket) => ticket.orderId === registration.body.orderId);
+  assert.equal(reviewedTicket.loved, 1);
+  assert.equal(reviewedTicket.rating, 5);
+  assert.equal(reviewedTicket.review, 'Really enjoyed this event.');
+  const invalidReview = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
+    .set(accountAuth).send({ loved: true, rating: 6, review: '' });
+  assert.equal(invalidReview.status, 400);
+  const unrelatedAuth = createTestAccountAuth('unrelated-ticket-owner@example.com');
+  const unauthorizedReview = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
+    .set(unrelatedAuth)
+    .send({ loved: true, rating: null, review: '' });
+  assert.equal(unauthorizedReview.status, 404);
   const unrelatedTickets = await request(app).get('/api/account/tickets')
-    .set(createTestAccountAuth('unrelated-ticket-owner@example.com'));
+    .set(unrelatedAuth);
   assert.equal(unrelatedTickets.body.tickets.some((ticket) => ticket.orderId === registration.body.orderId), false);
   const verification = await request(app).get(`/api/tickets/${order.body.tickets[0].code}/verify`);
   assert.equal(verification.body.valid, true);
