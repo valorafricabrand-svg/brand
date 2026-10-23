@@ -34,6 +34,117 @@
       }
       root.classList.add('event-detail-card');
       document.title = `${event.title} | Valor Africa Events`;
+      const isPublishedEvent = Boolean(slug);
+      const eventDescription = event.description || `Event details and tickets for ${event.title} on Valor Africa Events.`;
+      const canonical = new URL('event.html', window.location.href);
+      if (isPublishedEvent) canonical.searchParams.set('slug', slug);
+      const setMeta = (selector, name, content) => {
+        let element = document.head.querySelector(selector);
+        if (!element) {
+          element = document.createElement('meta');
+          element.name = name;
+          document.head.appendChild(element);
+        }
+        element.content = content;
+      };
+      setMeta('meta[name="description"]', 'description', eventDescription);
+      setMeta('meta[name="robots"]', 'robots', isPublishedEvent ? 'index, follow' : 'noindex, nofollow');
+      if (isPublishedEvent) {
+        let canonicalLink = document.head.querySelector('link[rel="canonical"]');
+        if (!canonicalLink) {
+          canonicalLink = document.createElement('link');
+          canonicalLink.rel = 'canonical';
+          document.head.appendChild(canonicalLink);
+        }
+        canonicalLink.href = canonical.href;
+
+        const setOpenGraph = (property, content) => {
+          let element = document.head.querySelector(`meta[property="${property}"]`);
+          if (!element) {
+            element = document.createElement('meta');
+            element.setAttribute('property', property);
+            document.head.appendChild(element);
+          }
+          element.content = content;
+        };
+        setOpenGraph('og:type', 'event');
+        setOpenGraph('og:title', document.title);
+        setOpenGraph('og:description', eventDescription);
+        setOpenGraph('og:url', canonical.href);
+        if (event.poster) {
+          setOpenGraph('og:image', new URL(event.poster, window.valorEventsApiBase || window.location.href).href);
+        }
+
+        const physicalLocation = {
+          '@type': 'Place',
+          name: event.venueName || event.location,
+          address: {
+            '@type': 'PostalAddress',
+            streetAddress: event.venueName || event.location,
+            addressLocality: event.city || event.location,
+            addressCountry: 'KE'
+          }
+        };
+        const virtualLocation = {
+          '@type': 'VirtualLocation',
+          url: canonical.href
+        };
+        const format = String(event.format || 'Physical').toLowerCase();
+        const eventSchema = {
+          '@context': 'https://schema.org',
+          '@type': 'Event',
+          name: event.title,
+          description: eventDescription,
+          startDate: new Date(event.startsAt).toISOString(),
+          eventStatus: 'https://schema.org/EventScheduled',
+          eventAttendanceMode: format === 'virtual'
+            ? 'https://schema.org/OnlineEventAttendanceMode'
+            : format === 'hybrid'
+              ? 'https://schema.org/MixedEventAttendanceMode'
+              : 'https://schema.org/OfflineEventAttendanceMode',
+          location: format === 'virtual'
+            ? virtualLocation
+            : format === 'hybrid'
+              ? [physicalLocation, virtualLocation]
+              : physicalLocation,
+          organizer: {
+            '@type': 'Organization',
+            name: 'Valor Africa Events',
+            url: 'https://valorafrica.co.ke/'
+          },
+          url: canonical.href
+        };
+        if (event.endsAt) eventSchema.endDate = new Date(event.endsAt).toISOString();
+        eventSchema.image = event.poster
+          ? new URL(event.poster, window.valorEventsApiBase || window.location.href).href
+          : new URL('images/events/concert-crowd.svg', window.location.href).href;
+        if (Array.isArray(event.tickets) && event.tickets.length) {
+          eventSchema.offers = event.tickets.map((ticket) => ({
+            '@type': 'Offer',
+            name: ticket.name,
+            price: Number(ticket.price),
+            priceCurrency: ticket.currency || 'KES',
+            url: canonical.href
+          }));
+        }
+        let schema = document.getElementById('eventStructuredData');
+        if (!schema) {
+          schema = document.createElement('script');
+          schema.id = 'eventStructuredData';
+          schema.type = 'application/ld+json';
+          document.head.appendChild(schema);
+        }
+        schema.textContent = JSON.stringify(eventSchema);
+        window.valorMetaContent = {
+          content_name: event.title,
+          content_category: event.category || 'Event',
+          content_ids: [String(event.id)],
+          content_type: 'event'
+        };
+        if (typeof window.valorTrackMeta === 'function') {
+          window.valorTrackMeta('ViewContent', window.valorMetaContent);
+        }
+      }
       const heading = document.createElement('h1');
       heading.textContent = event.title;
       const copy = document.createElement('div');
@@ -123,6 +234,11 @@
       bookLink.className = 'button button-primary event-detail-book';
       bookLink.href = '#eventTicketForm';
       bookLink.textContent = 'Book tickets';
+      bookLink.addEventListener('click', () => {
+        if (typeof window.valorTrackMeta === 'function') {
+          window.valorTrackMeta('InitiateCheckout', window.valorMetaContent);
+        }
+      });
       const secureNote = document.createElement('p');
       secureNote.className = 'event-detail-secure-note';
       secureNote.textContent = 'Secure checkout · Tickets are confirmed after payment.';
@@ -230,6 +346,8 @@
         button.disabled = false;
       });
     } catch (error) {
+      const robots = document.head.querySelector('meta[name="robots"]');
+      if (robots) robots.content = 'noindex, nofollow';
       root.textContent = error.message;
       root.classList.add('error');
     }
@@ -322,6 +440,9 @@
       const accountToken = window.sessionStorage.getItem('valor-account-token');
       if (accountToken) headers.set('Authorization', `Bearer ${accountToken}`);
       const order = await api(`/api/orders/${encodeURIComponent(orderId)}`, { headers });
+      if (typeof window.valorTrackPurchase === 'function') {
+        window.valorTrackPurchase(order);
+      }
       const heading = document.createElement('h1');
       heading.textContent = order.status === 'paid' ? 'Payment confirmed' : order.status === 'confirmed' ? 'Free registration confirmed' : order.status === 'failed' ? 'Payment not completed' : order.status === 'review' ? 'Payment needs support review' : order.paymentMethod === 'stripe' ? 'Waiting for Stripe payment confirmation' : 'Waiting for M-Pesa payment';
       const details = document.createElement('p');
