@@ -714,7 +714,7 @@ test('free registrations require an account but do not require M-Pesa', async ()
       id,access_token_hash,order_type,event_id,buyer_name,phone,ticket_type,quantity,
       amount_kes,payment_method,status
     ) VALUES (?,?,'ticket',?,'Legacy Buyer',?,'Regular',1,1200,'mpesa','paid')
-  `).run(legacyOrderId, crypto.randomBytes(32).toString('hex'), submitted.body.id, legacyPhone);
+  `).run(legacyOrderId, crypto.randomBytes(32).toString('hex'), submitted.body.id, `0${legacyPhone.slice(-9)}`);
   db.prepare('INSERT INTO tickets (code,order_id,event_id,ticket_type) VALUES (?,?,?,?)')
     .run(crypto.randomUUID(), legacyOrderId, submitted.body.id, 'Regular');
   const restoredTickets = await request(app).get('/api/account/tickets').set(accountAuth);

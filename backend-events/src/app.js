@@ -2011,7 +2011,9 @@ function createApp(options = {}) {
         WHERE (
           o.account_id=? OR (
             o.account_id IS NULL AND EXISTS (
-              SELECT 1 FROM wallets w WHERE w.account_id=? AND w.phone=o.phone
+              SELECT 1 FROM wallets w WHERE w.account_id=?
+                AND substr(replace(replace(replace(replace(replace(o.phone,'+',''),' ',''),'-',''),'(',''),')',''),-9)
+                  = substr(w.phone,-9)
             )
           )
         ) AND o.order_type='ticket' AND o.status IN ('paid','confirmed')
@@ -2049,7 +2051,9 @@ function createApp(options = {}) {
         AND (
           account_id=? OR (
             account_id IS NULL AND EXISTS (
-              SELECT 1 FROM wallets w WHERE w.account_id=? AND w.phone=orders.phone
+              SELECT 1 FROM wallets w WHERE w.account_id=?
+                AND substr(replace(replace(replace(replace(replace(orders.phone,'+',''),' ',''),'-',''),'(',''),')',''),-9)
+                  = substr(w.phone,-9)
             )
           )
         )
