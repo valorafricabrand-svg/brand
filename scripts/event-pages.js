@@ -9,6 +9,125 @@
     element.classList.add('error');
   }
 
+  function createTicketFeedback(ticket) {
+    const feedback = document.createElement('section');
+    feedback.className = 'ticket-feedback';
+    feedback.setAttribute('aria-label', `Feedback for ${ticket.eventTitle}`);
+
+    const loveButton = document.createElement('button');
+    loveButton.type = 'button';
+    loveButton.className = 'ticket-love';
+    loveButton.setAttribute('aria-pressed', String(Boolean(ticket.loved)));
+    loveButton.setAttribute('aria-label', ticket.loved ? 'Remove love for this event' : 'Show that you loved this event');
+    const heart = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    heart.setAttribute('viewBox', '0 0 24 24');
+    heart.setAttribute('aria-hidden', 'true');
+    heart.classList.add('ticket-love-icon');
+    const heartPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    heartPath.setAttribute('d', 'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z');
+    heart.appendChild(heartPath);
+    const loveText = document.createElement('span');
+    loveText.textContent = ticket.loved ? 'You loved this event' : 'I loved this event';
+    loveButton.append(heart, loveText);
+
+    const reviewForm = document.createElement('form');
+    reviewForm.className = 'ticket-review-form';
+    const reviewHeading = document.createElement('h3');
+    reviewHeading.textContent = 'Leave a review';
+    const ratingLabel = document.createElement('label');
+    ratingLabel.textContent = 'Rating (optional)';
+    const ratingSelect = document.createElement('select');
+    ratingSelect.name = 'rating';
+    ratingSelect.setAttribute('aria-label', 'Event rating');
+    ratingSelect.add(new Option('Choose a rating', ''));
+    for (let rating = 5; rating >= 1; rating -= 1) {
+      ratingSelect.add(new Option(`${rating} ${rating === 1 ? 'star' : 'stars'}`, String(rating)));
+    }
+    if (ticket.rating) ratingSelect.value = String(ticket.rating);
+    ratingLabel.appendChild(ratingSelect);
+
+    const reviewLabel = document.createElement('label');
+    reviewLabel.textContent = 'Your review (optional)';
+    const reviewInput = document.createElement('textarea');
+    reviewInput.name = 'review';
+    reviewInput.maxLength = 1200;
+    reviewInput.rows = 3;
+    reviewInput.placeholder = 'What did you think of the event?';
+    reviewInput.value = ticket.review || '';
+    reviewLabel.appendChild(reviewInput);
+
+    const saveButton = document.createElement('button');
+    saveButton.type = 'submit';
+    saveButton.className = 'button button-primary';
+    saveButton.textContent = 'Save feedback';
+    const status = document.createElement('p');
+    status.className = 'ticket-feedback-status';
+    status.setAttribute('role', 'status');
+    reviewForm.append(reviewHeading, ratingLabel, reviewLabel, saveButton, status);
+
+    const saveFeedback = async (loved, successMessage) => {
+      loveButton.disabled = true;
+      saveButton.disabled = true;
+      status.classList.remove('error');
+      status.textContent = '';
+      try {
+        const saved = await api(`/api/account/events/${encodeURIComponent(ticket.eventId)}/feedback`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${window.sessionStorage.getItem('valor-account-token')}` },
+          body: JSON.stringify({
+            loved,
+            rating: ratingSelect.value ? Number(ratingSelect.value) : null,
+            review: reviewInput.value
+          })
+        });
+        loveButton.setAttribute('aria-pressed', String(saved.loved));
+        loveButton.setAttribute('aria-label', saved.loved ? 'Remove love for this event' : 'Show that you loved this event');
+        loveText.textContent = saved.loved ? 'You loved this event' : 'I loved this event';
+        status.textContent = successMessage(saved);
+      } catch (error) {
+        status.textContent = error.message;
+        status.classList.add('error');
+      } finally {
+        loveButton.disabled = false;
+        saveButton.disabled = false;
+      }
+    };
+
+    loveButton.addEventListener('click', () => {
+      const loved = loveButton.getAttribute('aria-pressed') !== 'true';
+      saveFeedback(loved, (saved) => saved.loved ? 'Thanks for sharing the love!' : 'Your love was removed.');
+    });
+    reviewForm.addEventListener('submit', (submitEvent) => {
+      submitEvent.preventDefault();
+      saveFeedback(loveButton.getAttribute('aria-pressed') === 'true', () => 'Your feedback has been saved.');
+    });
+    feedback.append(loveButton, reviewForm);
+    return feedback;
+  }
+
+  function loadEventFeedback(event) {
+    const token = window.sessionStorage.getItem('valor-account-token');
+    if (!token || !event.id) return;
+
+    const root = document.getElementById('eventDetails');
+    const status = document.createElement('p');
+    status.className = 'ticket-feedback-status';
+    status.setAttribute('role', 'status');
+    status.textContent = 'Checking ticket eligibility for event feedback…';
+    root.appendChild(status);
+
+    api('/api/account/tickets', {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then((result) => {
+      status.remove();
+      const ticket = result.tickets.find((entry) => String(entry.eventId) === String(event.id));
+      if (ticket) root.appendChild(createTicketFeedback(ticket));
+    }).catch((error) => {
+      status.textContent = `Could not verify ticket eligibility for event feedback: ${error.message}`;
+      status.classList.add('error');
+    });
+  }
+
   async function loadEventDetails() {
     const root = document.getElementById('eventDetails');
     if (!root) return;
@@ -255,6 +374,7 @@
       layout.className = 'event-detail-layout';
       layout.append(posterWrap, copy);
       root.replaceChildren(layout);
+      if (slug) loadEventFeedback(event);
       if (!slug) return;
       const form = document.getElementById('eventTicketForm');
       const select = form.elements.ticketType;

@@ -7,7 +7,7 @@ Valor Africa is an event discovery, publishing, ticketing, and event-promotion p
 - `index.html` — event discovery, approved event listings, and the paid Valor Ads carousel.
 - `events.html` — searchable and filterable event listings with M-Pesa and wallet checkout.
 - `account.html` — Google/email account sign-in, account session management, and sign-out. Sign-in links return users to the page they came from; the account session is maintained for the current browser tab.
-- `my-tickets.html` and `organizer-dashboard.html` — account-linked ticket QR passes with event love/review feedback, organizer sales summaries, and event editing/removal when there are no active ticket orders or promotions.
+- `my-tickets.html`, `event.html`, and `organizer-dashboard.html` — account-linked ticket QR passes with event love/review feedback on ticket and event pages, organizer sales summaries, and event editing/removal when there are no active ticket orders or promotions.
 - `wallet.html` — one-time phone-wallet linking, M-Pesa deposits, and transaction history.
 - `host.html` — organizer event submission and local draft saving.
 - `partnership.html` — creator applications and tracking, plus signed-in organizer and sponsor inquiries with follow-up status alongside investor information.
@@ -21,7 +21,7 @@ The public site is currently focused on discoverable events in Kenya. The home a
 
 Meta Pixel uses the configured ID in `scripts/privacy-consent.js` and loads only after a visitor accepts optional cookies. Public discovery, event, organizer, and marketing pages record page views, published event views, and clicks to start ticket checkout. The order-status page can send a Purchase event only after payment is confirmed and only with consent; it does not send a PageView. Account, wallet, ticket, and organizer-dashboard pages remain excluded. Purchase events are deduplicated in the browser by order ID. Visitors can reject or withdraw consent using the persistent Cookie settings control. Review `privacy-policy.html` against your actual data practices and legal obligations for the countries you serve.
 
-Signed-in buyers with confirmed or paid tickets can save one loved state, an optional 1–5 star rating, and a review of up to 1,200 characters per event from `my-tickets.html`. Feedback is private to the buyer's account; it is not published publicly. Older paid/confirmed tickets that predate account linking are also shown after the buyer verifies and links the same phone number used for the ticket order.
+Signed-in buyers with confirmed or paid tickets can save one loved state, an optional 1–5 star rating, and a review of up to 1,200 characters per event from `my-tickets.html` or that event's published detail page. Feedback is private to the buyer's account; it is not published publicly. Older paid/confirmed tickets that predate account linking are also shown after the buyer verifies and links the same phone number used for the ticket order.
 
 ## Run locally
 
