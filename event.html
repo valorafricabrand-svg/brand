@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles/events.css?v=affiliate-referrals-1">
   <link rel="stylesheet" href="styles/privacy-consent.css">
   <script src="scripts/events-api.js?v=account-navigation-1" defer></script>
-  <script src="scripts/event-pages.js?v=ticket-feedback-1" defer></script>
+  <script src="scripts/event-pages.js?v=nowpayments-checkout-1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
 </head>
 <body>
@@ -24,8 +24,8 @@
       <label>Ticket type<select name="ticketType" required></select></label>
       <label>Quantity<input name="quantity" type="number" min="1" max="10" value="1" required></label>
       <label>Your name<input name="buyerName" maxlength="120" autocomplete="name" required></label>
-      <label>Payment method<select name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="stripe" disabled>Card (Stripe Checkout; coming soon)</option><option value="paypal" disabled>PayPal (coming soon)</option><option value="crypto" disabled>Crypto (coming soon)</option></select></label>
-      <p class="checkout-note">PayPal and crypto payments are coming soon; provider APIs are not connected yet.</p>
+      <label>Payment method<select name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="stripe" disabled>Card (Stripe Checkout; coming soon)</option><option value="nowpayments" disabled>Cryptocurrency (NOWPayments; coming soon)</option></select></label>
+      <p class="checkout-note" id="nowpaymentsPriceNote" hidden></p>
       <label>Safaricom M-Pesa number<input name="phone" type="tel" autocomplete="tel" placeholder="07…, 011…, or +254…" required></label>
       <p class="checkout-note">Sign in to your account to get tickets. <a href="account.html">Open your account</a> or <a href="wallet.html">wallet</a>.</p>
       <p class="checkout-note">By continuing, you agree to our <a href="refund-policy.html">Refund Policy</a>.</p>

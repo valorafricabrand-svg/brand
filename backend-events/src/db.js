@@ -330,6 +330,12 @@ if (!orderColumns.some((column) => column.name === 'stripe_session_id')) {
 if (!orderColumns.some((column) => column.name === 'stripe_session_expires_at')) {
   db.exec('ALTER TABLE orders ADD COLUMN stripe_session_expires_at TEXT');
 }
+if (!orderColumns.some((column) => column.name === 'nowpayments_invoice_id')) {
+  db.exec('ALTER TABLE orders ADD COLUMN nowpayments_invoice_id TEXT');
+}
+if (!orderColumns.some((column) => column.name === 'nowpayments_price_amount_usd')) {
+  db.exec('ALTER TABLE orders ADD COLUMN nowpayments_price_amount_usd REAL');
+}
 if (!orderColumns.some((column) => column.name === 'ticket_email_status')) {
   db.exec("ALTER TABLE orders ADD COLUMN ticket_email_status TEXT NOT NULL DEFAULT 'not_applicable'");
 }
@@ -354,6 +360,7 @@ if (!orderColumns.some((column) => column.name === 'affiliate_referral_token_has
 db.exec('CREATE INDEX IF NOT EXISTS orders_affiliate_partner ON orders(affiliate_partner_id, status, paid_at)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS wallets_account ON wallets(account_id)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_session ON orders(stripe_session_id) WHERE stripe_session_id IS NOT NULL');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS orders_nowpayments_invoice ON orders(nowpayments_invoice_id) WHERE nowpayments_invoice_id IS NOT NULL');
 db.exec('DROP TABLE IF EXISTS wallet_sessions');
 
 const walletTransactionSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='wallet_transactions'").get().sql;

@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="styles/events.css?v=affiliate-referrals-1">
   <link rel="stylesheet" href="styles/privacy-consent.css">
   <script src="scripts/events-api.js?v=account-navigation-1" defer></script>
-  <script src="scripts/events.js?v=affiliate-referrals-1" defer></script>
+  <script src="scripts/events.js?v=nowpayments-checkout-1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
 </head>
 <body>
@@ -82,8 +82,9 @@
         <label for="ticketQuantity">Number of tickets</label><input id="ticketQuantity" name="quantity" type="number" min="1" max="10" value="1" required>
         <label for="buyerName">Your name</label><input id="buyerName" name="name" autocomplete="name" required>
         <label for="ticketPaymentMethod">Payment method</label><select id="ticketPaymentMethod" name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="stripe" disabled>Card (Stripe Checkout; coming soon)</option><option value="paypal" disabled>PayPal (coming soon)</option><option value="crypto" disabled>Crypto (coming soon)</option></select>
-        <p class="checkout-note">PayPal and crypto payments are coming soon; provider APIs are not connected yet.</p>
+        <p class="checkout-note">Payment options are available when configured for the event checkout.</p>
         <label for="buyerPhone">WhatsApp number</label><input id="buyerPhone" name="phone" type="tel" autocomplete="tel" required>
+        <p class="checkout-note" id="cryptoPriceEstimate" hidden></p>
         <p class="checkout-note" id="ticketPaymentNote">You will receive an M-Pesa payment prompt. Your ticket is issued only after payment is confirmed.</p>
         <p class="checkout-note">Sign in to your account to get tickets. <a href="account.html">Open your account</a> or <a href="wallet.html">wallet</a>.</p>
         <p class="checkout-note">By continuing, you agree to our <a href="refund-policy.html">Refund Policy</a>.</p>

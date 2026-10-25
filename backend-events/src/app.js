@@ -10,6 +10,7 @@ const db = require('./db');
 const { createLoginLimiter, initializeAdmin, login, requireAdmin } = require('./auth');
 const mpesa = require('./mpesa');
 const stripe = require('./stripe');
+const nowpayments = require('./nowpayments');
 const walletSms = require('./wallet-sms');
 const accountEmail = require('./account-email');
 const { normalizeKenyanPhone } = require('./kenyan-phone');
@@ -172,6 +173,7 @@ function safeOrderAccess(order, suppliedToken) {
 function createApp(options = {}) {
   const paymentGateway = options.mpesa || mpesa;
   const stripeGateway = options.stripe || stripe;
+  const nowpaymentsGateway = options.nowpayments || nowpayments;
   const smsGateway = options.sms || walletSms;
   const emailGateway = options.email || accountEmail;
   const ticketEmailGateway = options.ticketEmail || require('./ticket-email');
@@ -290,6 +292,88 @@ function createApp(options = {}) {
     }
   });
   app.use(express.json({ limit: '64kb' }));
+  app.post('/api/nowpayments/ipn', (req, res, next) => {
+    if (!nowpaymentsGateway.isConfigured()) {
+      return res.status(503).json({ error: 'NOWPayments notifications are not configured.' });
+    }
+    const payload = req.body;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+        !nowpaymentsGateway.verifyIpn(payload, req.get('x-nowpayments-sig'))) {
+      return res.status(400).json({ error: 'Invalid NOWPayments notification signature.' });
+    }
+    if (typeof payload.order_id !== 'string' || !['string','number'].includes(typeof payload.invoice_id) ||
+        typeof payload.payment_status !== 'string') {
+      return res.status(400).json({ error: 'Invalid NOWPayments notification payload.' });
+    }
+    try {
+      const order = db.prepare(`
+        SELECT * FROM orders
+        WHERE id=? AND order_type='ticket' AND payment_method='nowpayments'
+      `).get(payload.order_id);
+      if (!order || order.nowpayments_invoice_id !== String(payload.invoice_id)) {
+        return res.json({ received: true });
+      }
+      const receivedPrice = Number(payload.price_amount);
+      if (!Number.isFinite(receivedPrice) ||
+          Math.round(receivedPrice * 100) !== Math.round(order.nowpayments_price_amount_usd * 100) ||
+          String(payload.price_currency).toLowerCase() !== 'usd') {
+        db.prepare(`
+          UPDATE orders SET status='review',result_description=?
+          WHERE id=? AND status='pending'
+        `).run('NOWPayments invoice total did not match this order; support review is required.', order.id);
+        return res.json({ received: true });
+      }
+      if (['failed','expired'].includes(payload.payment_status)) {
+        db.prepare(`
+          UPDATE orders SET status='failed',result_description=?
+          WHERE id=? AND status='pending'
+        `).run('NOWPayments payment was not completed.', order.id);
+        return res.json({ received: true });
+      }
+      if (payload.payment_status !== 'finished') {
+        if (payload.payment_status === 'partially_paid') {
+          db.prepare(`
+            UPDATE orders SET result_description=?
+            WHERE id=? AND status='pending'
+          `).run('NOWPayments has received a partial payment. Complete the invoice payment to receive tickets.', order.id);
+        }
+        return res.json({ received: true });
+      }
+      db.transaction(() => {
+        const current = db.prepare("SELECT * FROM orders WHERE id=? AND status='pending'").get(order.id);
+        if (!current) return;
+        if (current.event_id) {
+          const eventRow = db.prepare('SELECT capacity FROM events WHERE id=?').get(current.event_id);
+          if (eventRow && eventRow.capacity !== null) {
+            const sold = db.prepare(`
+              SELECT COALESCE(SUM(quantity),0) AS total FROM orders
+              WHERE event_id=? AND order_type='ticket' AND status IN ('paid','confirmed')
+            `).get(current.event_id).total;
+            if (sold + current.quantity > eventRow.capacity) {
+              db.prepare("UPDATE orders SET status='review',result_description=? WHERE id=?")
+                .run('Crypto payment received but ticket capacity was reached; contact support for a refund.', current.id);
+              return;
+            }
+          }
+        }
+        db.prepare("UPDATE orders SET status='paid',result_description=?,paid_at=datetime('now') WHERE id=?")
+          .run('Payment confirmed by NOWPayments.', current.id);
+        const insertTicket = db.prepare('INSERT INTO tickets (code,order_id,event_id,ticket_type) VALUES (?,?,?,?)');
+        for (let ticket = 0; ticket < current.quantity; ticket += 1) {
+          insertTicket.run(crypto.randomUUID(), current.id, current.event_id, current.ticket_type);
+        }
+      })();
+      const updated = db.prepare('SELECT status FROM orders WHERE id=?').get(order.id);
+      if (updated && updated.status === 'paid') {
+        deliverTicketEmail(order.id).catch((error) => {
+          console.error(`Could not process ticket confirmation email for order ${order.id}:`, error);
+        });
+      }
+      return res.json({ received: true });
+    } catch (error) {
+      return next(error);
+    }
+  });
   app.use('/uploads/events', express.static(uploadDirectory, {
     fallthrough: false,
     maxAge: '1d',
@@ -465,6 +549,10 @@ function createApp(options = {}) {
       paymentsConfigured: paymentGateway.isConfigured(),
       mpesaEnvironment: typeof paymentGateway.environment === 'function' ? paymentGateway.environment() : null,
       stripePaymentsConfigured: stripeGateway.isConfigured(),
+      nowpaymentsConfigured: nowpaymentsGateway.isConfigured(),
+      nowpaymentsKesPerUsd: typeof nowpaymentsGateway.kesPerUsdRate === 'function'
+        ? nowpaymentsGateway.kesPerUsdRate()
+        : null,
       phoneLinkSmsConfigured: smsGateway.isConfigured(),
       emailAuthConfigured: emailGateway.isConfigured(),
       ticketEmailsConfigured: ticketEmailGateway.isConfigured(),
@@ -1737,6 +1825,7 @@ function createApp(options = {}) {
           !Number.isSafeInteger(session.expiresAt)) {
         throw new Error('Stripe did not return a valid checkout session.');
       }
+
       db.prepare(`
         UPDATE orders SET stripe_session_id=?,stripe_session_expires_at=? WHERE id=? AND status='pending'
       `).run(session.id, new Date(session.expiresAt * 1000).toISOString(), order.id);
@@ -1753,6 +1842,42 @@ function createApp(options = {}) {
         .run('Could not start Stripe Checkout.', order.id);
       console.error('Stripe Checkout could not be started:', error.message);
       return res.status(502).json({ error: 'Stripe could not start checkout. Please try again shortly.' });
+    }
+  }
+
+  async function startNowPaymentsCheckout(res, order, amountKes, event) {
+    try {
+      const invoice = await nowpaymentsGateway.createInvoice({
+        id: order.id,
+        amountKes,
+        quantity: order.quantity,
+        ticketType: order.ticketType,
+        eventTitle: event.title,
+        eventSlug: event.slug,
+        publicSiteUrl
+      });
+      if (!invoice || typeof invoice.id !== 'string' || typeof invoice.url !== 'string' ||
+          !Number.isFinite(invoice.priceAmountUsd) || invoice.priceAmountUsd <= 0) {
+        throw new Error('NOWPayments did not return a valid invoice.');
+      }
+      db.prepare(`
+        UPDATE orders SET nowpayments_invoice_id=?,nowpayments_price_amount_usd=?
+        WHERE id=? AND status='pending'
+      `).run(invoice.id, invoice.priceAmountUsd, order.id);
+      return res.status(201).json({
+        orderId: order.id,
+        accessToken: order.accessToken,
+        status: 'pending',
+        paymentMethod: 'nowpayments',
+        checkoutUrl: invoice.url,
+        cryptoPriceAmountUsd: invoice.priceAmountUsd,
+        message: 'Continue to NOWPayments to complete your crypto payment.'
+      });
+    } catch (error) {
+      db.prepare("UPDATE orders SET status='failed',result_description=? WHERE id=? AND status='pending'")
+        .run('Could not start NOWPayments checkout.', order.id);
+      console.error('NOWPayments invoice could not be created:', error.message);
+      return res.status(502).json({ error: 'NOWPayments could not start checkout. Please try again shortly.' });
     }
   }
 
@@ -1813,13 +1938,17 @@ function createApp(options = {}) {
     try {
       const { eventId, ticketType, buyerName, phone: inputPhone, quantity = 1 } = req.body || {};
       const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
-      if (!['mpesa','wallet','stripe'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa, Valor Wallet, or Stripe Checkout as the payment method.' });
+      if (!['mpesa','wallet','stripe','nowpayments'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa, Valor Wallet, Stripe Checkout, or NOWPayments as the payment method.' });
       req.wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
       if (paymentMethod === 'wallet' && !req.wallet) return res.status(409).json({ error: 'Verify and link your phone number before paying from your wallet.' });
-      const phone = paymentMethod === 'wallet' ? req.wallet.phone : normalizePhone(inputPhone);
+      const phone = paymentMethod === 'wallet'
+        ? req.wallet.phone
+        : paymentMethod === 'nowpayments' ? '' : normalizePhone(inputPhone);
       if (typeof eventId !== 'string' || !eventId || typeof ticketType !== 'string' || !ticketType) return res.status(400).json({ error: 'Choose a published event and ticket type.' });
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the ticket buyer’s name.' });
-      if (!phone) return res.status(400).json({ error: 'Enter a Kenyan Safaricom M-Pesa number: 0712345678, 0112345678, or +254712345678.' });
+      if (!phone && paymentMethod !== 'nowpayments') {
+        return res.status(400).json({ error: 'Enter a Kenyan Safaricom M-Pesa number: 0712345678, 0112345678, or +254712345678.' });
+      }
       if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 10) return res.status(400).json({ error: 'Ticket quantity must be 1–10.' });
       const event = db.prepare("SELECT * FROM events WHERE id = ? AND status = 'approved' AND deleted_at IS NULL").get(eventId);
       if (!event) return res.status(404).json({ error: 'This event is not available for ticket sales.' });
@@ -1833,6 +1962,9 @@ function createApp(options = {}) {
       if (price > 0 && paymentMethod === 'mpesa' && paymentsUnavailable(res)) return;
       if (price > 0 && paymentMethod === 'stripe' && !stripeGateway.isConfigured()) {
         return res.status(503).json({ error: 'Stripe Checkout is not enabled yet. Valor Africa must configure its Stripe keys and webhook secret.' });
+      }
+      if (price > 0 && paymentMethod === 'nowpayments' && !nowpaymentsGateway.isConfigured()) {
+        return res.status(503).json({ error: 'NOWPayments checkout is not enabled yet. Valor Africa must configure its API key, IPN secret, callback URL, and KES-to-USD rate.' });
       }
       const referralToken = typeof req.body?.affiliateReferralToken === 'string' &&
         req.body.affiliateReferralToken.length <= 100
@@ -1924,6 +2056,9 @@ function createApp(options = {}) {
       }
       if (paymentMethod === 'stripe') {
         return startStripeCheckout(res, order, price * quantity, price, event, req.account.email);
+      }
+      if (paymentMethod === 'nowpayments') {
+        return startNowPaymentsCheckout(res, order, price * quantity, event);
       }
       return startCheckout(res, order, price * quantity, phone);
     } catch (error) {
@@ -2098,6 +2233,7 @@ function createApp(options = {}) {
         quantity: order.quantity,
         ticketType: order.ticket_type,
         paymentMethod: order.payment_method,
+        cryptoPriceAmountUsd: order.nowpayments_price_amount_usd,
         receipt: order.status === 'paid' ? order.mpesa_receipt : '',
         resultDescription: order.result_description,
         createdAt: order.created_at

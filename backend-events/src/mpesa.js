@@ -82,7 +82,7 @@ async function initiateStkPush(order) {
       BusinessShortCode: config.shortcode,
       Password: password(config, timestamp),
       Timestamp: timestamp,
-      TransactionType: 'CustomerPayBillOnline',
+      TransactionType: 'CustomerBuyGoodsOnline',
       Amount: order.amountKes,
       PartyA: order.phone,
       PartyB: config.shortcode,

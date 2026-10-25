@@ -389,13 +389,24 @@
       form.hidden = false;
       const health = await api('/api/health');
       const stripePaymentsConfigured = Boolean(health.stripePaymentsConfigured);
+      const nowpaymentsConfigured = Boolean(health.nowpaymentsConfigured);
+      const nowpaymentsKesPerUsd = Number(health.nowpaymentsKesPerUsd);
       const stripeOption = form.elements.paymentMethod.querySelector('option[value="stripe"]');
       stripeOption.disabled = !stripePaymentsConfigured;
       stripeOption.textContent = stripePaymentsConfigured ? 'Card (Stripe Checkout)' : 'Card (Stripe Checkout; coming soon)';
-      const anyCardPaymentConfigured = Boolean(health.paymentsConfigured || stripePaymentsConfigured);
+      const nowpaymentsOption = form.elements.paymentMethod.querySelector('option[value="nowpayments"]');
+      nowpaymentsOption.disabled = !nowpaymentsConfigured;
+      nowpaymentsOption.textContent = nowpaymentsConfigured
+        ? 'Cryptocurrency (NOWPayments)'
+        : 'Cryptocurrency (NOWPayments; coming soon)';
+      if (!health.paymentsConfigured && nowpaymentsConfigured &&
+          form.elements.paymentMethod.value === 'mpesa') {
+        form.elements.paymentMethod.value = 'nowpayments';
+      }
+      const anyOnlinePaymentConfigured = Boolean(health.paymentsConfigured || stripePaymentsConfigured || nowpaymentsConfigured);
       const hasFreeTickets = event.tickets.some((ticket) => Number(ticket.price) === 0);
       const accountToken = window.sessionStorage.getItem('valor-account-token');
-      if (!anyCardPaymentConfigured) {
+      if (!anyOnlinePaymentConfigured) {
         event.tickets.forEach((ticket) => {
           if (Number(ticket.price) > 0 && !accountToken) {
             const option = Array.from(select.options).find((entry) => entry.value === ticket.name);
@@ -405,25 +416,53 @@
         const freeTicket = event.tickets.find((ticket) => Number(ticket.price) === 0);
         if (freeTicket) select.value = freeTicket.name;
       }
-      if (!anyCardPaymentConfigured && !hasFreeTickets && !accountToken) {
+      if (!anyOnlinePaymentConfigured && !hasFreeTickets && !accountToken) {
         const button = form.querySelector('[type=submit]');
         button.disabled = true;
         showError(document.getElementById('pageFeedback'), 'Paid checkout is not available yet. Please try again later or use a funded wallet after signing in.');
-      } else if (!anyCardPaymentConfigured) {
-        document.getElementById('pageFeedback').textContent = 'M-Pesa and Stripe are unavailable; free registration and funded Valor Wallet payments remain available.';
+      } else if (!anyOnlinePaymentConfigured) {
+        document.getElementById('pageFeedback').textContent = 'M-Pesa, Stripe, and NOWPayments are unavailable; free registration and funded Valor Wallet payments remain available.';
       }
       const paymentMethod = form.elements.paymentMethod;
       const phoneInput = form.elements.phone;
+      const cryptoPriceNote = document.getElementById('nowpaymentsPriceNote');
+      const updateCryptoPriceNote = () => {
+        if (paymentMethod.value !== 'nowpayments' || !nowpaymentsConfigured ||
+            !Number.isFinite(nowpaymentsKesPerUsd) || nowpaymentsKesPerUsd <= 0) {
+          cryptoPriceNote.hidden = true;
+          cryptoPriceNote.textContent = '';
+          return;
+        }
+        const ticket = event.tickets.find((entry) => entry.name === select.value);
+        const quantity = Number(form.elements.quantity.value);
+        if (!ticket || !Number.isSafeInteger(quantity) || quantity < 1) {
+          cryptoPriceNote.hidden = true;
+          return;
+        }
+        const amountKes = Number(ticket.price) * quantity;
+        const amountUsd = Math.round((amountKes / nowpaymentsKesPerUsd) * 100) / 100;
+        cryptoPriceNote.textContent = `Crypto invoice: KES ${amountKes.toLocaleString('en-KE')} ≈ USD ${amountUsd.toFixed(2)} (1 USD = KES ${nowpaymentsKesPerUsd.toLocaleString('en-KE')}). The USD amount is fixed when checkout starts.`;
+        cryptoPriceNote.hidden = false;
+      };
       const updatePaymentFields = () => {
         const usesWallet = paymentMethod.value === 'wallet';
         const usesStripe = paymentMethod.value === 'stripe';
-        phoneInput.required = !usesWallet;
-        phoneInput.disabled = usesWallet;
+        const usesNowpayments = paymentMethod.value === 'nowpayments';
+        phoneInput.required = !usesWallet && !usesNowpayments;
+        phoneInput.disabled = usesWallet || usesNowpayments;
         const phoneLabel = phoneInput.closest('label');
-        if (phoneLabel) phoneLabel.firstChild.textContent = usesWallet ? 'M-Pesa number (not needed for wallet)' : usesStripe ? 'Contact phone number' : 'Safaricom M-Pesa number';
-        form.querySelector('[type=submit]').textContent = `Pay with ${usesWallet ? 'Valor Wallet' : usesStripe ? 'Stripe Checkout' : 'M-Pesa'}`;
+        if (phoneLabel) {
+          phoneLabel.hidden = usesWallet || usesNowpayments;
+          phoneLabel.firstChild.textContent = usesStripe ? 'Contact phone number' : 'Safaricom M-Pesa number';
+        }
+        form.querySelector('[type=submit]').textContent = `Pay with ${usesWallet
+          ? 'Valor Wallet'
+          : usesStripe ? 'Stripe Checkout' : usesNowpayments ? 'NOWPayments' : 'M-Pesa'}`;
+        updateCryptoPriceNote();
       };
       paymentMethod.addEventListener('change', updatePaymentFields);
+      select.addEventListener('change', updateCryptoPriceNote);
+      form.elements.quantity.addEventListener('input', updateCryptoPriceNote);
       updatePaymentFields();
       form.addEventListener('submit', async (submitEvent) => {
         submitEvent.preventDefault();
@@ -450,6 +489,11 @@
         }
         if (selectedMethod === 'stripe' && !stripePaymentsConfigured) {
           showError(document.getElementById('pageFeedback'), 'Stripe Checkout is not configured yet. Choose M-Pesa or Valor Wallet.');
+          button.disabled = false;
+          return;
+        }
+        if (selectedMethod === 'nowpayments' && !nowpaymentsConfigured) {
+          showError(document.getElementById('pageFeedback'), 'NOWPayments is not configured yet. Choose M-Pesa or Valor Wallet.');
           button.disabled = false;
           return;
         }
@@ -564,15 +608,22 @@
         window.valorTrackPurchase(order);
       }
       const heading = document.createElement('h1');
-      heading.textContent = order.status === 'paid' ? 'Payment confirmed' : order.status === 'confirmed' ? 'Free registration confirmed' : order.status === 'failed' ? 'Payment not completed' : order.status === 'review' ? 'Payment needs support review' : order.paymentMethod === 'stripe' ? 'Waiting for Stripe payment confirmation' : 'Waiting for M-Pesa payment';
+      heading.textContent = order.status === 'paid' ? 'Payment confirmed' : order.status === 'confirmed' ? 'Free registration confirmed' : order.status === 'failed' ? 'Payment not completed' : order.status === 'review' ? 'Payment needs support review' : order.paymentMethod === 'stripe' ? 'Waiting for Stripe payment confirmation' : order.paymentMethod === 'nowpayments' ? 'Waiting for crypto payment confirmation' : 'Waiting for M-Pesa payment';
       const details = document.createElement('p');
-      details.textContent = `${order.orderType === 'ticket' ? `${order.quantity} ${order.ticketType} ticket(s)` : `Advertising: ${order.campaign?.packageName || 'Event promotion'}`} · KES ${Number(order.amountKes).toLocaleString('en-KE')}${order.receipt ? ` · Receipt ${order.receipt}` : ''}`;
+      const cryptoPrice = order.cryptoPriceAmountUsd !== null &&
+        order.cryptoPriceAmountUsd !== undefined &&
+        Number.isFinite(Number(order.cryptoPriceAmountUsd))
+        ? ` · NOWPayments invoice: USD ${Number(order.cryptoPriceAmountUsd).toFixed(2)}`
+        : '';
+      details.textContent = `${order.orderType === 'ticket' ? `${order.quantity} ${order.ticketType} ticket(s)` : `Advertising: ${order.campaign?.packageName || 'Event promotion'}`} · KES ${Number(order.amountKes).toLocaleString('en-KE')}${cryptoPrice}${order.receipt ? ` · Receipt ${order.receipt}` : ''}`;
       root.replaceChildren(heading, details);
       if (order.status === 'pending') {
         const explanation = document.createElement('p');
         explanation.textContent = order.paymentMethod === 'stripe'
           ? 'Complete payment in Stripe Checkout. This page checks for confirmation automatically.'
-          : 'Approve the payment prompt on your phone. This page checks for confirmation automatically.';
+          : order.paymentMethod === 'nowpayments'
+            ? 'Complete the crypto payment on NOWPayments. Tickets are issued after the payment is confirmed; this page checks for confirmation automatically.'
+            : 'Approve the payment prompt on your phone. This page checks for confirmation automatically.';
         root.appendChild(explanation);
         window.setTimeout(loadOrder, order.paymentMethod === 'stripe' ? 2500 : 5000);
       } else if (['paid','confirmed'].includes(order.status) && order.tickets?.length) {

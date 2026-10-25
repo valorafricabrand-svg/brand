@@ -17,6 +17,7 @@ const db = require('../src/db');
 const { createApp, initializeAdmin } = require('../src/app');
 const { login } = require('../src/auth');
 const mpesa = require('../src/mpesa');
+const nowpayments = require('../src/nowpayments');
 const { normalizeKenyanPhone } = require('../src/kenyan-phone');
 
 initializeAdmin();
@@ -64,6 +65,26 @@ const stripeGateway = {
     return this.enabled;
   }
 };
+let nowpaymentsInvoiceNumber = 0;
+const nowpaymentsGateway = {
+  enabled: true,
+  lastInvoice: null,
+  isConfigured() {
+    return this.enabled;
+  },
+  async createInvoice(order) {
+    nowpaymentsInvoiceNumber += 1;
+    this.lastInvoice = order;
+    return {
+      id: `invoice-${nowpaymentsInvoiceNumber}`,
+      url: `https://nowpayments.test/payment/${nowpaymentsInvoiceNumber}`,
+      priceAmountUsd: Math.round((order.amountKes / 130) * 100) / 100
+    };
+  },
+  verifyIpn(payload, signature) {
+    return signature === 'test-nowpayments-signature';
+  }
+};
 const smsCodes = new Map();
 const smsGateway = {
   enabled: true,
@@ -102,6 +123,7 @@ const ticketEmailGateway = {
 const app = createApp({
   mpesa: paymentGateway,
   stripe: stripeGateway,
+  nowpayments: nowpaymentsGateway,
   sms: smsGateway,
   email: emailGateway,
   ticketEmail: ticketEmailGateway,
@@ -474,6 +496,63 @@ test('Stripe webhook rejects mismatched totals and expires abandoned checkouts w
     .set(accountAuth).set('X-Order-Access', abandoned.body.accessToken);
   assert.equal(failed.body.status, 'failed');
   assert.equal(failed.body.tickets, undefined);
+});
+
+test('NOWPayments issues tickets only after a signed, matching finished-payment notification', async () => {
+  const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
+  const accountAuth = await ticketAccountAuth();
+  const checkout = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Early bird',
+    buyerName: 'Crypto Buyer',
+    quantity: 1,
+    paymentMethod: 'nowpayments'
+  });
+  assert.equal(checkout.status, 201);
+  assert.equal(checkout.body.paymentMethod, 'nowpayments');
+  assert.match(checkout.body.checkoutUrl, /^https:\/\/nowpayments\.test\//);
+  assert.equal(checkout.body.cryptoPriceAmountUsd, 6.15);
+  assert.equal(nowpaymentsGateway.lastInvoice.amountKes, 800);
+  const order = db.prepare('SELECT * FROM orders WHERE id=?').get(checkout.body.orderId);
+  assert.equal(order.payment_method, 'nowpayments');
+  assert.equal(order.phone, '');
+  assert.equal(order.nowpayments_invoice_id, 'invoice-1');
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(order.id).total, 0);
+
+  const payload = {
+    payment_id: 'payment-1',
+    invoice_id: order.nowpayments_invoice_id,
+    order_id: order.id,
+    payment_status: 'finished',
+    price_amount: '6.15',
+    price_currency: 'usd'
+  };
+  const invalidSignature = await request(app).post('/api/nowpayments/ipn')
+    .set('x-nowpayments-sig', 'invalid')
+    .send(payload);
+  assert.equal(invalidSignature.status, 400);
+  assert.equal(db.prepare('SELECT status FROM orders WHERE id=?').get(order.id).status, 'pending');
+
+  const confirming = await request(app).post('/api/nowpayments/ipn')
+    .set('x-nowpayments-sig', 'test-nowpayments-signature')
+    .send({ ...payload, payment_status: 'confirming' });
+  assert.equal(confirming.status, 200);
+  assert.equal(db.prepare('SELECT status FROM orders WHERE id=?').get(order.id).status, 'pending');
+
+  const finished = await request(app).post('/api/nowpayments/ipn')
+    .set('x-nowpayments-sig', 'test-nowpayments-signature')
+    .send(payload);
+  assert.equal(finished.status, 200);
+  const paid = await request(app).get(`/api/orders/${order.id}`)
+    .set(accountAuth).set('X-Order-Access', checkout.body.accessToken);
+  assert.equal(paid.body.status, 'paid');
+  assert.equal(paid.body.cryptoPriceAmountUsd, 6.15);
+  assert.equal(paid.body.tickets.length, 1);
+
+  await request(app).post('/api/nowpayments/ipn')
+    .set('x-nowpayments-sig', 'test-nowpayments-signature')
+    .send(payload);
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(order.id).total, 1);
 });
 
 test('paid ticket order issues only after Daraja verifies the callback', async () => {
