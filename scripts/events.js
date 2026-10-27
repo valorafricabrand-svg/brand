@@ -125,6 +125,7 @@
       tickets: [{ name: 'Regular', price: 300, currency: 'KES' }]
     }
   ];
+  const fallbackEvents = events.map((event) => ({ ...event }));
   const organizerPromo = {
     id: 'valor-organizer-promo',
     isPlatformPromo: true,
@@ -162,15 +163,19 @@
         window.valorEventsApi('/api/ads/featured'),
         window.valorEventsApi('/api/health')
       ]);
-      const toEvent = (event) => ({
-        ...event,
-        location: event.location || [event.venueName, event.city].filter(Boolean).join(', '),
-        poster: event.poster ? new URL(event.poster, apiBase).href : 'images/events/concert-crowd.svg',
-        earlyBirdEnds: event.tickets.find((ticket) => ticket.name === 'Early bird')?.saleEnds || '',
-        tickets: event.tickets.map((ticket) => ({ ...ticket, currency: 'KES' }))
-      });
-      events = listing.events.map(toEvent);
-      adEvents = [ticketBuyerPromo, organizerPromo, ...featured.events.map(toEvent)];
+      const toEvent = (event) => {
+        const availableTickets = Array.isArray(event.tickets) ? event.tickets : [];
+        return {
+          ...event,
+          location: event.location || [event.venueName, event.city].filter(Boolean).join(', '),
+          poster: event.poster ? new URL(event.poster, apiBase).href : 'images/events/concert-crowd.svg',
+          earlyBirdEnds: availableTickets.find((ticket) => ticket.name === 'Early bird')?.saleEnds || '',
+          tickets: availableTickets.map((ticket) => ({ ...ticket, currency: ticket.currency || 'KES' }))
+        };
+      };
+      const liveEvents = listing.events.map(toEvent);
+      events = liveEvents.length ? liveEvents : fallbackEvents;
+      adEvents = [ticketBuyerPromo, organizerPromo, ...(featured.events.length ? featured.events.map(toEvent) : liveEvents.slice(0, 1))];
       mpesaCheckoutEnabled = Boolean(health.paymentsConfigured);
       stripeCheckoutEnabled = Boolean(health.stripePaymentsConfigured);
       nowpaymentsCheckoutEnabled = Boolean(health.nowpaymentsConfigured);
@@ -631,7 +636,7 @@
   function renderEvents(container, list) {
     if (!container) return;
     const cards = list.map(createEventCard);
-    if (container.id === 'allEvents' && list.length >= 2) {
+    if ((container.id === 'featuredEvents' || container.id === 'allEvents') && list.length >= 2) {
       cards.splice(Math.min(2, cards.length), 0, createSponsoredAdRail());
       if (list.length >= 8) {
         cards.splice(Math.min(8, cards.length), 0, createSponsoredEventsRail());
