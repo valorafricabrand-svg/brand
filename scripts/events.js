@@ -557,7 +557,7 @@
     if (!container) return;
     const cards = list.map(createEventCard);
     if (container.id === 'allEvents' && list.length >= 2) {
-      const insertionIndex = Math.min(4, cards.length);
+      const insertionIndex = Math.min(2, cards.length);
       cards.splice(insertionIndex, 0, createSponsoredAdRail());
     }
     container.replaceChildren(...cards);
