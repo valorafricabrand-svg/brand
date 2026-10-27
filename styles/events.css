@@ -254,6 +254,9 @@ img { display: block; max-width: 100%; }
 .sponsored-ticket-heading { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; border-bottom: 1px solid #edf1ef; color: #243d35; font-size: 12px; }
 .sponsored-ticket-heading div { display: inline-flex; align-items: center; gap: 8px; }
 .sponsored-ticket-heading div span { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 8px; color: #fff; background: linear-gradient(135deg, #087f5b, #0da977); }
+.sponsored-events-rail { border-color: #ecdcae; background: linear-gradient(135deg, #fffdf5, #f4faf7); }
+.sponsored-events-rail .sponsored-ticket-heading div span { background: linear-gradient(135deg, #b87913, #e1ad3a); }
+.sponsored-events-rail .sponsored-ticket-card { height: 156px; }
 .sponsored-ticket-heading strong { font: 800 16px Manrope, sans-serif; }
 .sponsored-ticket-heading a { color: var(--green-dark); font-size: 11px; font-weight: 800; }
 .sponsored-ticket-window { overflow: hidden; }

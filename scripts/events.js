@@ -551,12 +551,50 @@
     return rail;
   }
 
+  function createSponsoredEventsRail() {
+    const rail = document.createElement('aside');
+    rail.className = 'sponsored-ticket-rail sponsored-events-rail';
+    rail.setAttribute('aria-label', 'Sponsored events');
+
+    const header = document.createElement('div');
+    header.className = 'sponsored-ticket-heading';
+    header.innerHTML = '<div><span>✦</span><strong>Sponsored events</strong></div><a href="advertise.html">Promote an event <span aria-hidden="true">→</span></a>';
+
+    const windowEl = document.createElement('div');
+    windowEl.className = 'sponsored-ticket-window';
+    const track = document.createElement('div');
+    track.className = 'sponsored-ticket-track';
+    const sponsoredEvents = events.filter((event) => Array.isArray(event.tickets) && event.tickets.length);
+
+    sponsoredEvents.slice(0, 5).forEach((event) => {
+      const ticket = event.tickets[0];
+      const card = document.createElement('a');
+      card.className = 'sponsored-ticket-card sponsored-event-card';
+      setEventDetailsLink(card, event);
+      card.innerHTML = `<span class="sponsored-ticket-label">SPONSORED</span><img src="${event.poster || 'images/events/concert-crowd.svg'}" alt="${event.title}" loading="lazy"><div><small>${event.category} · ${shortDate(event.startsAt)}</small><strong>${event.title}</strong><p>${formatMoney(ticket.price, ticket.currency || 'KES')} · ${event.location}</p><span class="sponsored-ticket-button">Get tickets <b aria-hidden="true">→</b></span></div>`;
+      track.appendChild(card);
+    });
+
+    [...track.children].forEach((card) => {
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) track.appendChild(card.cloneNode(true));
+    });
+    windowEl.appendChild(track);
+    rail.append(header, windowEl);
+    rail.addEventListener('mouseenter', () => track.classList.add('is-paused'));
+    rail.addEventListener('mouseleave', () => track.classList.remove('is-paused'));
+    rail.addEventListener('focusin', () => track.classList.add('is-paused'));
+    rail.addEventListener('focusout', () => track.classList.remove('is-paused'));
+    return rail;
+  }
+
   function renderEvents(container, list) {
     if (!container) return;
     const cards = list.map(createEventCard);
     if (container.id === 'allEvents' && list.length >= 2) {
-      const insertionIndex = Math.min(2, cards.length);
-      cards.splice(insertionIndex, 0, createSponsoredAdRail());
+      cards.splice(Math.min(2, cards.length), 0, createSponsoredAdRail());
+      if (list.length >= 8) {
+        cards.splice(Math.min(8, cards.length), 0, createSponsoredEventsRail());
+      }
     }
     container.replaceChildren(...cards);
   }
@@ -948,8 +986,9 @@
       });
       const noResults = document.getElementById('noResults');
       if (noResults) noResults.hidden = visible > 0;
-      const sponsoredRail = allEvents.querySelector('.sponsored-ticket-rail');
-      if (sponsoredRail) sponsoredRail.hidden = visible === 0;
+      allEvents.querySelectorAll('.sponsored-ticket-rail').forEach((rail) => {
+        rail.hidden = visible === 0;
+      });
     };
     allCategories.addEventListener('click', (event) => {
       const button = event.target.closest('button[data-category]');
