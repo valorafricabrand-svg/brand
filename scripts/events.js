@@ -292,6 +292,55 @@
     return row;
   }
 
+  function createEventFavoriteButton(poster, event) {
+    if (!event.id) return;
+    const token = window.valorAccountToken ? window.valorAccountToken() : '';
+    let button;
+    if (!token) {
+      button = document.createElement('a');
+      button.href = 'account.html?returnTo=' + encodeURIComponent(window.location.pathname + window.location.search);
+      button.setAttribute('aria-label', `Sign in to favorite ${event.title}`);
+    } else {
+      button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('aria-label', `Favorite ${event.title}`);
+    }
+    button.className = 'event-favorite-button';
+    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78a5.5 5.5 0 0 0 1.06-8.84Z"/></svg>';
+
+    const setFavorite = (loved) => {
+      button.classList.toggle('is-favorite', loved);
+      button.setAttribute('aria-pressed', String(loved));
+      button.setAttribute('title', loved ? 'Remove from favorites' : 'Add to favorites');
+    };
+
+    if (token && window.valorEventsApi) {
+      window.valorEventsApi(`/api/account/events/${encodeURIComponent(event.id)}/feedback`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then((saved) => setFavorite(saved.loved)).catch(() => setFavorite(false));
+
+      button.addEventListener('click', async (clickEvent) => {
+        clickEvent.preventDefault();
+        clickEvent.stopPropagation();
+        const loved = button.getAttribute('aria-pressed') !== 'true';
+        button.disabled = true;
+        try {
+          const saved = await window.valorEventsApi(`/api/account/events/${encodeURIComponent(event.id)}/feedback`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${window.valorAccountToken()}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ loved, rating: null, review: '' })
+          });
+          setFavorite(saved.loved);
+        } catch (error) {
+          button.setAttribute('title', error.message);
+        } finally {
+          button.disabled = false;
+        }
+      });
+    }
+    poster.appendChild(button);
+  }
+
   function createEventCard(event) {
     const article = document.createElement('article');
     article.className = 'event-card';
@@ -300,12 +349,16 @@
 
     const poster = document.createElement('div');
     poster.className = 'event-poster';
+    const posterLink = document.createElement('a');
+    posterLink.className = 'event-poster-link';
+    posterLink.setAttribute('aria-label', `View details for ${event.title}`);
+    setEventDetailsLink(posterLink, event);
     if (event.poster) {
       const image = document.createElement('img');
       image.src = event.poster;
       image.alt = `${event.title} event poster`;
       image.loading = 'lazy';
-      poster.appendChild(image);
+      posterLink.appendChild(image);
     } else {
       const artwork = document.createElement('div');
       artwork.className = 'poster-art';
@@ -329,8 +382,10 @@
       category.className = 'poster-art-category';
       category.textContent = event.category;
       artwork.append(label, title, category);
-      poster.appendChild(artwork);
+      posterLink.appendChild(artwork);
     }
+    poster.appendChild(posterLink);
+    createEventFavoriteButton(poster, event);
 
     const badgeDate = document.createElement('span');
     badgeDate.className = 'poster-date';

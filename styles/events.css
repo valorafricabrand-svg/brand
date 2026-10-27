@@ -302,6 +302,14 @@ img { display: block; max-width: 100%; }
 .event-card:hover { transform: translateY(-3px); box-shadow: 0 13px 28px rgba(25, 45, 65, .14); }
 .event-card[hidden] { display: none; }
 .event-poster { position: relative; height: 230px; overflow: hidden; background: #143e34; }
+.event-poster-link { display: block; width: 100%; height: 100%; color: inherit; }
+.event-poster-link:focus-visible { outline: 3px solid #fff; outline-offset: -6px; }
+.event-favorite-button { position: absolute; z-index: 3; top: 11px; right: 11px; display: grid; width: 42px; height: 42px; padding: 0; place-items: center; border: 1px solid rgba(255,255,255,.72); border-radius: 50%; color: #263544; background: rgba(255,255,255,.94); box-shadow: 0 5px 18px rgba(15,35,28,.18); backdrop-filter: blur(8px); cursor: pointer; transition: transform .18s ease, color .18s ease, background .18s ease; }
+.event-favorite-button svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.event-favorite-button:hover, .event-favorite-button:focus-visible { transform: scale(1.06); color: #c51636; }
+.event-favorite-button.is-favorite { color: #fff; border-color: #d92d45; background: #d92d45; }
+.event-favorite-button.is-favorite svg { fill: currentColor; }
+.event-favorite-button:disabled { cursor: wait; opacity: .65; }
 .event-poster img { width: 100%; height: 100%; object-fit: cover; transition: transform .3s ease; }
 .event-card:hover .event-poster img { transform: scale(1.035); }
 .poster-art { position: relative; display: flex; width: 100%; height: 100%; flex-direction: column; justify-content: flex-end; gap: 10px; padding: 25px 22px; overflow: hidden; color: #fff; background: radial-gradient(ellipse at 76% 22%, rgba(115,230,179,.38), transparent 42%), linear-gradient(135deg, #063d32, #0b8060 58%, #10251f); }
@@ -320,7 +328,7 @@ img { display: block; max-width: 100%; }
 .poster-art-category { color: rgba(255,255,255,.76); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 .poster-date { position: absolute; top: 11px; left: 11px; display: grid; min-width: 48px; padding: 5px 7px; place-items: center; border-radius: 11px; color: var(--green-dark); background: #fff; font-size: 17px; font-weight: 800; line-height: 1.05; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,.14); }
 .poster-date small { margin-top: 3px; font-size: 10px; letter-spacing: .07em; }
-.poster-badge { position: absolute; top: 11px; right: 11px; padding: 6px 9px; border-radius: 999px; color: #4b3500; background: var(--yellow); font-size: 11px; font-weight: 800; }
+.poster-badge { position: absolute; top: 11px; right: 62px; padding: 6px 9px; border-radius: 999px; color: #4b3500; background: var(--yellow); font-size: 11px; font-weight: 800; }
 .event-card-body { display: flex; min-height: 238px; flex-direction: column; padding: 15px 16px 17px; }
 .event-card h3 { overflow: hidden; margin: 0 0 6px; font: 800 17px/1.25 Manrope, sans-serif; letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; }
 .event-meta { display: flex; align-items: center; gap: 5px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
