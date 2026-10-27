@@ -73,7 +73,7 @@
       try {
         const saved = await api(`/api/account/events/${encodeURIComponent(ticket.eventId)}/feedback`, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${window.sessionStorage.getItem('valor-account-token')}` },
+          headers: { Authorization: `Bearer ${window.valorAccountToken()}` },
           body: JSON.stringify({
             loved,
             rating: ratingSelect.value ? Number(ratingSelect.value) : null,
@@ -106,29 +106,27 @@
   }
 
   function loadEventFeedback(event) {
-    const token = window.sessionStorage.getItem('valor-account-token');
-    if (!token || !event.id) return;
-
+    if (!event.id) return;
+    const token = window.valorAccountToken();
     const root = document.getElementById('eventDetails');
+    if (!token) {
+      const signIn = document.createElement('a');
+      signIn.className = 'ticket-love';
+      signIn.href = 'account.html?returnTo=' + encodeURIComponent(window.location.pathname + window.location.search + window.location.hash);
+      signIn.textContent = '♡ Sign in to like and recommend this event';
+      root.appendChild(signIn);
+      return;
+    }
     const status = document.createElement('p');
     status.className = 'ticket-feedback-status';
     status.setAttribute('role', 'status');
-    status.textContent = 'Checking ticket eligibility for event feedback…';
+    status.textContent = 'Loading your event feedback…';
     root.appendChild(status);
-
-    api('/api/account/tickets', {
-      headers: { Authorization: `Bearer ${token}` }
-    }).then((result) => {
+    api('/api/account/events/' + encodeURIComponent(event.id) + '/feedback', { headers: { Authorization: 'Bearer ' + token } }).then((saved) => {
       status.remove();
-      const ticket = result.tickets.find((entry) => String(entry.eventId) === String(event.id));
-      if (ticket) root.appendChild(createTicketFeedback(ticket));
-    }).catch((error) => {
-      status.textContent = `Could not verify ticket eligibility for event feedback: ${error.message}`;
-      status.classList.add('error');
-    });
-  }
-
-  async function loadEventDetails() {
+      root.appendChild(createTicketFeedback({ eventId: event.id, eventTitle: event.title, loved: saved.loved, rating: saved.rating, review: saved.review }));
+    }).catch((error) => { status.textContent = error.message; status.classList.add('error'); });
+  }  async function loadEventDetails() {
     const root = document.getElementById('eventDetails');
     if (!root) return;
     try {
@@ -405,7 +403,7 @@
       }
       const anyOnlinePaymentConfigured = Boolean(health.paymentsConfigured || stripePaymentsConfigured || nowpaymentsConfigured);
       const hasFreeTickets = event.tickets.some((ticket) => Number(ticket.price) === 0);
-      const accountToken = window.sessionStorage.getItem('valor-account-token');
+      const accountToken = window.valorAccountToken();
       if (!anyOnlinePaymentConfigured) {
         event.tickets.forEach((ticket) => {
           if (Number(ticket.price) > 0 && !accountToken) {
@@ -469,7 +467,7 @@
         const button = form.querySelector('[type=submit]');
         button.disabled = true;
         const selectedMethod = paymentMethod.value;
-        const currentAccountToken = window.sessionStorage.getItem('valor-account-token');
+        const currentAccountToken = window.valorAccountToken();
         if (!currentAccountToken) {
           const feedback = document.getElementById('pageFeedback');
           feedback.replaceChildren(document.createTextNode('Sign in to your account before getting tickets. '));
@@ -566,7 +564,7 @@
       event.preventDefault();
       feedback.classList.remove('error');
       const values = Object.fromEntries(new FormData(form));
-      const token = window.sessionStorage.getItem('valor-account-token');
+      const token = window.valorAccountToken();
       if (values.paymentMethod === 'wallet' && !token) {
         showError(feedback, 'Sign in to your account and link a phone wallet before paying with your balance.');
         return;
@@ -601,7 +599,7 @@
     }
     try {
       const headers = new Headers({ 'X-Order-Access': token });
-      const accountToken = window.sessionStorage.getItem('valor-account-token');
+      const accountToken = window.valorAccountToken();
       if (accountToken) headers.set('Authorization', `Bearer ${accountToken}`);
       const order = await api(`/api/orders/${encodeURIComponent(orderId)}`, { headers });
       if (typeof window.valorTrackPurchase === 'function') {
@@ -683,7 +681,7 @@
   async function loadMyTickets() {
     const root = document.getElementById('myTickets');
     if (!root) return;
-    const token = window.sessionStorage.getItem('valor-account-token');
+    const token = window.valorAccountToken();
     if (!token) {
       root.replaceChildren();
       showError(root, 'Sign in to view your tickets. ');
@@ -850,7 +848,7 @@
       root.replaceChildren(fragment);
     } catch (error) {
       if (/sign in|session has expired/i.test(error.message)) {
-        window.sessionStorage.removeItem('valor-account-token');
+        window.valorClearAccountToken();
         root.replaceChildren();
         showError(root, 'Your session has expired. ');
         const link = document.createElement('a');

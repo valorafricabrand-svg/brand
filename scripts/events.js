@@ -1062,7 +1062,7 @@
   if (accountLink) {
     accountLink.href = `account.html?returnTo=${encodeURIComponent(ticketReturnTo)}`;
     accountLink.addEventListener('click', () => {
-      if (!window.sessionStorage.getItem('valor-account-token')) saveTicketDraft();
+      if (!window.valorAccountToken()) saveTicketDraft();
     });
   }
 
@@ -1192,7 +1192,7 @@
       const ticketFeedback = document.getElementById('ticketFeedback');
       const submitButton = ticketForm.querySelector('[type=submit]');
       const paymentMethod = data.get('paymentMethod');
-      const accountToken = window.sessionStorage.getItem('valor-account-token');
+      const accountToken = window.valorAccountToken();
       if (!accountToken) {
         showAccountSignIn(ticketFeedback);
         return;
@@ -1247,7 +1247,7 @@
         window.location.assign(`order.html?orderId=${encodeURIComponent(order.orderId)}`);
       } catch (error) {
         if (/session has expired|sign in to your valor africa account/i.test(error.message)) {
-          window.sessionStorage.removeItem('valor-account-token');
+          window.valorClearAccountToken();
           showAccountSignIn(ticketFeedback);
           return;
         }
@@ -1334,7 +1334,7 @@
       publishButton.textContent = 'Save event changes';
       publishWithoutEarlyBirdButton.textContent = 'Save without early-bird offer';
       try {
-        const accountToken = window.sessionStorage.getItem('valor-account-token');
+        const accountToken = window.valorAccountToken();
         if (!accountToken) throw new Error('Sign in to your organizer account to edit this event.');
         const result = await window.valorEventsApi('/api/events/mine', {
           headers: { Authorization: `Bearer ${accountToken}` }
@@ -1622,7 +1622,7 @@
       feedback.textContent = editingEventId ? 'Saving your event changes…' : 'Submitting your event…';
       try {
         const headers = {};
-        const accountToken = window.sessionStorage.getItem('valor-account-token');
+        const accountToken = window.valorAccountToken();
         if (accountToken) headers.Authorization = `Bearer ${accountToken}`;
         const result = await window.valorEventsApi(
           editingEventId ? `/api/events/mine/${encodeURIComponent(editingEventId)}` : '/api/events/submissions',

@@ -26,13 +26,26 @@
   window.valorEventsApiBase = base;
   const accountTokenKey = 'valor-account-token';
   const accountReturnToKey = 'valor-account-return-to';
+  window.valorAccountToken = function () {
+    let token = window.localStorage.getItem(accountTokenKey) || window.sessionStorage.getItem(accountTokenKey) || '';
+    if (token) window.localStorage.setItem(accountTokenKey, token);
+    return token;
+  };
+  window.valorSetAccountToken = function (token) {
+    window.localStorage.setItem(accountTokenKey, token);
+    window.sessionStorage.setItem(accountTokenKey, token);
+  };
+  window.valorClearAccountToken = function () {
+    window.localStorage.removeItem(accountTokenKey);
+    window.sessionStorage.removeItem(accountTokenKey);
+  };
   const accountPath = new URL('account.html', window.location.href).pathname;
 
   function buildAccountHref() {
     const url = new URL('account.html', window.location.href);
     if (window.location.pathname !== accountPath) {
       const currentPage = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-      window.sessionStorage.setItem(accountReturnToKey, currentPage);
+      window.localStorage.setItem(accountReturnToKey, currentPage);
       url.searchParams.set('returnTo', currentPage);
     }
     return url.href;
@@ -62,7 +75,7 @@
       status.hidden = true;
       nav.appendChild(status);
       signOutButton.addEventListener('click', async () => {
-        const token = window.sessionStorage.getItem(accountTokenKey);
+        const token = window.valorAccountToken();
         let revokeError = null;
         if (token) {
           try {
@@ -74,7 +87,7 @@
             revokeError = error;
           }
         }
-        window.sessionStorage.removeItem(accountTokenKey);
+        window.valorClearAccountToken();
         window.sessionStorage.removeItem('valor-wallet-token');
         window.sessionStorage.removeItem('valor-wallet-link-phone');
         document.dispatchEvent(new CustomEvent('valor:account-session', { detail: { account: null } }));
@@ -98,6 +111,24 @@
       );
     }
   }
+  const scrollKey = 'valor-scroll-position';
+  let scrollSaveTimer;
+  window.addEventListener('scroll', () => {
+    window.clearTimeout(scrollSaveTimer);
+    scrollSaveTimer = window.setTimeout(() => {
+      const saved = JSON.parse(window.localStorage.getItem(scrollKey) || '{}');
+      saved[window.location.pathname + window.location.search] = window.scrollY;
+      window.localStorage.setItem(scrollKey, JSON.stringify(saved));
+    }, 150);
+  }, { passive: true });
+  window.addEventListener('load', () => {
+    if (window.location.hash) return;
+    const saved = JSON.parse(window.localStorage.getItem(scrollKey) || '{}');
+    const position = saved[window.location.pathname + window.location.search];
+    if (Number.isFinite(position) && position > 0) {
+      window.requestAnimationFrame(() => window.scrollTo({ top: position, behavior: 'auto' }));
+    }
+  });
 
   rememberCurrentPage();
   window.addEventListener('hashchange', rememberCurrentPage);
@@ -107,7 +138,7 @@
         link.href = buildAccountHref();
       }
     });
-    const token = window.sessionStorage.getItem(accountTokenKey);
+    const token = window.valorAccountToken();
     updateAccountNavigation(Boolean(token));
     if (token) {
       window.valorEventsApi('/api/auth/account', {
@@ -116,7 +147,7 @@
         updateAccountNavigation(true);
       }).catch((error) => {
         if (/sign in|session has expired/i.test(error.message)) {
-          window.sessionStorage.removeItem(accountTokenKey);
+          window.valorClearAccountToken();
           window.sessionStorage.removeItem('valor-wallet-token');
           window.sessionStorage.removeItem('valor-wallet-link-phone');
           document.dispatchEvent(new CustomEvent('valor:account-session', { detail: { account: null } }));

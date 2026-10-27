@@ -36,7 +36,7 @@
 
   function redirectAfterSignIn() {
     const returnTo = new URLSearchParams(window.location.search).get('returnTo');
-    const rememberedPath = window.sessionStorage.getItem(accountReturnToKey);
+    const rememberedPath = window.localStorage.getItem(accountReturnToKey);
     const destination = [returnTo, rememberedPath].find((value) => {
       if (!value || !value.startsWith('/') || value.startsWith('//')) return false;
       try {
@@ -100,7 +100,7 @@
   }
 
   async function accountSignInResult(result) {
-    window.sessionStorage.setItem(accountTokenKey, result.accessToken);
+    window.valorSetAccountToken(result.accessToken);
     emailForm.reset();
     setEmailMode('options');
     await loadAccountSession();
@@ -114,7 +114,7 @@
         method: 'POST',
         body: JSON.stringify({ idToken })
       });
-      window.sessionStorage.setItem(accountTokenKey, result.accessToken);
+      window.valorSetAccountToken(result.accessToken);
       await loadAccountSession();
       setFeedback(document.getElementById('googleFeedback'), '');
       redirectAfterSignIn();
@@ -265,7 +265,7 @@
     } catch (error) {
       revokeError = error;
     }
-    window.sessionStorage.removeItem(accountTokenKey);
+    window.valorClearAccountToken();
     accountSignedIn.hidden = true;
     accountSignedOut.hidden = false;
     setFeedback(emailFeedback, '');
@@ -286,12 +286,12 @@
   });
 
   async function initializeAccount() {
-    const accountToken = window.sessionStorage.getItem(accountTokenKey);
+    const accountToken = window.valorAccountToken();
     if (accountToken) {
       try {
         await loadAccountSession();
       } catch (error) {
-        window.sessionStorage.removeItem(accountTokenKey);
+        window.valorClearAccountToken();
         accountSignedIn.hidden = true;
         accountSignedOut.hidden = false;
         setFeedback(emailFeedback, error.message, true);

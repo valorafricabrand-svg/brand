@@ -2168,6 +2168,25 @@ function createApp(options = {}) {
     }
   });
 
+  app.get('/api/account/events/:eventId/feedback', requireAccount, (req, res, next) => {
+    const eventExists = db.prepare(`SELECT 1 FROM events WHERE id=? LIMIT 1`).get(req.params.eventId);
+    if (!eventExists) return res.status(404).json({ error: 'This event is not available.' });
+    try {
+      const feedback = db.prepare(`
+        SELECT loved,rating,review
+        FROM event_feedback
+        WHERE account_id=? AND event_id=?
+      `).get(req.account.id, req.params.eventId);
+      res.json(feedback ? {
+        loved: Boolean(feedback.loved),
+        rating: feedback.rating,
+        review: feedback.review || ''
+      } : { loved: false, rating: null, review: '' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/api/account/events/:eventId/feedback', requireAccount, (req, res, next) => {
     const { loved, rating, review } = req.body || {};
     const normalizedRating = rating === undefined || rating === null || rating === '' ? null : rating;
@@ -2180,21 +2199,8 @@ function createApp(options = {}) {
     if (typeof review !== 'string' || review.length > 1200) {
       return res.status(400).json({ error: 'Review must be text of 1,200 characters or fewer.' });
     }
-    const purchasedEvent = db.prepare(`
-      SELECT 1 FROM orders
-      WHERE event_id=? AND order_type='ticket' AND status IN ('paid','confirmed')
-        AND (
-          account_id=? OR (
-            account_id IS NULL AND EXISTS (
-              SELECT 1 FROM wallets w WHERE w.account_id=?
-                AND substr(replace(replace(replace(replace(replace(orders.phone,'+',''),' ',''),'-',''),'(',''),')',''),-9)
-                  = substr(w.phone,-9)
-            )
-          )
-        )
-      LIMIT 1
-    `).get(req.params.eventId, req.account.id, req.account.id);
-    if (!purchasedEvent) return res.status(404).json({ error: 'You need a confirmed ticket for this event to leave feedback.' });
+    const eventExists = db.prepare(`SELECT 1 FROM events WHERE id=? LIMIT 1`).get(req.params.eventId);
+    if (!eventExists) return res.status(404).json({ error: 'This event is not available.' });
 
     try {
       db.prepare(`

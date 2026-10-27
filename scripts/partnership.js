@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const token = window.sessionStorage.getItem('valor-account-token');
+  const token = window.valorAccountToken();
   const signedOut = document.getElementById('partnerSignedOut');
   const applicationForm = document.getElementById('partnerApplicationForm');
   const dashboard = document.getElementById('partnerDashboard');

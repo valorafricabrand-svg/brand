@@ -776,7 +776,8 @@ test('free registrations require an account but do not require M-Pesa', async ()
   const unauthorizedReview = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
     .set(unrelatedAuth)
     .send({ loved: true, rating: null, review: '' });
-  assert.equal(unauthorizedReview.status, 404);
+  assert.equal(unauthorizedReview.status, 200);
+  assert.deepEqual(unauthorizedReview.body, { loved: true, rating: null, review: '' });
   const unrelatedTickets = await request(app).get('/api/account/tickets')
     .set(unrelatedAuth);
   assert.equal(unrelatedTickets.body.tickets.some((ticket) => ticket.orderId === registration.body.orderId), false);

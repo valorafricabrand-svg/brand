@@ -16,7 +16,7 @@
   }
 
   function authHeaders() {
-    return { Authorization: `Bearer ${window.sessionStorage.getItem(accountTokenKey) || ''}` };
+    return { Authorization: Bearer  };
   }
 
   function formatMoney(amount) {

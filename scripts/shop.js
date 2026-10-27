@@ -2,7 +2,14 @@
   'use strict';
 
   const accountTokenKey = 'valor-account-token';
+  const cartKey = 'valor-shop-cart';
   const cart = new Map();
+  try {
+    const savedCart = JSON.parse(window.localStorage.getItem(cartKey) || '[]');
+    if (Array.isArray(savedCart)) savedCart.forEach((item) => {
+      if (item && typeof item.productId === 'string' && Number.isInteger(item.quantity) && item.quantity > 0) cart.set(item.productId, item.quantity);
+    });
+  } catch (error) { window.localStorage.removeItem(cartKey); }
   const products = new Map();
   const productGrid = document.getElementById('shopProducts');
   const productFeedback = document.getElementById('shopProductsFeedback');
@@ -125,6 +132,7 @@
   }
 
   function renderCart() {
+    window.localStorage.setItem(cartKey, JSON.stringify(Array.from(cart, ([productId, quantity]) => ({ productId, quantity }))));
     cartItems.replaceChildren();
     let quantityTotal = 0;
     let total = 0;
@@ -208,7 +216,7 @@
   }
 
   async function loadWallet() {
-    accountToken = window.sessionStorage.getItem(accountTokenKey) || '';
+    accountToken = window.valorAccountToken();
     if (!accountToken) {
       walletStatus.textContent = 'Sign in and use a linked Valor Wallet to pay.';
       checkoutForm.hidden = true;

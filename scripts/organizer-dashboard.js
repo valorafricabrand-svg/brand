@@ -2,7 +2,7 @@
   'use strict';
 
   const root = document.getElementById('organizerEvents');
-  const token = window.sessionStorage.getItem('valor-account-token');
+  const token = window.valorAccountToken();
   const headers = { Authorization: `Bearer ${token || ''}` };
 
   function showSignIn(message) {
@@ -115,7 +115,7 @@
       root.replaceChildren(list);
     } catch (error) {
       if (/sign in|session has expired/i.test(error.message)) {
-        window.sessionStorage.removeItem('valor-account-token');
+        window.valorClearAccountToken();
         showSignIn('Your session has expired.');
       } else {
         root.textContent = error.message;
