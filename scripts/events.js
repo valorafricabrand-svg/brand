@@ -505,44 +505,42 @@
   function createSponsoredAdRail() {
     const rail = document.createElement('aside');
     rail.className = 'sponsored-ticket-rail';
-    rail.setAttribute('aria-label', 'Sponsored events and Valor merchandise');
+    rail.setAttribute('aria-label', 'Top selling tickets and products');
 
     const header = document.createElement('div');
     header.className = 'sponsored-ticket-heading';
-    header.innerHTML = '<div><span>✦</span><strong>Sponsored for you</strong></div><a href="advertise.html">Advertise with Valor <span aria-hidden="true">→</span></a>';
+    header.innerHTML = '<div><span>★</span><strong>Top selling tickets &amp; products</strong></div><a href="advertise.html">Advertise &amp; sell <span aria-hidden="true">→</span></a>';
 
     const windowEl = document.createElement('div');
     windowEl.className = 'sponsored-ticket-window';
     const track = document.createElement('div');
     track.className = 'sponsored-ticket-track';
 
-    const featuredEvent = events.find((event) => Array.isArray(event.tickets) && event.tickets.length);
-    const eventCard = document.createElement(featuredEvent ? 'a' : 'article');
-    eventCard.className = 'sponsored-ticket-card sponsored-event-card';
-    if (featuredEvent) {
-      eventCard.href = featuredEvent.slug
-        ? `event.html?slug=${encodeURIComponent(featuredEvent.slug)}`
-        : '#';
-      if (!featuredEvent.slug) {
-        setEventDetailsLink(eventCard, featuredEvent);
-      }
-    }
-    eventCard.innerHTML = featuredEvent
-      ? '<span class="sponsored-ticket-label">SPONSORED EVENT</span><div><small>Discover &amp; experience</small><strong></strong><p></p><span class="sponsored-ticket-button">Get tickets <b aria-hidden="true">→</b></span></div>'
-      : '<span class="sponsored-ticket-label">SPONSORED EVENT</span><div><small>Your event deserves attention</small><strong>Put your next event in front of the crowd</strong><p>Reach engaged event-goers across Kenya.</p><a class="sponsored-ticket-button" href="advertise.html">Promote an event <b aria-hidden="true">→</b></a></div>';
-    if (featuredEvent) {
-      eventCard.querySelector('strong').textContent = featuredEvent.title;
-      eventCard.querySelector('p').textContent = `${featuredEvent.location} · from ${formatMoney(featuredEvent.tickets[0].price, featuredEvent.tickets[0].currency || 'KES')}`;
-    }
+    const ticketEvents = events.filter((event) => Array.isArray(event.tickets) && event.tickets.length).slice(0, 2);
+    const products = [
+      { name: 'Valor Africa Tote Bag', price: 'KES 4,500', image: 'images/one.jpg' },
+      { name: 'Community Print Tee', price: 'KES 2,800', image: 'images/IMG_0729.jpg' }
+    ];
 
-    const merchCard = document.createElement('a');
-    merchCard.className = 'sponsored-ticket-card sponsored-merch-card';
-    merchCard.href = 'shop.html';
-    merchCard.innerHTML = '<span class="sponsored-ticket-label">VALOR MERCH</span><div><small>Wear the experience</small><strong>Official Valor Africa merch</strong><p>Shop totes, tees and community favourites.</p><span class="sponsored-ticket-button">Shop now <b aria-hidden="true">→</b></span></div><span class="merch-spark" aria-hidden="true">V</span>';
+    ticketEvents.forEach((event) => {
+      const ticket = event.tickets[0];
+      const card = document.createElement('a');
+      card.className = 'sponsored-ticket-card sponsored-event-card';
+      setEventDetailsLink(card, event);
+      card.innerHTML = `<span class="sponsored-ticket-label">TOP TICKET</span><img src="${event.poster || 'images/events/concert-crowd.svg'}" alt="" loading="lazy"><div><small>${event.category}</small><strong>${event.title}</strong><p>${formatMoney(ticket.price, ticket.currency || 'KES')} · ${shortDate(event.startsAt)}</p><span class="sponsored-ticket-button">Get tickets <b aria-hidden="true">→</b></span></div>`;
+      track.appendChild(card);
+    });
 
-    track.append(eventCard, merchCard);
+    products.forEach((product) => {
+      const card = document.createElement('a');
+      card.className = 'sponsored-ticket-card sponsored-merch-card';
+      card.href = 'shop.html';
+      card.innerHTML = `<span class="sponsored-ticket-label">TOP PRODUCT</span><img src="${product.image}" alt="${product.name}" loading="lazy"><div><small>Valor Africa shop</small><strong>${product.name}</strong><p>${product.price}</p><span class="sponsored-ticket-button">Buy now <b aria-hidden="true">→</b></span></div>`;
+      track.appendChild(card);
+    });
+
     if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      track.append(eventCard.cloneNode(true), merchCard.cloneNode(true));
+      [...track.children].forEach((card) => track.appendChild(card.cloneNode(true)));
     }
     windowEl.appendChild(track);
     rail.append(header, windowEl);
