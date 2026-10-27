@@ -132,6 +132,15 @@ img { display: block; max-width: 100%; }
 .ticket-review-form button:disabled, .ticket-love:disabled { cursor: wait; opacity: .6; }
 .ticket-feedback-status { min-height: 1.5em; color: #067647; }
 .ticket-feedback-status.error { color: #b42318; }
+.event-detail-poster-wrap { box-sizing: border-box; }
+.event-detail-feedback { width: 100%; margin-top: 12px; padding: 12px; border-top: 0; border-radius: 12px; background: #f8faf9; }
+.event-detail-feedback .ticket-love, .event-detail-love { min-height: 38px; width: 100%; padding: 7px 12px; font-size: 13px; }
+.event-detail-feedback .ticket-review-form { gap: 8px; }
+.event-detail-feedback .ticket-review-form h3 { font-size: 15px; }
+.event-detail-feedback .ticket-review-form label { font-size: 12px; }
+.event-detail-feedback select, .event-detail-feedback textarea { min-height: 38px; padding: 8px 10px; }
+.event-detail-feedback textarea { height: 64px; }
+.event-detail-feedback .button { min-height: 40px; width: 100%; }
 .organizer-event-list { display: grid; gap: 14px; }
 .organizer-event-card { justify-items: start; margin-top: 0; text-align: left; }
 .organizer-event-archived { opacity: .72; }

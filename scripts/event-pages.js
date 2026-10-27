@@ -108,12 +108,12 @@
   function loadEventFeedback(event) {
     if (!event.id) return;
     const token = window.valorAccountToken();
-    const root = document.getElementById('eventDetails');
+    const root = document.querySelector('.event-detail-poster-wrap') || document.getElementById('eventDetails');
     if (!token) {
       const signIn = document.createElement('a');
-      signIn.className = 'ticket-love';
+      signIn.className = 'ticket-love event-detail-love';
       signIn.href = 'account.html?returnTo=' + encodeURIComponent(window.location.pathname + window.location.search + window.location.hash);
-      signIn.textContent = '♡ Sign in to like and recommend this event';
+      signIn.textContent = '♡ Favorite this event';
       root.appendChild(signIn);
       return;
     }
@@ -124,7 +124,9 @@
     root.appendChild(status);
     api('/api/account/events/' + encodeURIComponent(event.id) + '/feedback', { headers: { Authorization: 'Bearer ' + token } }).then((saved) => {
       status.remove();
-      root.appendChild(createTicketFeedback({ eventId: event.id, eventTitle: event.title, loved: saved.loved, rating: saved.rating, review: saved.review }));
+      const feedback = createTicketFeedback({ eventId: event.id, eventTitle: event.title, loved: saved.loved, rating: saved.rating, review: saved.review });
+      feedback.classList.add('event-detail-feedback');
+      root.appendChild(feedback);
     }).catch((error) => { status.textContent = error.message; status.classList.add('error'); });
   }  async function loadEventDetails() {
     const root = document.getElementById('eventDetails');
