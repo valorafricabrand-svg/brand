@@ -587,6 +587,47 @@
     return rail;
   }
 
+  function createPartnershipBrandsRail() {
+    const rail = document.createElement('aside');
+    rail.className = 'sponsored-ticket-rail partnership-brands-rail';
+    rail.setAttribute('aria-label', 'Partnership brands');
+
+    const header = document.createElement('div');
+    header.className = 'sponsored-ticket-heading';
+    header.innerHTML = '<div><span>◆</span><strong>Partnership brands</strong></div><a href="partnership.html">Become a partner <span aria-hidden="true">→</span></a>';
+
+    const windowEl = document.createElement('div');
+    windowEl.className = 'sponsored-ticket-window';
+    const track = document.createElement('div');
+    track.className = 'partnership-brands-track';
+    const brands = [
+      { name: 'M-Pesa', note: 'Mobile payments', style: 'mpesa' },
+      { name: 'PayPal', note: 'Digital payments', style: 'paypal' },
+      { name: 'Bitcoin', note: 'Crypto payments', style: 'bitcoin' },
+      { name: 'Toyota', note: 'Mobility partner', style: 'toyota' },
+      { name: 'Paystack', note: 'Online payments', style: 'paystack' },
+      { name: 'Airtel Money', note: 'Mobile payments', style: 'airtel' }
+    ];
+
+    brands.forEach((brand) => {
+      const card = document.createElement('a');
+      card.className = `partnership-brand-card brand-${brand.style}`;
+      card.href = 'partnership.html';
+      card.setAttribute('aria-label', `${brand.name} partnership — learn more`);
+      card.innerHTML = `<span class="partnership-brand-mark" aria-hidden="true">${brand.name === 'Bitcoin' ? '₿' : brand.name.charAt(0)}</span><span><strong>${brand.name}</strong><small>${brand.note}</small></span>`;
+      track.appendChild(card);
+    });
+    [...track.children].forEach((card) => track.appendChild(card.cloneNode(true)));
+
+    windowEl.appendChild(track);
+    rail.append(header, windowEl);
+    rail.addEventListener('mouseenter', () => track.classList.add('is-paused'));
+    rail.addEventListener('mouseleave', () => track.classList.remove('is-paused'));
+    rail.addEventListener('focusin', () => track.classList.add('is-paused'));
+    rail.addEventListener('focusout', () => track.classList.remove('is-paused'));
+    return rail;
+  }
+
   function renderEvents(container, list) {
     if (!container) return;
     const cards = list.map(createEventCard);
@@ -594,6 +635,9 @@
       cards.splice(Math.min(2, cards.length), 0, createSponsoredAdRail());
       if (list.length >= 8) {
         cards.splice(Math.min(8, cards.length), 0, createSponsoredEventsRail());
+      }
+      if (list.length >= 12) {
+        cards.splice(Math.min(12, cards.length), 0, createPartnershipBrandsRail());
       }
     }
     container.replaceChildren(...cards);

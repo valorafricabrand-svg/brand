@@ -273,6 +273,22 @@ img { display: block; max-width: 100%; }
 .sponsored-merch-card div { background: linear-gradient(135deg, #273f70, #744c78); }
 .sponsored-ticket-button { display: inline-flex; width: max-content; min-height: 31px; align-items: center; gap: 8px; margin-top: 3px; padding: 6px 9px; border-radius: 7px; color: var(--green-dark); background: #fff; font-size: 10px; font-weight: 800; }
 .sponsored-ticket-card:hover .sponsored-ticket-button { color: #fff; background: #133f33; }
+.partnership-brands-rail { border-color: #dfe5ec; background: linear-gradient(135deg, #f9fbfd, #f4f7fb); }
+.partnership-brands-rail .sponsored-ticket-heading div span { color: #26384f; background: linear-gradient(135deg, #dfe8f4, #fff); border: 1px solid #d7e0ea; }
+.partnership-brands-track { display: flex; width: max-content; gap: 10px; padding: 10px 12px; animation: sponsored-ticker 26s linear infinite; }
+.partnership-brands-track.is-paused { animation-play-state: paused; }
+.partnership-brand-card { display: flex; width: 190px; height: 82px; align-items: center; gap: 11px; padding: 12px 14px; border: 1px solid #e3e8ee; border-radius: 12px; color: #253044; background: #fff; box-shadow: 0 5px 15px rgba(31, 49, 72, .055); text-decoration: none; }
+.partnership-brand-card:hover { transform: translateY(-1px); border-color: #cbd6df; box-shadow: 0 8px 18px rgba(31, 49, 72, .09); }
+.partnership-brand-mark { display: grid; width: 46px; height: 46px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: #fff; background: #26384f; font: 800 20px Manrope, sans-serif; }
+.partnership-brand-card > span:last-child { display: grid; gap: 3px; }
+.partnership-brand-card strong { color: #24344a; font: 800 15px Manrope, sans-serif; white-space: nowrap; }
+.partnership-brand-card small { color: #8290a3; font-size: 9px; font-weight: 700; }
+.brand-mpesa .partnership-brand-mark { background: #e51d2a; }
+.brand-paypal .partnership-brand-mark { background: #173c79; }
+.brand-bitcoin .partnership-brand-mark { color: #fff; background: #f7931a; }
+.brand-toyota .partnership-brand-mark { color: #d3132a; border: 3px solid #d3132a; background: #fff; }
+.brand-paystack .partnership-brand-mark { background: #00c3f7; }
+.brand-airtel .partnership-brand-mark { background: #e30613; }
 @keyframes sponsored-ticker { 0% { transform: translateX(0); } 100% { transform: translateX(calc(-50% - 5px)); } }
 .event-card { min-width: 0; overflow: hidden; border: 1px solid #e8edf1; border-radius: 13px; color: var(--ink); background: #fff; box-shadow: 0 6px 19px rgba(25, 45, 65, .08); transition: box-shadow .2s ease, transform .2s ease; }
 .event-card:hover { transform: translateY(-3px); box-shadow: 0 13px 28px rgba(25, 45, 65, .14); }
