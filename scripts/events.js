@@ -502,9 +502,65 @@
     if (!copied) throw new Error('Clipboard access is unavailable in this browser.');
   }
 
+  function createSponsoredAdRail() {
+    const rail = document.createElement('aside');
+    rail.className = 'sponsored-ticket-rail';
+    rail.setAttribute('aria-label', 'Sponsored events and Valor merchandise');
+
+    const header = document.createElement('div');
+    header.className = 'sponsored-ticket-heading';
+    header.innerHTML = '<div><span>✦</span><strong>Sponsored for you</strong></div><a href="advertise.html">Advertise with Valor <span aria-hidden="true">→</span></a>';
+
+    const windowEl = document.createElement('div');
+    windowEl.className = 'sponsored-ticket-window';
+    const track = document.createElement('div');
+    track.className = 'sponsored-ticket-track';
+
+    const featuredEvent = events.find((event) => Array.isArray(event.tickets) && event.tickets.length);
+    const eventCard = document.createElement(featuredEvent ? 'a' : 'article');
+    eventCard.className = 'sponsored-ticket-card sponsored-event-card';
+    if (featuredEvent) {
+      eventCard.href = featuredEvent.slug
+        ? `event.html?slug=${encodeURIComponent(featuredEvent.slug)}`
+        : '#';
+      if (!featuredEvent.slug) {
+        setEventDetailsLink(eventCard, featuredEvent);
+      }
+    }
+    eventCard.innerHTML = featuredEvent
+      ? '<span class="sponsored-ticket-label">SPONSORED EVENT</span><div><small>Discover &amp; experience</small><strong></strong><p></p><span class="sponsored-ticket-button">Get tickets <b aria-hidden="true">→</b></span></div>'
+      : '<span class="sponsored-ticket-label">SPONSORED EVENT</span><div><small>Your event deserves attention</small><strong>Put your next event in front of the crowd</strong><p>Reach engaged event-goers across Kenya.</p><a class="sponsored-ticket-button" href="advertise.html">Promote an event <b aria-hidden="true">→</b></a></div>';
+    if (featuredEvent) {
+      eventCard.querySelector('strong').textContent = featuredEvent.title;
+      eventCard.querySelector('p').textContent = `${featuredEvent.location} · from ${formatMoney(featuredEvent.tickets[0].price, featuredEvent.tickets[0].currency || 'KES')}`;
+    }
+
+    const merchCard = document.createElement('a');
+    merchCard.className = 'sponsored-ticket-card sponsored-merch-card';
+    merchCard.href = 'shop.html';
+    merchCard.innerHTML = '<span class="sponsored-ticket-label">VALOR MERCH</span><div><small>Wear the experience</small><strong>Official Valor Africa merch</strong><p>Shop totes, tees and community favourites.</p><span class="sponsored-ticket-button">Shop now <b aria-hidden="true">→</b></span></div><span class="merch-spark" aria-hidden="true">V</span>';
+
+    track.append(eventCard, merchCard);
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      track.append(eventCard.cloneNode(true), merchCard.cloneNode(true));
+    }
+    windowEl.appendChild(track);
+    rail.append(header, windowEl);
+    rail.addEventListener('mouseenter', () => track.classList.add('is-paused'));
+    rail.addEventListener('mouseleave', () => track.classList.remove('is-paused'));
+    rail.addEventListener('focusin', () => track.classList.add('is-paused'));
+    rail.addEventListener('focusout', () => track.classList.remove('is-paused'));
+    return rail;
+  }
+
   function renderEvents(container, list) {
     if (!container) return;
-    container.replaceChildren(...list.map(createEventCard));
+    const cards = list.map(createEventCard);
+    if (container.id === 'allEvents' && list.length >= 2) {
+      const insertionIndex = Math.min(4, cards.length);
+      cards.splice(insertionIndex, 0, createSponsoredAdRail());
+    }
+    container.replaceChildren(...cards);
   }
 
   const featured = document.getElementById('featuredEvents');
@@ -894,6 +950,8 @@
       });
       const noResults = document.getElementById('noResults');
       if (noResults) noResults.hidden = visible > 0;
+      const sponsoredRail = allEvents.querySelector('.sponsored-ticket-rail');
+      if (sponsoredRail) sponsoredRail.hidden = visible === 0;
     };
     allCategories.addEventListener('click', (event) => {
       const button = event.target.closest('button[data-category]');
