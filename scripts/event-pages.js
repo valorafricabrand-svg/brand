@@ -105,6 +105,61 @@
     return feedback;
   }
 
+  function loadPublicEventReviews(event) {
+    const root = document.getElementById('eventDetails');
+    if (!root || !event.id) return;
+    const section = document.createElement('section');
+    section.className = 'event-public-reviews';
+    section.innerHTML = '<div class="event-review-heading"><h2>What people say</h2><p>Loading reviews…</p></div>';
+    root.appendChild(section);
+
+    api('/api/events/' + encodeURIComponent(event.id) + '/reviews').then((data) => {
+      const heading = section.querySelector('.event-review-heading');
+      const countLabel = data.ratingCount
+        ? `${data.averageRating.toFixed(1)} out of 5 · ${data.ratingCount} ${data.ratingCount === 1 ? 'rating' : 'ratings'}`
+        : data.loveCount
+          ? `${data.loveCount} ${data.loveCount === 1 ? 'person loves' : 'people love'} this event`
+          : 'No ratings yet';
+      heading.innerHTML = '';
+      const title = document.createElement('h2');
+      title.textContent = 'What people say';
+      const summary = document.createElement('p');
+      summary.className = 'event-review-summary';
+      if (data.ratingCount) {
+        summary.textContent = '★'.repeat(Math.round(data.averageRating)) + '☆'.repeat(5 - Math.round(data.averageRating)) + '  ' + countLabel;
+      } else {
+        summary.textContent = countLabel;
+      }
+      heading.append(title, summary);
+
+      if (!data.reviews.length) {
+        const empty = document.createElement('p');
+        empty.className = 'event-review-empty';
+        empty.textContent = 'Reviews from attendees will appear here once they share them.';
+        section.appendChild(empty);
+        return;
+      }
+      const list = document.createElement('div');
+      list.className = 'event-review-list';
+      data.reviews.forEach((review) => {
+        const article = document.createElement('article');
+        article.className = 'event-review-item';
+        const name = document.createElement('strong');
+        name.textContent = review.displayName;
+        const stars = document.createElement('span');
+        stars.className = 'event-review-stars';
+        stars.textContent = review.rating ? '★'.repeat(review.rating) + '☆'.repeat(5 - review.rating) : 'Valor attendee';
+        const comment = document.createElement('p');
+        comment.textContent = review.review;
+        article.append(name, stars, comment);
+        list.appendChild(article);
+      });
+      section.appendChild(list);
+    }).catch(() => {
+      section.querySelector('.event-review-heading p').textContent = 'Reviews are temporarily unavailable.';
+    });
+  }
+
   function loadEventFeedback(event) {
     if (!event.id) return;
     const token = window.valorAccountToken();
@@ -374,7 +429,10 @@
       layout.className = 'event-detail-layout';
       layout.append(posterWrap, copy);
       root.replaceChildren(layout);
-      if (slug) loadEventFeedback(event);
+      if (slug) {
+        loadPublicEventReviews(event);
+        loadEventFeedback(event);
+      }
       if (!slug) return;
       const form = document.getElementById('eventTicketForm');
       const select = form.elements.ticketType;

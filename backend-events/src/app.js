@@ -1303,6 +1303,45 @@ function createApp(options = {}) {
     res.json({ events: rows.map(publicEvent) });
   });
 
+  app.get('/api/events/:eventId/reviews', (req, res, next) => {
+    try {
+      const eventExists = db.prepare(`SELECT 1 FROM events WHERE id=? LIMIT 1`).get(req.params.eventId);
+      if (!eventExists) return res.status(404).json({ error: 'This event is not available.' });
+      const summary = db.prepare(`
+        SELECT
+          COUNT(*) AS loveCount,
+          COUNT(rating) AS ratingCount,
+          AVG(rating) AS averageRating,
+          SUM(CASE WHEN TRIM(review) <> '' THEN 1 ELSE 0 END) AS reviewCount
+        FROM event_feedback
+        WHERE event_id=? AND (loved=1 OR rating IS NOT NULL OR TRIM(review) <> '')
+      `).get(req.params.eventId);
+      const reviews = db.prepare(`
+        SELECT COALESCE(NULLIF(TRIM(a.display_name), ''), 'Valor attendee') AS displayName,
+          f.rating,f.review,f.updated_at AS updatedAt
+        FROM event_feedback f
+        JOIN accounts a ON a.id=f.account_id
+        WHERE f.event_id=? AND TRIM(f.review) <> ''
+        ORDER BY datetime(f.updated_at) DESC
+        LIMIT 20
+      `).all(req.params.eventId);
+      res.json({
+        averageRating: summary.averageRating === null ? null : Number(Number(summary.averageRating).toFixed(1)),
+        ratingCount: summary.ratingCount || 0,
+        loveCount: summary.loveCount || 0,
+        reviewCount: summary.reviewCount || 0,
+        reviews: reviews.map((review) => ({
+          displayName: review.displayName,
+          rating: review.rating,
+          review: review.review,
+          updatedAt: review.updatedAt
+        }))
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/api/events/by-slug/:slug', (req, res) => {
     const row = db.prepare(`
       SELECT * FROM events WHERE slug = ? AND status = 'approved' AND deleted_at IS NULL

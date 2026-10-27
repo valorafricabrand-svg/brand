@@ -768,6 +768,12 @@ test('free registrations require an account but do not require M-Pesa', async ()
   const reviewedTicket = updatedTicket.body.tickets.find((ticket) => ticket.orderId === registration.body.orderId);
   assert.equal(reviewedTicket.loved, 1);
   assert.equal(reviewedTicket.rating, 5);
+  const publicReviews = await request(app).get(`/api/events/${submitted.body.id}/reviews`);
+  assert.equal(publicReviews.status, 200);
+  assert.equal(publicReviews.body.ratingCount, 1);
+  assert.equal(publicReviews.body.averageRating, 5);
+  assert.equal(publicReviews.body.reviews.length, 1);
+  assert.equal(publicReviews.body.reviews[0].review, 'Really enjoyed this event.');
   assert.equal(reviewedTicket.review, 'Really enjoyed this event.');
   const invalidReview = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
     .set(accountAuth).send({ loved: true, rating: 6, review: '' });
