@@ -601,12 +601,12 @@
     const track = document.createElement('div');
     track.className = 'partnership-brands-track';
     const brands = [
-      { name: 'M-Pesa', note: 'Mobile payments', style: 'mpesa' },
-      { name: 'PayPal', note: 'Digital payments', style: 'paypal' },
-      { name: 'Bitcoin', note: 'Crypto payments', style: 'bitcoin' },
-      { name: 'Toyota', note: 'Mobility partner', style: 'toyota' },
-      { name: 'Paystack', note: 'Online payments', style: 'paystack' },
-      { name: 'Airtel Money', note: 'Mobile payments', style: 'airtel' }
+      { name: 'M-Pesa', note: 'Mobile payments', style: 'mpesa', logo: 'images/partners/mpesa.svg' },
+      { name: 'PayPal', note: 'Digital payments', style: 'paypal', logo: 'images/partners/paypal.svg' },
+      { name: 'Bitcoin', note: 'Crypto payments', style: 'bitcoin', logo: 'images/partners/bitcoin.svg' },
+      { name: 'Toyota', note: 'Mobility partner', style: 'toyota', logo: 'images/partners/toyota.svg' },
+      { name: 'Paystack', note: 'Online payments', style: 'paystack', logo: 'images/partners/paystack.svg' },
+      { name: 'Airtel Money', note: 'Mobile payments', style: 'airtel', logo: 'images/partners/airtel.svg' }
     ];
 
     brands.forEach((brand) => {
@@ -614,7 +614,7 @@
       card.className = `partnership-brand-card brand-${brand.style}`;
       card.href = 'partnership.html';
       card.setAttribute('aria-label', `${brand.name} partnership — learn more`);
-      card.innerHTML = `<span class="partnership-brand-mark" aria-hidden="true">${brand.name === 'Bitcoin' ? '₿' : brand.name.charAt(0)}</span><span><strong>${brand.name}</strong><small>${brand.note}</small></span>`;
+      card.innerHTML = `<span class="partnership-brand-logo"><img src="${brand.logo}" alt="${brand.name} logo" loading="lazy"></span><span><strong>${brand.name}</strong><small>${brand.note}</small></span>`;
       track.appendChild(card);
     });
     [...track.children].forEach((card) => track.appendChild(card.cloneNode(true)));
@@ -635,9 +635,6 @@
       cards.splice(Math.min(2, cards.length), 0, createSponsoredAdRail());
       if (list.length >= 8) {
         cards.splice(Math.min(8, cards.length), 0, createSponsoredEventsRail());
-      }
-      if (list.length >= 12) {
-        cards.splice(Math.min(12, cards.length), 0, createPartnershipBrandsRail());
       }
     }
     container.replaceChildren(...cards);
