@@ -91,7 +91,10 @@ async function initiateStkPush(order) {
       AccountReference: order.id.slice(0, 12),
       TransactionDesc: order.orderType === 'ticket'
         ? 'Valor event tickets'
-        : order.orderType === 'wallet' ? 'Valor wallet deposit' : 'Valor event promotion'
+        : order.orderType === 'wallet' ? 'Valor wallet deposit'
+          : order.orderType === 'gift_card' ? 'Valor gift card'
+            : order.orderType === 'merchant_voucher' ? 'Valor merchant voucher'
+              : 'Valor event promotion'
     })
   });
   if (!data.CheckoutRequestID || !data.MerchantRequestID) {

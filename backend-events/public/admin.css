@@ -56,5 +56,11 @@ input,select,textarea{width:100%;min-height:42px;padding:9px 11px;border:1px sol
 .feedback{min-height:22px;margin:10px 0 0;color:var(--green-dark,#064e3b);font-size:13px}
 .feedback.error{color:#b42318}
 .empty{padding:20px;border:1px dashed var(--border);border-radius:10px;color:var(--muted);text-align:center}
+.gift-admin-group{margin-top:24px;padding-top:18px;border-top:1px solid #e8edf2}
+.gift-admin-group h3{margin:0 0 11px;font-size:16px}
+.gift-payout-fields{display:grid;grid-template-columns:1fr 1.4fr 1.3fr auto;align-items:end}
+.gift-payout-fields input{min-width:0}
+.gift-payout-fields .button{white-space:nowrap}
 @media(max-width:760px){.package-form,.package-row,.product-form,.product-row{grid-template-columns:1fr 1fr}.package-form .button,.product-form .button{grid-column:1/-1}.section-heading{align-items:stretch;flex-direction:column}.section-heading select{width:100%}}
+@media(max-width:760px){.gift-payout-fields{grid-template-columns:1fr 1fr}.gift-payout-fields .button{grid-column:1/-1}}
 @media(max-width:470px){.package-form,.package-row,.product-form,.product-row{grid-template-columns:1fr}.record-actions .button{flex:1 1 100%}.tabs{margin-inline:-5px}}

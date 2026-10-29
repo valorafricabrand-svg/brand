@@ -162,6 +162,24 @@ function createTestAccountAuth(email) {
   return { Authorization: `Bearer ${token}` };
 }
 
+function createTestWallet(auth, balanceKes = 0) {
+  const tokenHash = crypto.createHash('sha256')
+    .update(auth.Authorization.slice('Bearer '.length)).digest('hex');
+  const account = db.prepare('SELECT account_id AS accountId FROM account_sessions WHERE token_hash=?').get(tokenHash);
+  assert.ok(account, 'Test auth must reference an account session.');
+  const walletId = crypto.randomUUID();
+  const phone = `2547${String(crypto.randomInt(0, 100000000)).padStart(8, '0')}`;
+  db.prepare('INSERT INTO wallets (id,phone,account_type,account_id) VALUES (?,?,?,?)')
+    .run(walletId, phone, 'buyer', account.accountId);
+  if (balanceKes) {
+    db.prepare(`
+      INSERT INTO wallet_transactions (id,wallet_id,transaction_type,amount_kes,status,description,completed_at)
+      VALUES (?,?,'deposit',?,'completed','Test wallet opening balance',datetime('now'))
+    `).run(crypto.randomUUID(), walletId, balanceKes);
+  }
+  return { walletId, accountId: account.accountId };
+}
+
 function submitEvent(
   title = 'Test Live Festival',
   auth = createTestAccountAuth(`event-submitter-${crypto.randomUUID()}@example.com`),
@@ -1251,6 +1269,201 @@ test('organizer and sponsor partnership applications support secure follow-up an
     .set(applicantAuth)).body.applications.find((application) => application.type === 'sponsor');
   assert.equal(updatedSponsor.status, 'pending');
   assert.equal(updatedSponsor.adminNote, '');
+});
+
+test('Valor gift cards charge, retry, redeem once, and support reviewed wallet refunds', async () => {
+  const purchaserAuth = createTestAccountAuth(`gift-purchaser-${crypto.randomUUID()}@example.com`);
+  const purchaser = createTestWallet(purchaserAuth, 1500);
+  const purchasePayload = {
+    amountKes: 1000,
+    recipientName: 'Gift Recipient',
+    recipientContact: 'recipient@example.com',
+    message: 'Enjoy this!',
+    paymentMethod: 'wallet',
+    clientRequestId: crypto.randomUUID()
+  };
+  const purchase = await request(app).post('/api/gift-cards/purchase').set(purchaserAuth).send(purchasePayload);
+  assert.equal(purchase.status, 201);
+  assert.equal(purchase.body.status, 'paid');
+  assert.equal((await request(app).get('/api/wallet').set(purchaserAuth)).body.balanceKes, 500);
+  const repeat = await request(app).post('/api/gift-cards/purchase').set(purchaserAuth).send(purchasePayload);
+  assert.equal(repeat.status, 200);
+  assert.equal(repeat.body.purchaseId, purchase.body.purchaseId);
+  assert.equal((await request(app).get('/api/wallet').set(purchaserAuth)).body.balanceKes, 500);
+
+  const card = (await request(app).get('/api/gift-cards/mine').set(purchaserAuth)).body.purchases[0];
+  assert.equal(card.status, 'paid');
+  assert.equal(card.cardStatus, 'issued');
+  assert.match(card.code, /^VA(?:-[0-9A-F]{6}){6}$/);
+  assert.equal(db.prepare('SELECT code_ciphertext FROM gift_cards WHERE id=?').get(card.giftCardId).code_ciphertext.includes(card.code), false);
+
+  const recipientAuth = createTestAccountAuth(`gift-recipient-${crypto.randomUUID()}@example.com`);
+  createTestWallet(recipientAuth);
+  const redeemed = await request(app).post('/api/gift-cards/redeem').set(recipientAuth).send({ code: card.code });
+  assert.equal(redeemed.status, 200);
+  assert.equal(redeemed.body.amountKes, 1000);
+  assert.equal(redeemed.body.balanceKes, 1000);
+  assert.equal((await request(app).post('/api/gift-cards/redeem').set(recipientAuth).send({ code: card.code })).status, 404);
+  assert.equal((await request(app).get('/api/wallet').set(recipientAuth)).body.balanceKes, 1000);
+
+  const refundablePayload = { ...purchasePayload, amountKes: 500, clientRequestId: crypto.randomUUID() };
+  const refundablePurchase = await request(app).post('/api/gift-cards/purchase').set(purchaserAuth).send(refundablePayload);
+  assert.equal(refundablePurchase.status, 201);
+  const refund = await request(app).post('/api/gift-refunds').set(purchaserAuth).send({
+    instrumentType: 'gift_card',
+    instrumentId: refundablePurchase.body.purchaseId,
+    reason: 'Bought this in error before sharing the code.'
+  });
+  assert.equal(refund.status, 201);
+  const approved = await request(app).patch(`/api/gift-refunds/admin/${refund.body.requestId}`)
+    .set(admin).send({ status: 'approved', adminNote: 'Unused credit returned to wallet.' });
+  assert.equal(approved.status, 200);
+  assert.equal((await request(app).get('/api/wallet').set(purchaserAuth)).body.balanceKes, 500);
+  const refunded = (await request(app).get('/api/gift-cards/mine').set(purchaserAuth)).body.purchases
+    .find((item) => item.purchaseId === refundablePurchase.body.purchaseId);
+  assert.equal(refunded.status, 'refunded');
+  assert.equal(refunded.code, '');
+  assert.equal(db.prepare('SELECT status FROM gift_cards WHERE purchase_id=?').get(refundablePurchase.body.purchaseId).status, 'refunded');
+  assert.ok(purchaser.walletId);
+});
+
+test('M-Pesa gift card remains unavailable until its matching payment callback is confirmed', async () => {
+  const buyerAuth = createTestAccountAuth(`mpesa-gift-buyer-${crypto.randomUUID()}@example.com`);
+  const purchase = await request(app).post('/api/gift-cards/purchase').set(buyerAuth).send({
+    amountKes: 1500,
+    recipientName: 'M-Pesa Recipient',
+    paymentMethod: 'mpesa',
+    phone: '0712345678',
+    clientRequestId: crypto.randomUUID()
+  });
+  assert.equal(purchase.status, 201);
+  assert.equal(purchase.body.status, 'pending');
+  const pending = db.prepare(`
+    SELECT checkout_request_id AS checkoutRequestId,merchant_request_id AS merchantRequestId
+    FROM gift_card_purchases WHERE id=?
+  `).get(purchase.body.purchaseId);
+  assert.equal(db.prepare('SELECT status FROM gift_cards WHERE purchase_id=?').get(purchase.body.purchaseId).status, 'pending');
+  const confirmed = await completePayment(pending.checkoutRequestId, pending.merchantRequestId, 1500, 'GIFTCARD123');
+  assert.equal(confirmed.status, 200);
+  const paidCard = (await request(app).get('/api/gift-cards/mine').set(buyerAuth)).body.purchases[0];
+  assert.equal(paidCard.status, 'paid');
+  assert.equal(paidCard.cardStatus, 'issued');
+  assert.ok(paidCard.code);
+});
+
+test('verified merchants can load one-time vouchers, fulfill wallet orders, confirm refunds, and record payouts', async () => {
+  const merchantAuth = createTestAccountAuth(`gift-merchant-${crypto.randomUUID()}@example.com`);
+  const merchantWallet = createTestWallet(merchantAuth);
+  const application = await request(app).post('/api/gift-merchants/applications').set(merchantAuth).send({
+    businessName: 'Nairobi Coffee House',
+    websiteUrl: 'https://coffee.example',
+    contactName: 'Amina Merchant',
+    contactPhone: `07${String(crypto.randomInt(10000000, 99999999))}`,
+    details: 'Independent coffee shop offering prepaid drinks and cafe experiences.'
+  });
+  assert.equal(application.status, 201);
+  assert.equal((await request(app).get('/api/gift-merchants/admin').set(admin)).body.merchants
+    .some((item) => item.id === application.body.merchantId && item.status === 'pending'), true);
+  const approvedMerchant = await request(app).patch(`/api/gift-merchants/admin/${application.body.merchantId}`)
+    .set(admin).send({ status: 'approved', adminNote: 'Business contact verified.' });
+  assert.equal(approvedMerchant.status, 200);
+
+  const listing = await request(app).post('/api/gift-merchants/vouchers').set(merchantAuth).send({
+    title: 'Coffee & pastry',
+    description: 'One coffee and pastry of your choice.',
+    faceValueKes: 1000,
+    salePriceKes: 750,
+    redemptionInstructions: 'Present this code at the counter.',
+    terms: 'One redemption per code.'
+  });
+  assert.equal(listing.status, 201);
+  const codes = ['CAFE-ONE-TIME-001', 'CAFE-ONE-TIME-002'].join('\n');
+  const inventory = await request(app).post(`/api/gift-merchants/vouchers/${listing.body.voucherId}/inventory`)
+    .set(merchantAuth).send({ codes });
+  assert.equal(inventory.status, 201);
+  assert.equal(inventory.body.added, 2);
+  assert.equal((await request(app).get('/api/gift-vouchers')).body.vouchers[0].stock, 2);
+  assert.equal(db.prepare('SELECT code_ciphertext FROM merchant_voucher_codes WHERE voucher_id=?').get(listing.body.voucherId).code_ciphertext.includes('CAFE-ONE-TIME'), false);
+  const secondListing = await request(app).post('/api/gift-merchants/vouchers').set(merchantAuth).send({
+    title: 'Coffee tasting',
+    description: 'A second offer from the same cafe.',
+    faceValueKes: 1500,
+    salePriceKes: 1000,
+    redemptionInstructions: 'Present this code at the counter.'
+  });
+  assert.equal(secondListing.status, 201);
+  const reusedCode = await request(app).post(`/api/gift-merchants/vouchers/${secondListing.body.voucherId}/inventory`)
+    .set(merchantAuth).send({ codes: 'CAFE-ONE-TIME-001' });
+  assert.equal(reusedCode.status, 409);
+
+  const buyerAuth = createTestAccountAuth(`voucher-buyer-${crypto.randomUUID()}@example.com`);
+  const buyerWallet = createTestWallet(buyerAuth, 5000);
+  const orderPayload = {
+    voucherId: listing.body.voucherId,
+    buyerName: 'Voucher Buyer',
+    paymentMethod: 'wallet',
+    clientRequestId: crypto.randomUUID()
+  };
+  const order = await request(app).post('/api/merchant-voucher-orders').set(buyerAuth).send(orderPayload);
+  assert.equal(order.status, 201);
+  assert.equal(order.body.status, 'paid');
+  assert.equal(order.body.amountKes, 750);
+  assert.equal((await request(app).get('/api/wallet').set(buyerAuth)).body.balanceKes, 4250);
+  const duplicate = await request(app).post('/api/merchant-voucher-orders').set(buyerAuth).send(orderPayload);
+  assert.equal(duplicate.status, 200);
+  assert.equal(duplicate.body.orderId, order.body.orderId);
+  assert.equal((await request(app).get('/api/wallet').set(buyerAuth)).body.balanceKes, 4250);
+  const buyerOrder = (await request(app).get('/api/merchant-voucher-orders/mine').set(buyerAuth)).body.orders[0];
+  assert.ok(codes.split('\n').includes(buyerOrder.code));
+
+  const refund = await request(app).post('/api/gift-refunds').set(buyerAuth).send({
+    instrumentType: 'merchant_voucher',
+    instrumentId: order.body.orderId,
+    reason: 'The voucher has not been used.'
+  });
+  assert.equal(refund.status, 201);
+  assert.equal((await request(app).get('/api/merchant-voucher-orders/mine').set(buyerAuth))
+    .body.orders.find((item) => item.orderId === order.body.orderId).refundStatus, 'pending');
+  const merchantRefunds = await request(app).get('/api/gift-merchants/mine').set(merchantAuth);
+  assert.equal(merchantRefunds.body.refundRequests.length, 1);
+  assert.equal(merchantRefunds.body.refundRequests[0].requestId, refund.body.requestId);
+  const prematureApproval = await request(app).patch(`/api/gift-refunds/admin/${refund.body.requestId}`)
+    .set(admin).send({ status: 'approved' });
+  assert.equal(prematureApproval.status, 409);
+  const confirmedUnused = await request(app).post(`/api/gift-merchants/refunds/${refund.body.requestId}/confirm-unused`)
+    .set(merchantAuth);
+  assert.equal(confirmedUnused.status, 200);
+  const approvedRefund = await request(app).patch(`/api/gift-refunds/admin/${refund.body.requestId}`)
+    .set(admin).send({ status: 'approved', adminNote: 'Merchant confirmed the code is unused.' });
+  assert.equal(approvedRefund.status, 200);
+  assert.equal((await request(app).get('/api/merchant-voucher-orders/mine').set(buyerAuth))
+    .body.orders.find((item) => item.orderId === order.body.orderId).refundStatus, 'approved');
+  assert.equal((await request(app).get('/api/wallet').set(buyerAuth)).body.balanceKes, 5000);
+  assert.equal(db.prepare('SELECT status FROM merchant_voucher_codes WHERE order_id=?').get(order.body.orderId).status, 'retired');
+
+  const secondOrder = await request(app).post('/api/merchant-voucher-orders').set(buyerAuth).send({
+    ...orderPayload,
+    clientRequestId: crypto.randomUUID()
+  });
+  assert.equal(secondOrder.status, 201);
+  const secondBuyerOrder = (await request(app).get('/api/merchant-voucher-orders/mine').set(buyerAuth)).body.orders
+    .find((item) => item.orderId === secondOrder.body.orderId);
+  assert.ok(secondBuyerOrder.code);
+  assert.notEqual(secondBuyerOrder.code, buyerOrder.code);
+  const payout = await request(app).post(`/api/gift-payouts/admin/${application.body.merchantId}`)
+    .set(admin).send({ amountKes: 500, reference: `GIFT-PAYOUT-${crypto.randomUUID()}`, note: 'Verified manual settlement.' });
+  assert.equal(payout.status, 201);
+  const payoutTotals = (await request(app).get('/api/gift-payouts/admin').set(admin)).body.merchants
+    .find((item) => item.merchantId === application.body.merchantId);
+  assert.equal(payoutTotals.paidOutKes, 500);
+  assert.equal(payoutTotals.dueKes, 250);
+  assert.equal((await request(app).get('/api/gift-merchants/mine').set(merchantAuth)).body.dueKes, 250);
+  assert.equal(db.prepare(`
+    SELECT COALESCE(SUM(amount_kes),0) AS balanceKes
+    FROM merchant_voucher_ledger WHERE merchant_id=?
+  `).get(application.body.merchantId).balanceKes, 250);
+  assert.ok(merchantWallet.walletId);
+  assert.ok(buyerWallet.walletId);
 });
 
 after(() => {

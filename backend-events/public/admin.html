@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Event admin | Valor Africa</title>
-  <link rel="stylesheet" href="/admin-assets/admin.css?v=business-partnerships-2">
-  <script src="/admin-assets/admin.js?v=business-partnerships-2" defer></script>
+  <link rel="stylesheet" href="/admin-assets/admin.css?v=gift-marketplace-1">
+  <script src="/admin-assets/admin.js?v=gift-marketplace-1" defer></script>
 </head>
 <body>
   <main class="admin-shell">
@@ -43,6 +43,7 @@
         <button class="tab" type="button" data-admin-tab="orders">All orders</button>
         <button class="tab" type="button" data-admin-tab="partners">Creator partners</button>
         <button class="tab" type="button" data-admin-tab="partnership-applications">Organizer &amp; sponsor inquiries</button>
+        <button class="tab" type="button" data-admin-tab="gifts">Gift marketplace</button>
       </nav>
       <section class="card admin-section" id="submissionsSection">
         <div class="section-heading">
@@ -90,6 +91,25 @@
       <section class="card admin-section" id="partnershipApplicationsSection" hidden>
         <div class="section-heading"><div><h2>Organizer &amp; sponsor inquiries</h2><p>Track follow-up status and notes. Approval is not a contract or agreement on price, budget, or deliverables.</p></div></div>
         <div class="record-list" id="partnershipApplicationsList"></div>
+      </section>
+      <section class="card admin-section" id="giftsSection" hidden>
+        <div class="section-heading"><div><h2>Gift marketplace operations</h2><p>Verify merchant applications, moderate voucher listings, record manual payouts, and review refunds. Payout controls only record transfers already made.</p></div></div>
+        <section class="gift-admin-group" aria-labelledby="giftMerchantsHeading">
+          <h3 id="giftMerchantsHeading">Merchant applications</h3>
+          <div class="record-list" id="giftMerchantsList"></div>
+        </section>
+        <section class="gift-admin-group" aria-labelledby="giftListingsHeading">
+          <h3 id="giftListingsHeading">Voucher listings</h3>
+          <div class="record-list" id="giftVouchersList"></div>
+        </section>
+        <section class="gift-admin-group" aria-labelledby="giftPayoutsHeading">
+          <h3 id="giftPayoutsHeading">Merchant payouts</h3>
+          <div class="record-list" id="giftPayoutsList"></div>
+        </section>
+        <section class="gift-admin-group" aria-labelledby="giftRefundsHeading">
+          <h3 id="giftRefundsHeading">Refund requests</h3>
+          <div class="record-list" id="giftRefundsList"></div>
+        </section>
       </section>
       <p class="feedback" id="dashboardFeedback" aria-live="polite"></p>
     </section>

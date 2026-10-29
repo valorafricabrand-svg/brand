@@ -299,6 +299,168 @@ db.exec(`
     quantity INTEGER NOT NULL CHECK (quantity BETWEEN 1 AND 10),
     unit_price_kes INTEGER NOT NULL CHECK (unit_price_kes > 0)
   );
+
+  CREATE TABLE IF NOT EXISTS gift_card_purchases (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts(id),
+    amount_kes INTEGER NOT NULL CHECK (amount_kes BETWEEN 500 AND 150000),
+    payment_method TEXT NOT NULL CHECK (payment_method IN ('wallet','mpesa')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed','review','refunded')),
+    client_request_id TEXT NOT NULL,
+    recipient_name TEXT NOT NULL,
+    recipient_contact TEXT NOT NULL DEFAULT '',
+    message TEXT NOT NULL DEFAULT '',
+    phone TEXT NOT NULL,
+    checkout_request_id TEXT UNIQUE,
+    merchant_request_id TEXT,
+    mpesa_receipt TEXT UNIQUE,
+    refund_reference TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    paid_at TEXT,
+    refunded_at TEXT,
+    UNIQUE (account_id,client_request_id)
+  );
+  CREATE INDEX IF NOT EXISTS gift_card_purchases_account ON gift_card_purchases(account_id,created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS gift_cards (
+    id TEXT PRIMARY KEY,
+    purchase_id TEXT NOT NULL UNIQUE REFERENCES gift_card_purchases(id),
+    purchaser_account_id TEXT NOT NULL REFERENCES accounts(id),
+    code_hash TEXT NOT NULL UNIQUE,
+    code_ciphertext TEXT NOT NULL,
+    code_nonce TEXT NOT NULL,
+    code_auth_tag TEXT NOT NULL,
+    amount_kes INTEGER NOT NULL CHECK (amount_kes BETWEEN 500 AND 150000),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','issued','redeemed','revoked','refunded')),
+    redeemed_by_account_id TEXT REFERENCES accounts(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    issued_at TEXT,
+    redeemed_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS gift_cards_purchaser ON gift_cards(purchaser_account_id,created_at DESC);
+  CREATE TABLE IF NOT EXISTS gift_card_ledger (
+    id TEXT PRIMARY KEY,
+    gift_card_id TEXT NOT NULL REFERENCES gift_cards(id),
+    transaction_type TEXT NOT NULL CHECK (transaction_type IN ('issued','redeemed','refunded','revoked')),
+    amount_kes INTEGER NOT NULL CHECK (amount_kes != 0),
+    account_id TEXT REFERENCES accounts(id),
+    reference_id TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS gift_card_ledger_card ON gift_card_ledger(gift_card_id,created_at,id);
+
+  CREATE TABLE IF NOT EXISTS gift_merchants (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL UNIQUE REFERENCES accounts(id),
+    business_name TEXT NOT NULL,
+    website_url TEXT NOT NULL DEFAULT '',
+    contact_name TEXT NOT NULL,
+    contact_phone TEXT NOT NULL,
+    application_details TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','suspended')),
+    admin_note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    reviewed_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS gift_merchants_status_created ON gift_merchants(status,created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS merchant_vouchers (
+    id TEXT PRIMARY KEY,
+    merchant_id TEXT NOT NULL REFERENCES gift_merchants(id),
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    face_value_kes INTEGER NOT NULL CHECK (face_value_kes > 0),
+    sale_price_kes INTEGER NOT NULL CHECK (sale_price_kes > 0),
+    redemption_instructions TEXT NOT NULL,
+    terms TEXT NOT NULL DEFAULT '',
+    active INTEGER NOT NULL DEFAULT 0 CHECK (active IN (0,1)),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS merchant_vouchers_listing ON merchant_vouchers(active,merchant_id,created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS merchant_voucher_orders (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts(id),
+    merchant_id TEXT NOT NULL REFERENCES gift_merchants(id),
+    voucher_id TEXT NOT NULL REFERENCES merchant_vouchers(id),
+    code_id TEXT NOT NULL REFERENCES merchant_voucher_codes(id),
+    amount_kes INTEGER NOT NULL CHECK (amount_kes > 0),
+    face_value_kes INTEGER NOT NULL CHECK (face_value_kes > 0),
+    voucher_title TEXT NOT NULL,
+    redemption_instructions TEXT NOT NULL,
+    voucher_terms TEXT NOT NULL DEFAULT '',
+    payment_method TEXT NOT NULL CHECK (payment_method IN ('wallet','mpesa')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','failed','review','refunded')),
+    client_request_id TEXT NOT NULL,
+    buyer_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    checkout_request_id TEXT UNIQUE,
+    merchant_request_id TEXT,
+    mpesa_receipt TEXT UNIQUE,
+    unused_confirmed INTEGER NOT NULL DEFAULT 0 CHECK (unused_confirmed IN (0,1)),
+    refund_reference TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    paid_at TEXT,
+    refunded_at TEXT,
+    UNIQUE (account_id,client_request_id)
+  );
+  CREATE INDEX IF NOT EXISTS merchant_voucher_orders_merchant ON merchant_voucher_orders(merchant_id,status,created_at DESC);
+  CREATE INDEX IF NOT EXISTS merchant_voucher_orders_buyer ON merchant_voucher_orders(account_id,created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS merchant_voucher_codes (
+    id TEXT PRIMARY KEY,
+    voucher_id TEXT NOT NULL REFERENCES merchant_vouchers(id),
+    code_hash TEXT NOT NULL,
+    code_ciphertext TEXT NOT NULL,
+    code_nonce TEXT NOT NULL,
+    code_auth_tag TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available','reserved','sold','retired')),
+    order_id TEXT UNIQUE REFERENCES merchant_voucher_orders(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (voucher_id,code_hash)
+  );
+  CREATE INDEX IF NOT EXISTS merchant_voucher_codes_inventory ON merchant_voucher_codes(voucher_id,status);
+  CREATE UNIQUE INDEX IF NOT EXISTS merchant_voucher_codes_unique_code ON merchant_voucher_codes(code_hash);
+  CREATE TABLE IF NOT EXISTS merchant_voucher_ledger (
+    id TEXT PRIMARY KEY,
+    merchant_id TEXT NOT NULL REFERENCES gift_merchants(id),
+    order_id TEXT NOT NULL REFERENCES merchant_voucher_orders(id),
+    transaction_type TEXT NOT NULL CHECK (transaction_type IN ('sale','refund','payout')),
+    amount_kes INTEGER NOT NULL CHECK (amount_kes != 0),
+    reference_id TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS merchant_voucher_ledger_merchant ON merchant_voucher_ledger(merchant_id,created_at,id);
+
+  CREATE TABLE IF NOT EXISTS merchant_payouts (
+    id TEXT PRIMARY KEY,
+    merchant_id TEXT NOT NULL REFERENCES gift_merchants(id),
+    amount_kes INTEGER NOT NULL CHECK (amount_kes > 0),
+    reference TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    admin_id INTEGER NOT NULL REFERENCES admins(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (merchant_id,reference)
+  );
+
+  CREATE TABLE IF NOT EXISTS gift_refund_requests (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts(id),
+    instrument_type TEXT NOT NULL CHECK (instrument_type IN ('gift_card','merchant_voucher')),
+    instrument_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+    admin_note TEXT NOT NULL DEFAULT '',
+    refund_reference TEXT NOT NULL DEFAULT '',
+    reviewed_by INTEGER REFERENCES admins(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    reviewed_at TEXT,
+    UNIQUE (account_id,instrument_type,instrument_id)
+  );
+  CREATE INDEX IF NOT EXISTS gift_refund_requests_review ON gift_refund_requests(status,created_at);
 `);
 
 const eventColumns = db.prepare('PRAGMA table_info(events)').all();
@@ -374,7 +536,12 @@ if (!walletTransactionSchema.includes("'merchandise_purchase'")) {
         wallet_id TEXT NOT NULL REFERENCES wallets(id),
         order_id TEXT UNIQUE REFERENCES orders(id),
         merchandise_order_id TEXT UNIQUE REFERENCES merchandise_orders(id),
-        transaction_type TEXT NOT NULL CHECK (transaction_type IN ('deposit','ticket_purchase','ad_purchase','merchandise_purchase')),
+        reference_type TEXT NOT NULL DEFAULT '',
+        reference_id TEXT NOT NULL DEFAULT '',
+        transaction_type TEXT NOT NULL CHECK (transaction_type IN (
+          'deposit','ticket_purchase','ad_purchase','merchandise_purchase',
+          'gift_card_purchase','gift_card_redemption','gift_card_refund','merchant_voucher_purchase'
+        )),
         amount_kes INTEGER NOT NULL CHECK (amount_kes != 0),
         status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','completed','failed','review')),
         checkout_request_id TEXT UNIQUE,
@@ -385,15 +552,18 @@ if (!walletTransactionSchema.includes("'merchandise_purchase'")) {
         completed_at TEXT
       );
       INSERT INTO wallet_transactions_new (
-        id,wallet_id,order_id,transaction_type,amount_kes,status,checkout_request_id,
+        id,wallet_id,order_id,merchandise_order_id,reference_type,reference_id,
+        transaction_type,amount_kes,status,checkout_request_id,
         merchant_request_id,receipt,description,created_at,completed_at
       )
-      SELECT id,wallet_id,order_id,transaction_type,amount_kes,status,checkout_request_id,
+      SELECT id,wallet_id,order_id,${oldMerchandiseOrderId},${oldReferenceType},${oldReferenceId},
+        transaction_type,amount_kes,status,checkout_request_id,
         merchant_request_id,receipt,description,created_at,completed_at
       FROM wallet_transactions;
       DROP TABLE wallet_transactions;
       ALTER TABLE wallet_transactions_new RENAME TO wallet_transactions;
       CREATE INDEX wallet_transactions_history ON wallet_transactions(wallet_id,created_at DESC);
+      CREATE INDEX wallet_transactions_reference ON wallet_transactions(reference_type,reference_id);
       COMMIT;
     `);
   } catch (error) {
@@ -403,6 +573,15 @@ if (!walletTransactionSchema.includes("'merchandise_purchase'")) {
     db.exec('PRAGMA foreign_keys = ON');
   }
 }
+db.exec('CREATE INDEX IF NOT EXISTS wallet_transactions_reference ON wallet_transactions(reference_type,reference_id)');
+db.exec(`
+  INSERT OR IGNORE INTO merchant_voucher_ledger (id,merchant_id,order_id,transaction_type,amount_kes,reference_id,description,created_at)
+  SELECT 'sale-' || o.id,o.merchant_id,o.id,'sale',o.amount_kes,o.id,'Confirmed merchant voucher sale.',COALESCE(o.paid_at,o.created_at)
+  FROM merchant_voucher_orders o WHERE o.status IN ('paid','refunded');
+  INSERT OR IGNORE INTO merchant_voucher_ledger (id,merchant_id,order_id,transaction_type,amount_kes,reference_id,description,created_at)
+  SELECT 'refund-' || o.id,o.merchant_id,o.id,'refund',-o.amount_kes,o.refund_reference,'Merchant voucher refund recorded.',COALESCE(o.refunded_at,o.created_at)
+  FROM merchant_voucher_orders o WHERE o.status='refunded';
+`);
 
 const starterProducts = [
   ['valor-tote', 'Valor Africa Tote Bag', 'Durable canvas tote with the Valor Africa emblem, hand-printed.', 4500, '/images/one.jpg'],

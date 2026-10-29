@@ -46,6 +46,7 @@
     await loadOrders();
     await loadPartners();
     await loadPartnershipApplications();
+    await loadGiftMarketplace();
   }
 
   function addText(parent, tag, className, value) {
@@ -149,6 +150,167 @@
       actions.className = 'record-actions';
       actions.append(save, toggle);
       card.appendChild(actions);
+      list.appendChild(card);
+    });
+  }
+
+  async function loadGiftMarketplace() {
+    await Promise.all([loadGiftMerchants(), loadGiftVouchers(), loadGiftPayouts(), loadGiftRefunds()]);
+  }
+
+  async function loadGiftMerchants() {
+    const list = document.getElementById('giftMerchantsList');
+    list.replaceChildren();
+    const { merchants } = await api('/api/gift-merchants/admin');
+    if (!merchants.length) return addText(list, 'p', 'empty', 'No merchant applications yet.');
+    merchants.forEach((merchant) => {
+      const card = document.createElement('article');
+      card.className = 'record';
+      card.dataset.giftMerchantId = merchant.id;
+      addText(card, 'h3', '', `${merchant.businessName} · ${merchant.status.toUpperCase()}`);
+      addText(card, 'p', 'record-meta', `${merchant.email} · ${merchant.contactName} · ${merchant.contactPhone} · Applied ${new Date(merchant.createdAt).toLocaleString()}`);
+      if (merchant.websiteUrl) addText(card, 'p', 'record-contact', merchant.websiteUrl);
+      addText(card, 'p', 'record-description', merchant.applicationDetails);
+      addText(card, 'p', 'record-meta', `${merchant.voucherCount} listings · KES ${Number(merchant.salesKes).toLocaleString('en-KE')} sales · KES ${Number(merchant.paidOutKes).toLocaleString('en-KE')} paid · KES ${Number(merchant.dueKes).toLocaleString('en-KE')} due`);
+      if (merchant.adminNote) addText(card, 'p', 'record-contact', `Admin note: ${merchant.adminNote}`);
+      const actions = document.createElement('div');
+      actions.className = 'record-actions';
+      const status = document.createElement('select');
+      status.dataset.giftMerchantStatus = '';
+      status.setAttribute('aria-label', `Review status for ${merchant.businessName}`);
+      ['approved','rejected','suspended'].filter((value) => value !== merchant.status).forEach((value) => {
+        const item = document.createElement('option');
+        item.value = value;
+        item.textContent = value === 'approved' ? 'Approve merchant' : value === 'suspended' ? 'Suspend merchant' : 'Reject application';
+        status.appendChild(item);
+      });
+      const note = document.createElement('input');
+      note.type = 'text';
+      note.maxLength = 1000;
+      note.placeholder = 'Optional note to merchant';
+      note.value = merchant.adminNote || '';
+      note.dataset.giftMerchantNote = '';
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'button primary';
+      save.dataset.saveGiftMerchant = '';
+      save.textContent = 'Save review';
+      actions.append(status, note, save);
+      card.appendChild(actions);
+      list.appendChild(card);
+    });
+  }
+
+  async function loadGiftVouchers() {
+    const list = document.getElementById('giftVouchersList');
+    list.replaceChildren();
+    const { vouchers } = await api('/api/gift-vouchers/admin');
+    if (!vouchers.length) return addText(list, 'p', 'empty', 'No voucher listings have been submitted.');
+    vouchers.forEach((voucher) => {
+      const card = document.createElement('article');
+      card.className = 'record';
+      addText(card, 'h3', '', `${voucher.title} · ${voucher.active ? 'ACTIVE' : 'PAUSED'}`);
+      addText(card, 'p', 'record-meta', `${voucher.merchantName} · merchant ${voucher.merchantStatus} · KES ${Number(voucher.salePriceKes).toLocaleString('en-KE')} sale / KES ${Number(voucher.faceValueKes).toLocaleString('en-KE')} value · ${voucher.stock} available · ${voucher.sold} sold`);
+      addText(card, 'p', 'record-description', voucher.description);
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'button secondary';
+      toggle.dataset.toggleGiftVoucher = voucher.id;
+      toggle.dataset.active = String(Boolean(voucher.active));
+      toggle.textContent = voucher.active ? 'Pause listing' : 'Activate listing';
+      toggle.disabled = voucher.merchantStatus !== 'approved' || (!voucher.active && voucher.stock < 1);
+      card.appendChild(toggle);
+      list.appendChild(card);
+    });
+  }
+
+  async function loadGiftPayouts() {
+    const list = document.getElementById('giftPayoutsList');
+    list.replaceChildren();
+    const { merchants } = await api('/api/gift-payouts/admin');
+    if (!merchants.length) return addText(list, 'p', 'empty', 'No merchant payout balances yet.');
+    merchants.forEach((merchant) => {
+      const card = document.createElement('article');
+      card.className = 'record';
+      card.dataset.giftPayoutMerchantId = merchant.merchantId;
+      addText(card, 'h3', '', `${merchant.businessName} · ${merchant.status.toUpperCase()}`);
+      addText(card, 'p', 'record-meta', `KES ${Number(merchant.salesKes).toLocaleString('en-KE')} sales · KES ${Number(merchant.paidOutKes).toLocaleString('en-KE')} paid · KES ${Number(merchant.dueKes).toLocaleString('en-KE')} due`);
+      if (merchant.payouts.length) {
+        const prior = merchant.payouts.map((payout) =>
+          `KES ${Number(payout.amountKes).toLocaleString('en-KE')} · ${payout.reference} · ${new Date(payout.createdAt).toLocaleDateString()}`
+        ).join('\n');
+        addText(card, 'p', 'record-contact', prior);
+      }
+      if (merchant.dueKes > 0 && merchant.status === 'approved') {
+        const actions = document.createElement('div');
+        actions.className = 'record-actions gift-payout-fields';
+        const amount = document.createElement('input');
+        amount.type = 'number';
+        amount.min = '1';
+        amount.max = String(merchant.dueKes);
+        amount.step = '1';
+        amount.placeholder = 'Amount in KES';
+        amount.dataset.giftPayoutAmount = '';
+        const reference = document.createElement('input');
+        reference.maxLength = 120;
+        reference.placeholder = 'Transfer receipt/reference';
+        reference.dataset.giftPayoutReference = '';
+        const note = document.createElement('input');
+        note.maxLength = 500;
+        note.placeholder = 'Optional payout note';
+        note.dataset.giftPayoutNote = '';
+        const submit = document.createElement('button');
+        submit.type = 'button';
+        submit.className = 'button secondary';
+        submit.dataset.recordGiftPayout = '';
+        submit.textContent = 'Record manual payout';
+        actions.append(amount, reference, note, submit);
+        card.appendChild(actions);
+      }
+      list.appendChild(card);
+    });
+  }
+
+  async function loadGiftRefunds() {
+    const list = document.getElementById('giftRefundsList');
+    list.replaceChildren();
+    const { requests } = await api('/api/gift-refunds/admin');
+    if (!requests.length) return addText(list, 'p', 'empty', 'No refund requests yet.');
+    requests.forEach((refund) => {
+      const card = document.createElement('article');
+      card.className = 'record';
+      card.dataset.giftRefundId = refund.id;
+      addText(card, 'h3', '', `${refund.title} · ${refund.status.toUpperCase()}`);
+      addText(card, 'p', 'record-meta', `${refund.email} · ${refund.instrumentType.replace('_',' ')} · KES ${Number(refund.amountKes).toLocaleString('en-KE')} · ${refund.paymentMethod} · ${new Date(refund.createdAt).toLocaleString()}`);
+      if (refund.merchantName) addText(card, 'p', 'record-contact', `Merchant: ${refund.merchantName} · unused confirmed: ${refund.instrumentStatus === 1 ? 'yes' : 'no'}`);
+      addText(card, 'p', 'record-description', refund.reason);
+      if (refund.adminNote) addText(card, 'p', 'record-contact', `Admin note: ${refund.adminNote}`);
+      if (refund.status === 'pending') {
+        const actions = document.createElement('div');
+        actions.className = 'record-actions';
+        const reference = document.createElement('input');
+        reference.maxLength = 120;
+        reference.placeholder = refund.paymentMethod === 'mpesa' ? 'Required M-Pesa refund reference' : 'Optional transfer reference';
+        reference.dataset.giftRefundReference = '';
+        const note = document.createElement('input');
+        note.maxLength = 1000;
+        note.placeholder = 'Optional review note';
+        note.dataset.giftRefundNote = '';
+        const approve = document.createElement('button');
+        approve.type = 'button';
+        approve.className = 'button primary';
+        approve.dataset.reviewGiftRefund = 'approved';
+        approve.textContent = 'Approve refund';
+        approve.disabled = refund.instrumentType === 'merchant_voucher' && refund.instrumentStatus !== 1;
+        if (approve.disabled) approve.title = 'Merchant must confirm the voucher code is unused first.';
+        const reject = document.createElement('button');
+        reject.type = 'button';
+        reject.className = 'button reject';
+        reject.dataset.reviewGiftRefund = 'rejected';
+        reject.textContent = 'Reject request';
+        actions.append(reference, note, approve, reject);
+        card.appendChild(actions);
+      }
       list.appendChild(card);
     });
   }
@@ -416,11 +578,73 @@
     document.getElementById('ordersSection').hidden = button.dataset.adminTab !== 'orders';
     document.getElementById('partnersSection').hidden = button.dataset.adminTab !== 'partners';
     document.getElementById('partnershipApplicationsSection').hidden = button.dataset.adminTab !== 'partnership-applications';
+    document.getElementById('giftsSection').hidden = button.dataset.adminTab !== 'gifts';
     if (button.dataset.adminTab === 'partners') {
       loadPartners().catch((error) => setFeedback(feedback, error.message, true));
     }
     if (button.dataset.adminTab === 'partnership-applications') {
       loadPartnershipApplications().catch((error) => setFeedback(feedback, error.message, true));
+    }
+    if (button.dataset.adminTab === 'gifts') {
+      loadGiftMarketplace().catch((error) => setFeedback(feedback, error.message, true));
+    }
+  });
+
+  document.getElementById('giftsSection').addEventListener('click', async (event) => {
+    const merchantButton = event.target.closest('[data-save-gift-merchant]');
+    const voucherButton = event.target.closest('[data-toggle-gift-voucher]');
+    const payoutButton = event.target.closest('[data-record-gift-payout]');
+    const refundButton = event.target.closest('[data-review-gift-refund]');
+    const button = merchantButton || voucherButton || payoutButton || refundButton;
+    if (!button) return;
+    button.disabled = true;
+    try {
+      if (merchantButton) {
+        const card = merchantButton.closest('[data-gift-merchant-id]');
+        await api(`/api/gift-merchants/admin/${encodeURIComponent(card.dataset.giftMerchantId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            status: card.querySelector('[data-gift-merchant-status]').value,
+            adminNote: card.querySelector('[data-gift-merchant-note]').value
+          })
+        });
+        setFeedback(feedback, 'Merchant review saved.');
+      } else if (voucherButton) {
+        await api(`/api/gift-vouchers/admin/${encodeURIComponent(voucherButton.dataset.toggleGiftVoucher)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ active: voucherButton.dataset.active !== 'true' })
+        });
+        setFeedback(feedback, 'Voucher listing updated.');
+      } else if (payoutButton) {
+        const card = payoutButton.closest('[data-gift-payout-merchant-id]');
+        await api(`/api/gift-payouts/admin/${encodeURIComponent(card.dataset.giftPayoutMerchantId)}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            amountKes: Number(card.querySelector('[data-gift-payout-amount]').value),
+            reference: card.querySelector('[data-gift-payout-reference]').value,
+            note: card.querySelector('[data-gift-payout-note]').value
+          })
+        });
+        setFeedback(feedback, 'Manual merchant payout recorded. This records a completed transfer; it does not send money.');
+      } else {
+        const card = refundButton.closest('[data-gift-refund-id]');
+        const status = refundButton.dataset.reviewGiftRefund;
+        const adminNote = card.querySelector('[data-gift-refund-note]').value;
+        const refundReference = card.querySelector('[data-gift-refund-reference]').value;
+        if (status === 'approved' && !window.confirm('Confirm that the refund has been completed manually and the reference is accurate?')) {
+          button.disabled = false;
+          return;
+        }
+        await api(`/api/gift-refunds/admin/${encodeURIComponent(card.dataset.giftRefundId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status, adminNote, refundReference })
+        });
+        setFeedback(feedback, status === 'approved' ? 'Refund approved and recorded.' : 'Refund request rejected.');
+      }
+      await loadGiftMarketplace();
+    } catch (error) {
+      button.disabled = false;
+      setFeedback(feedback, error.message, true);
     }
   });
 

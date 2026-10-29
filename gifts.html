@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gift cards &amp; local vouchers | Valor Africa</title>
+  <meta name="description" content="Send Valor Wallet credit or discover verified merchant vouchers from businesses across Kenya. Buy, redeem, and manage gifts in one place.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://valorafrica.co.ke/gifts.html">
+  <meta property="og:title" content="Gift cards &amp; local vouchers | Valor Africa">
+  <meta property="og:description" content="Give Valor Wallet credit or shop verified merchant vouchers across Kenya.">
+  <meta property="og:url" content="https://valorafrica.co.ke/gifts.html">
+  <meta property="og:image" content="https://valorafrica.co.ke/images/og-image.svg">
+  <meta name="theme-color" content="#087f5b">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/events.css?v=public-event-reviews-1">
+  <link rel="stylesheet" href="styles/privacy-consent.css">
+  <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
+  <script src="scripts/gifts.js?v=gift-marketplace-1" defer></script>
+  <script src="scripts/privacy-consent.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <nav class="nav wrap" aria-label="Main navigation">
+      <a href="index.html" class="brand" aria-label="Valor Africa home">
+        <span class="brand-mark" aria-hidden="true">V</span>
+        <span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span>
+      </a>
+      <div class="nav-links nav-links-static">
+        <a href="events.html">Events</a>
+        <a href="shop.html">Shop</a>
+        <a href="wallet.html">Wallet</a>
+        <a href="gifts.html" aria-current="page">Gifts</a>
+        <a href="account.html">Account</a>
+        <a href="contact.html">Help</a>
+      </div>
+    </nav>
+  </header>
+  <main id="main" class="gifts-page">
+    <section class="gifts-hero">
+      <div class="wrap gifts-hero-inner">
+        <div>
+          <p class="eyebrow">GIVE SOMETHING GOOD</p>
+          <h1>Good things,<br><span>beautifully shared.</span></h1>
+          <p>Send Valor credit for experiences and essentials, or discover redeemable offers from verified local businesses.</p>
+          <a class="gifts-hero-link" href="#gift-options">Explore gift cards <span aria-hidden="true">↓</span></a>
+        </div>
+        <div class="gifts-hero-card" aria-hidden="true">
+          <span class="gifts-card-glow"></span>
+          <span class="gifts-card-brand">VALOR AFRICA</span>
+          <strong>For the<br>next good thing.</strong>
+          <span class="gifts-card-footer"><span>GIFT CREDIT</span><span>KE · KES</span></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap gifts-trust" aria-label="How Valor gifts work">
+      <div><span aria-hidden="true">01</span><p><strong>Choose with confidence</strong><small>Valor-issued credit or a verified merchant offer.</small></p></div>
+      <div><span aria-hidden="true">02</span><p><strong>Pay your way</strong><small>Valor Wallet or a secure M-Pesa prompt.</small></p></div>
+      <div><span aria-hidden="true">03</span><p><strong>Share the moment</strong><small>Copy a code or link and send it directly.</small></p></div>
+    </section>
+
+    <section class="wrap gifts-section" id="gift-options">
+      <div class="gifts-section-heading">
+        <div><p class="eyebrow">FLEXIBLE BY DESIGN</p><h2>Start with a gift card</h2><p>Valor credit goes to a linked Valor Wallet and can be used toward eligible Valor Shop and event ticket purchases.</p></div>
+        <a class="gifts-text-link" href="wallet.html">Explore Valor Wallet <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="gifts-grid gifts-grid-two">
+        <article class="gift-panel gift-buy-panel">
+          <div class="gift-panel-title"><span class="gift-icon" aria-hidden="true">V</span><div><h3>Valor gift credit</h3><p>Give them room to choose.</p></div></div>
+          <div class="gift-account-required" id="giftSignInPrompt" hidden>
+            <p>Sign in to purchase, redeem, or manage your gifts.</p>
+            <a class="button button-primary" href="account.html?returnTo=%2Fgifts.html">Sign in or create account</a>
+          </div>
+          <div id="giftAccountTools" hidden>
+            <form id="giftPurchaseForm" class="gift-form">
+              <fieldset class="gift-amounts">
+                <legend>Choose an amount</legend>
+                <div id="giftAmountOptions" class="gift-amount-options"></div>
+                <label class="gift-custom-amount">Custom amount (KES)
+                  <input id="giftCustomAmount" type="number" min="500" max="150000" step="1" inputmode="numeric" placeholder="From 500">
+                </label>
+              </fieldset>
+              <div class="gift-form-row">
+                <label>Recipient name<input name="recipientName" maxlength="120" autocomplete="name" required></label>
+                <label>Recipient contact <span>(optional)</span><input name="recipientContact" maxlength="160" placeholder="Email or phone"></label>
+              </div>
+              <label>A note for them <span>(optional)</span><textarea name="message" rows="2" maxlength="500" placeholder="A little something, just for you…"></textarea></label>
+              <div class="gift-form-row">
+                <label>Payment method
+                  <select name="paymentMethod" data-payment-selector>
+                    <option value="wallet">Valor Wallet</option>
+                    <option value="mpesa">M-Pesa</option>
+                  </select>
+                </label>
+                <label data-phone-field hidden>M-Pesa number<input name="phone" type="tel" autocomplete="tel" placeholder="07XX XXX XXX"></label>
+              </div>
+              <p class="gift-wallet-note" id="giftWalletStatus" role="status">Checking your Valor Wallet…</p>
+              <p class="gift-legal-note">After payment, the code is available in Your gifts for you to share. Valor does not automatically deliver the code to the recipient.</p>
+              <button class="button button-primary" type="submit">Continue to payment</button>
+              <p class="gift-legal-note">Valor gift credit is redeemed once to a linked wallet. Remaining wallet value can carry forward. Refund requests are reviewed by support before redemption. <a href="refund-policy.html">Read our refund policy</a>.</p>
+              <p class="gift-feedback" id="giftPurchaseFeedback" role="status" aria-live="polite"></p>
+            </form>
+          </div>
+        </article>
+        <article class="gift-panel gift-redeem-panel">
+          <div class="gift-panel-title"><span class="gift-icon gift-icon-light" aria-hidden="true">↗</span><div><h3>Have a Valor code?</h3><p>Redeem it to your linked wallet.</p></div></div>
+          <form id="giftRedeemForm" class="gift-form">
+            <label>Gift-card code<input name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="VA-XXXXXX-XXXXXX-XXXXXX" required></label>
+            <button class="button button-secondary" type="submit" id="redeemGiftButton">Redeem gift credit</button>
+            <p class="gift-legal-note">Each Valor code is single-use. The full value is added to your wallet, where it may be spent over time on eligible Valor Shop and event ticket purchases.</p>
+            <p class="gift-feedback" id="giftRedeemFeedback" role="status" aria-live="polite"></p>
+          </form>
+          <div class="gift-wallet-link"><span>Need a wallet?</span><a href="wallet.html">Set up Valor Wallet <span aria-hidden="true">→</span></a></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="gift-market-section" id="merchant-vouchers">
+      <div class="wrap gifts-section">
+        <div class="gifts-section-heading">
+          <div><p class="eyebrow">LOCAL FINDS, MADE REDEEMABLE</p><h2>Merchant vouchers</h2><p>Shop offers from participating businesses. Each listing shows its issuer, redemption instructions, and terms.</p></div>
+          <a class="gifts-text-link" href="#merchant-tools">Are you a merchant? <span aria-hidden="true">→</span></a>
+        </div>
+        <p class="gift-feedback" id="voucherCatalogFeedback" role="status" aria-live="polite"></p>
+        <div class="merchant-voucher-grid" id="merchantVoucherCatalog" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="wrap gifts-section gifts-account-section" id="your-gifts" hidden>
+      <div class="gifts-section-heading">
+        <div><p class="eyebrow">ALL YOUR GOOD THINGS</p><h2>Your gifts</h2><p>View payment status, copy a shareable code, or find your redemption instructions.</p></div>
+        <button class="button button-secondary" type="button" id="refreshGiftsButton">Refresh gifts</button>
+      </div>
+      <div class="gifts-grid gifts-grid-two">
+        <div><h3 class="gift-list-heading">Valor gift cards</h3><div class="gift-owned-list" id="myGiftCards"></div></div>
+        <div><h3 class="gift-list-heading">Merchant vouchers</h3><div class="gift-owned-list" id="myVoucherOrders"></div></div>
+      </div>
+      <form class="gift-refund-form" id="giftRefundForm">
+        <div><h3>Request a refund review</h3><p>Eligible unused purchases can be submitted to Valor support. Merchant vouchers require merchant confirmation that the code has not been used.</p></div>
+        <label>Purchase<select name="instrument" id="giftRefundInstrument" required><option value="">Choose an eligible purchase</option></select></label>
+        <label>Reason<textarea name="reason" rows="2" maxlength="1000" required placeholder="Tell us what happened"></textarea></label>
+        <button class="button button-secondary" type="submit">Send review request</button>
+        <p class="gift-feedback" id="giftRefundFeedback" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section class="gift-merchant-section" id="merchant-tools">
+      <div class="wrap gifts-section">
+        <div class="gifts-section-heading">
+          <div><p class="eyebrow">FOR LOCAL BUSINESSES</p><h2>Bring your offers to Valor</h2><p>Apply to sell redeemable vouchers. Merchant listings go live after verification and code inventory review.</p></div>
+        </div>
+        <div class="gift-panel merchant-apply-panel" id="merchantApplicationPanel">
+          <div id="merchantSignInPrompt">
+            <p>Sign in to apply for a merchant account.</p>
+            <a class="button button-primary" href="account.html?returnTo=%2Fgifts.html%23merchant-tools">Sign in or create account</a>
+          </div>
+          <div id="merchantApplicationStatus" hidden></div>
+          <form class="gift-form merchant-application-form" id="merchantApplicationForm" hidden>
+            <div class="gift-form-row">
+              <label>Business name<input name="businessName" maxlength="160" required></label>
+              <label>Website <span>(optional, HTTPS)</span><input name="websiteUrl" type="url" maxlength="500" placeholder="https://yourbusiness.co.ke"></label>
+            </div>
+            <div class="gift-form-row">
+              <label>Authorized contact<input name="contactName" maxlength="120" required></label>
+              <label>Kenyan contact number<input name="contactPhone" type="tel" required placeholder="07XX XXX XXX"></label>
+            </div>
+            <label>Tell us about your business and the vouchers you would like to offer<textarea name="details" rows="3" maxlength="2000" required></textarea></label>
+            <button class="button button-primary" type="submit">Submit for review</button>
+            <p class="gift-feedback" id="merchantApplicationFeedback" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+        <div class="merchant-dashboard" id="merchantDashboard" hidden>
+          <div class="merchant-dashboard-heading">
+            <div><p class="eyebrow">MERCHANT STUDIO</p><h3 id="merchantStudioTitle">Your voucher studio</h3><p id="merchantReviewNote"></p></div>
+            <div class="merchant-stat"><span>Balance due</span><strong id="merchantBalanceDue">KES 0</strong><small>Paid out manually after review</small></div>
+          </div>
+          <div id="merchantApprovedTools" hidden>
+            <div class="gifts-grid gifts-grid-two merchant-forms">
+              <form class="gift-form gift-panel" id="merchantVoucherForm">
+                <h3>Create a voucher listing</h3>
+                <label>Offer title<input name="title" maxlength="120" required></label>
+                <label>What the customer gets<textarea name="description" rows="2" maxlength="2000" required></textarea></label>
+                <div class="gift-form-row">
+                  <label>Face value (KES)<input name="faceValueKes" type="number" min="1" step="1" required></label>
+                  <label>Sale price (KES)<input name="salePriceKes" type="number" min="1" step="1" required></label>
+                </div>
+                <label>How to redeem<textarea name="redemptionInstructions" rows="2" maxlength="2000" required></textarea></label>
+                <label>Offer terms<textarea name="terms" rows="2" maxlength="2000" placeholder="Any restrictions the customer should know"></textarea></label>
+                <button class="button button-primary" type="submit">Create listing</button>
+                <p class="gift-feedback" id="merchantListingFeedback" role="status" aria-live="polite"></p>
+              </form>
+              <form class="gift-form gift-panel" id="merchantInventoryForm">
+                <h3>Load voucher codes</h3>
+                <p>Codes are encrypted and never shown again in merchant tools. A code is reserved at checkout and released only after confirmed payment.</p>
+                <label>Voucher listing<select name="voucherId" id="merchantVoucherSelect" required><option value="">Choose a listing</option></select></label>
+                <label>One-time codes <span>(up to 100, one per line)</span><textarea name="codes" rows="6" maxlength="12000" autocomplete="off" required></textarea></label>
+                <button class="button button-secondary" type="submit">Add encrypted codes</button>
+                <p class="gift-feedback" id="merchantInventoryFeedback" role="status" aria-live="polite"></p>
+              </form>
+            </div>
+            <div class="merchant-listing-area"><h3>Your listings</h3><div class="merchant-listing-list" id="merchantListingList"></div></div>
+            <div class="merchant-listing-area"><h3>Recent orders</h3><div class="merchant-order-list" id="merchantOrderList"></div></div>
+            <div class="merchant-listing-area"><h3>Refund requests</h3><p>Confirm only after checking directly with the customer and verifying the code is unused. Valor support makes the refund decision.</p><div class="merchant-refund-list" id="merchantRefundList"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer"><div class="wrap"><p>Valor Africa · Gifts from us and verified local businesses.</p><nav aria-label="Legal"><a href="refund-policy.html">Refund policy</a><a href="privacy-policy.html">Privacy</a><a href="contact.html">Support</a></nav></div></footer>
+
+  <dialog class="voucher-checkout-dialog" id="voucherCheckoutDialog">
+    <form class="gift-form" id="voucherCheckoutForm">
+      <button class="dialog-close" type="button" id="closeVoucherDialog" aria-label="Close">×</button>
+      <p class="eyebrow">MERCHANT VOUCHER</p>
+      <h2 id="voucherCheckoutTitle">Complete your purchase</h2>
+      <p id="voucherCheckoutSummary"></p>
+      <label>Your name<input name="buyerName" maxlength="120" autocomplete="name" required></label>
+      <label>Payment method
+        <select name="paymentMethod" data-payment-selector>
+          <option value="wallet">Valor Wallet</option>
+          <option value="mpesa">M-Pesa</option>
+        </select>
+      </label>
+      <label data-phone-field hidden>M-Pesa number<input name="phone" type="tel" autocomplete="tel" placeholder="07XX XXX XXX"></label>
+      <p class="gift-legal-note" id="voucherCheckoutTerms"></p>
+      <button class="button button-primary" type="submit">Confirm purchase</button>
+      <p class="gift-feedback" id="voucherCheckoutFeedback" role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+</body>
+</html>

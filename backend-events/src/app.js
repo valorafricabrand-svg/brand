@@ -25,6 +25,56 @@ function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
+function giftCodeEncryptionKey() {
+  const configured = process.env.GIFT_CARD_ENCRYPTION_KEY;
+  if (!configured) {
+    if (!process.env.JWT_SECRET) throw new Error('Gift-card encryption is unavailable until GIFT_CARD_ENCRYPTION_KEY is configured.');
+    return crypto.createHash('sha256').update(`valor-gift-codes-v1:${process.env.JWT_SECRET}`).digest();
+  }
+  const key = Buffer.from(configured, 'base64');
+  if (key.length !== 32) throw new Error('GIFT_CARD_ENCRYPTION_KEY must be a base64-encoded 32-byte key.');
+  return key;
+}
+
+if (process.env.NODE_ENV === 'production') giftCodeEncryptionKey();
+
+function protectGiftCode(code) {
+  const nonce = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', giftCodeEncryptionKey(), nonce);
+  const ciphertext = Buffer.concat([cipher.update(code, 'utf8'), cipher.final()]);
+  return {
+    codeCiphertext: ciphertext.toString('base64'),
+    codeNonce: nonce.toString('base64'),
+    codeAuthTag: cipher.getAuthTag().toString('base64')
+  };
+}
+
+function revealGiftCode(record) {
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    giftCodeEncryptionKey(),
+    Buffer.from(record.code_nonce, 'base64')
+  );
+  decipher.setAuthTag(Buffer.from(record.code_auth_tag, 'base64'));
+  return Buffer.concat([
+    decipher.update(Buffer.from(record.code_ciphertext, 'base64')),
+    decipher.final()
+  ]).toString('utf8');
+}
+
+function normalizeGiftCardCode(value) {
+  return typeof value === 'string' ? value.replace(/[\s-]/g, '').toUpperCase() : '';
+}
+
+function createGiftCardCode() {
+  const value = crypto.randomBytes(18).toString('hex').toUpperCase();
+  return `VA-${value.match(/.{1,6}/g).join('-')}`;
+}
+
+function giftCardCodeHash(value) {
+  return sha256(normalizeGiftCardCode(value));
+}
+
 function publicEvent(row) {
   const regular = { name: 'Regular', price: row.regular_price, currency: 'KES' };
   const tickets = [];
@@ -388,6 +438,9 @@ function createApp(options = {}) {
   const submissionLimiter = createSubmissionLimiter();
   const partnerApplicationLimiter = createSubmissionLimiter(10, 'partnership applications');
   const partnerReferralLimiter = createSubmissionLimiter(1000, 'referral visits');
+  const giftPurchaseLimiter = createSubmissionLimiter(8, 'gift purchases');
+  const giftCodeAttemptLimiter = createSubmissionLimiter(10, 'gift-code attempts');
+  const merchantApplicationLimiter = createSubmissionLimiter(5, 'gift merchant applications');
   const walletOtpAttempts = new Map();
   const accountCodeAttempts = new Map();
   function normalizedEmail(value) {
@@ -529,6 +582,23 @@ function createApp(options = {}) {
       FROM wallet_transactions WHERE wallet_id=? ORDER BY created_at DESC,id DESC LIMIT 30
     `).all(walletId);
     return { wallet, balanceKes: balance, transactions };
+  }
+
+  function recordWalletTransaction(walletId, amountKes, transactionType, referenceType, referenceId, description) {
+    db.prepare(`
+      INSERT INTO wallet_transactions (
+        id,wallet_id,reference_type,reference_id,transaction_type,amount_kes,status,description,completed_at
+      ) VALUES (?,?,?,?,?,?,'completed',?,datetime('now'))
+    `).run(
+      crypto.randomUUID(), walletId, referenceType, referenceId, transactionType, amountKes, description
+    );
+  }
+
+  function addGiftCardLedgerEntry(cardId, transactionType, amountKes, accountId, referenceId, description) {
+    db.prepare(`
+      INSERT INTO gift_card_ledger (id,gift_card_id,transaction_type,amount_kes,account_id,reference_id,description)
+      VALUES (?,?,?,?,?,?,?)
+    `).run(crypto.randomUUID(), cardId, transactionType, amountKes, accountId, referenceId, description);
   }
 
   const imageUpload = multer({
@@ -763,6 +833,610 @@ function createApp(options = {}) {
     } catch (error) {
       if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
       throw error;
+    }
+  });
+
+  app.get('/api/gift-cards/catalog', (req, res) => {
+    res.json({
+      issuer: 'Valor Africa',
+      currency: 'KES',
+      minimumAmountKes: 500,
+      maximumAmountKes: 150000,
+      amountsKes: [500,1000,2500,5000,10000,25000],
+      redemption: 'Redeem to a linked Valor Wallet. Wallet value can be used for eligible Valor merchandise and event tickets.',
+      expiry: null
+    });
+  });
+
+  app.post('/api/gift-cards/purchase', requireAccount, giftPurchaseLimiter, async (req, res, next) => {
+    const body = req.body || {};
+    const amountKes = body.amountKes;
+    const paymentMethod = body.paymentMethod || 'wallet';
+    const clientRequestId = body.clientRequestId;
+    const recipientName = typeof body.recipientName === 'string' ? body.recipientName.trim() : '';
+    const recipientContact = typeof body.recipientContact === 'string' ? body.recipientContact.trim() : '';
+    const message = typeof body.message === 'string' ? body.message.trim() : '';
+    if (!Number.isSafeInteger(amountKes) || amountKes < 500 || amountKes > 150000) {
+      return res.status(400).json({ error: 'Choose a gift amount from KES 500 to KES 150,000.' });
+    }
+    if (!['wallet','mpesa'].includes(paymentMethod)) {
+      return res.status(400).json({ error: 'Choose Valor Wallet or M-Pesa.' });
+    }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRequestId || '')) {
+      return res.status(400).json({ error: 'Refresh and retry your gift-card purchase.' });
+    }
+    if (!recipientName || recipientName.length > 120 || recipientContact.length > 160 || message.length > 500) {
+      return res.status(400).json({ error: 'Add a recipient name (120 characters maximum), optional contact (160 characters), and message (500 characters maximum).' });
+    }
+    const wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
+    if (paymentMethod === 'wallet' && !wallet) {
+      return res.status(409).json({ error: 'Link a Valor Wallet before paying with wallet balance.' });
+    }
+    const phone = paymentMethod === 'wallet' ? wallet.phone : normalizePhone(body.phone);
+    if (!phone) return res.status(400).json({ error: 'Enter a valid Kenyan M-Pesa number.' });
+    if (paymentMethod === 'mpesa' && paymentsUnavailable(res)) return;
+
+    const code = createGiftCardCode();
+    let protectedCode;
+    try {
+      protectedCode = protectGiftCode(code);
+    } catch (error) {
+      return next(error);
+    }
+    let purchase;
+    try {
+      purchase = db.transaction(() => {
+        const duplicate = db.prepare(`
+          SELECT id,amount_kes AS amountKes,payment_method AS paymentMethod,status,
+            recipient_name AS recipientName,recipient_contact AS recipientContact,message
+          FROM gift_card_purchases WHERE account_id=? AND client_request_id=?
+        `).get(req.account.id, clientRequestId);
+        if (duplicate) {
+          if (duplicate.amountKes !== amountKes || duplicate.paymentMethod !== paymentMethod ||
+              duplicate.recipientName !== recipientName || duplicate.recipientContact !== recipientContact ||
+              duplicate.message !== message) {
+            throw Object.assign(new Error('This retry key was already used for a different gift-card purchase. Refresh and try again.'), { statusCode: 409 });
+          }
+          return { ...duplicate, duplicate: true };
+        }
+        if (wallet) {
+          const balanceKes = db.prepare("SELECT COALESCE(SUM(amount_kes),0) AS balance FROM wallet_transactions WHERE wallet_id=? AND status='completed'")
+            .get(wallet.id).balance;
+          if (balanceKes < amountKes) {
+            throw Object.assign(new Error('Your wallet balance is too low. Add funds and try again.'), { statusCode: 402 });
+          }
+        }
+        const id = crypto.randomUUID();
+        const status = paymentMethod === 'wallet' ? 'paid' : 'pending';
+        db.prepare(`
+          INSERT INTO gift_card_purchases (
+            id,account_id,amount_kes,payment_method,status,client_request_id,
+            recipient_name,recipient_contact,message,phone,paid_at
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,CASE WHEN ?='paid' THEN datetime('now') END)
+        `).run(
+          id, req.account.id, amountKes, paymentMethod, status, clientRequestId,
+          recipientName, recipientContact, message, phone, status
+        );
+        const cardId = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO gift_cards (
+            id,purchase_id,purchaser_account_id,code_hash,code_ciphertext,code_nonce,code_auth_tag,amount_kes,status,issued_at
+          ) VALUES (?,?,?,?,?,?,?,?,?,CASE WHEN ?='issued' THEN datetime('now') END)
+        `).run(
+          cardId, id, req.account.id, giftCardCodeHash(code), protectedCode.codeCiphertext,
+          protectedCode.codeNonce, protectedCode.codeAuthTag, amountKes, status === 'paid' ? 'issued' : 'pending',
+          status === 'paid' ? 'issued' : 'pending'
+        );
+        if (wallet) {
+          recordWalletTransaction(
+            wallet.id, -amountKes, 'gift_card_purchase', 'gift_card_purchase', id,
+            `Valor gift card for ${recipientName}`
+          );
+          addGiftCardLedgerEntry(cardId, 'issued', amountKes, req.account.id, id, 'Gift card purchase paid from Valor Wallet.');
+        }
+        return { id, amountKes, paymentMethod, status, duplicate: false };
+      })();
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+      return next(error);
+    }
+    if (purchase.duplicate) {
+      return res.status(200).json({
+        purchaseId: purchase.id,
+        status: purchase.status,
+        message: purchase.status === 'pending' ? 'Your M-Pesa payment is still processing.' : 'This gift-card purchase was already recorded.'
+      });
+    }
+    if (paymentMethod === 'wallet') {
+      return res.status(201).json({
+        purchaseId: purchase.id,
+        status: 'paid',
+        amountKes,
+        message: 'Your Valor gift card is ready. Copy its code from Your gifts and share it with the recipient.'
+      });
+    }
+    try {
+      const checkout = await paymentGateway.initiateStkPush({
+        id: purchase.id,
+        amountKes,
+        phone,
+        orderType: 'gift_card'
+      });
+      db.prepare('UPDATE gift_card_purchases SET checkout_request_id=?,merchant_request_id=? WHERE id=? AND status=?')
+        .run(checkout.checkoutRequestId, checkout.merchantRequestId, purchase.id, 'pending');
+      return res.status(201).json({
+        purchaseId: purchase.id,
+        status: 'pending',
+        message: checkout.customerMessage
+      });
+    } catch (error) {
+      db.transaction(() => {
+        db.prepare("UPDATE gift_card_purchases SET status='failed' WHERE id=? AND status='pending'").run(purchase.id);
+        db.prepare("UPDATE gift_cards SET status='revoked' WHERE purchase_id=? AND status='pending'").run(purchase.id);
+      })();
+      console.error('M-Pesa gift-card checkout could not be started:', error.message);
+      return res.status(502).json({ error: 'M-Pesa could not start the gift-card payment. Please try again shortly.' });
+    }
+  });
+
+  app.get('/api/gift-cards/mine', requireAccount, (req, res, next) => {
+    try {
+      const purchases = db.prepare(`
+        SELECT p.id,p.amount_kes AS amountKes,p.payment_method AS paymentMethod,p.status,
+          p.recipient_name AS recipientName,p.recipient_contact AS recipientContact,p.message,
+          p.created_at AS createdAt,p.paid_at AS paidAt,g.id AS giftCardId,g.status AS cardStatus,
+          (SELECT r.status FROM gift_refund_requests r WHERE r.instrument_type='gift_card'
+            AND r.instrument_id=p.id LIMIT 1) AS refundStatus,
+          g.code_ciphertext,g.code_nonce,g.code_auth_tag
+        FROM gift_card_purchases p JOIN gift_cards g ON g.purchase_id=p.id
+        WHERE p.account_id=? ORDER BY p.created_at DESC LIMIT 50
+      `).all(req.account.id).map((purchase) => ({
+        purchaseId: purchase.id,
+        giftCardId: purchase.giftCardId,
+        amountKes: purchase.amountKes,
+        paymentMethod: purchase.paymentMethod,
+        status: purchase.status,
+        cardStatus: purchase.cardStatus,
+        refundStatus: purchase.refundStatus,
+        recipientName: purchase.recipientName,
+        recipientContact: purchase.recipientContact,
+        message: purchase.message,
+        createdAt: purchase.createdAt,
+        paidAt: purchase.paidAt,
+        code: purchase.cardStatus === 'issued' ? revealGiftCode(purchase) : ''
+      }));
+      return res.json({ purchases });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.post('/api/gift-cards/redeem', requireAccount, giftCodeAttemptLimiter, (req, res) => {
+    const wallet = walletForAccount(req.account.id);
+    if (!wallet) return res.status(409).json({ error: 'Link and verify a Valor Wallet before redeeming gift credit.' });
+    const code = normalizeGiftCardCode(req.body && req.body.code);
+    if (!/^VA[0-9A-F]{36}$/.test(code)) return res.status(400).json({ error: 'Enter a valid Valor gift-card code.' });
+    try {
+      const result = db.transaction(() => {
+        const card = db.prepare(`
+          SELECT id,amount_kes AS amountKes,status FROM gift_cards WHERE code_hash=?
+        `).get(sha256(code));
+        if (!card || card.status !== 'issued') {
+          throw Object.assign(new Error('This gift-card code is invalid, already redeemed, or not yet paid.'), { statusCode: 404 });
+        }
+        const updated = db.prepare(`
+          UPDATE gift_cards SET status='redeemed',redeemed_by_account_id=?,redeemed_at=datetime('now')
+          WHERE id=? AND status='issued'
+        `).run(req.account.id, card.id);
+        if (updated.changes !== 1) throw Object.assign(new Error('This gift card has already been redeemed.'), { statusCode: 409 });
+        const purchase = db.prepare('SELECT purchase_id AS purchaseId FROM gift_cards WHERE id=?').get(card.id);
+        recordWalletTransaction(
+          wallet.id, card.amountKes, 'gift_card_redemption', 'gift_card', card.id,
+          `Valor gift card redeemed (${card.id})`
+        );
+        addGiftCardLedgerEntry(card.id, 'redeemed', -card.amountKes, req.account.id, wallet.id, 'Gift card value transferred to Valor Wallet.');
+        return { ...card, purchaseId: purchase.purchaseId };
+      })();
+      const snapshot = walletSnapshot(wallet.id);
+      return res.status(200).json({
+        status: 'redeemed',
+        amountKes: result.amountKes,
+        purchaseId: result.purchaseId,
+        balanceKes: snapshot.balanceKes,
+        message: `KES ${result.amountKes.toLocaleString('en-KE')} Valor credit was added to your wallet.`
+      });
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
+  });
+
+  app.post('/api/gift-refunds', requireAccount, (req, res) => {
+    const { instrumentType, instrumentId, reason } = req.body || {};
+    if (!['gift_card','merchant_voucher'].includes(instrumentType) ||
+        typeof instrumentId !== 'string' || !instrumentId ||
+        typeof reason !== 'string' || !reason.trim() || reason.trim().length > 1000) {
+      return res.status(400).json({ error: 'Choose a gift or voucher order and explain the refund request (1,000 characters maximum).' });
+    }
+    const owned = instrumentType === 'gift_card'
+      ? db.prepare(`
+        SELECT 1 FROM gift_cards g JOIN gift_card_purchases p ON p.id=g.purchase_id
+        WHERE p.id=? AND p.account_id=? AND g.status='issued' AND p.status='paid'
+      `).get(instrumentId, req.account.id)
+      : db.prepare(`
+        SELECT 1 FROM merchant_voucher_orders
+        WHERE id=? AND account_id=? AND status='paid'
+      `).get(instrumentId, req.account.id);
+    if (!owned) return res.status(409).json({ error: 'Only paid, unused gift cards or voucher orders can be submitted for support review.' });
+    try {
+      const id = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO gift_refund_requests (id,account_id,instrument_type,instrument_id,reason)
+        VALUES (?,?,?,?,?)
+      `).run(id, req.account.id, instrumentType, instrumentId, reason.trim());
+      return res.status(201).json({ requestId: id, status: 'pending', message: 'Your refund request was sent to Valor support for review.' });
+    } catch (error) {
+      if (String(error.message).includes('UNIQUE constraint failed')) {
+        return res.status(409).json({ error: 'A refund request for this purchase is already on file.' });
+      }
+      throw error;
+    }
+  });
+
+  app.get('/api/gift-vouchers', (req, res) => {
+    const vouchers = db.prepare(`
+      SELECT v.id,v.title,v.description,v.face_value_kes AS faceValueKes,
+        v.sale_price_kes AS salePriceKes,v.redemption_instructions AS redemptionInstructions,
+        v.terms,m.id AS merchantId,m.business_name AS merchantName,m.website_url AS merchantWebsite,
+        (SELECT COUNT(*) FROM merchant_voucher_codes c WHERE c.voucher_id=v.id AND c.status='available') AS stock
+      FROM merchant_vouchers v JOIN gift_merchants m ON m.id=v.merchant_id
+      WHERE v.active=1 AND m.status='approved'
+        AND EXISTS (SELECT 1 FROM merchant_voucher_codes c WHERE c.voucher_id=v.id AND c.status='available')
+      ORDER BY v.created_at DESC LIMIT 100
+    `).all();
+    return res.json({ vouchers });
+  });
+
+  app.post('/api/gift-merchants/applications', requireAccount, merchantApplicationLimiter, (req, res) => {
+    const body = req.body || {};
+    const businessName = typeof body.businessName === 'string' ? body.businessName.trim() : '';
+    const websiteUrl = typeof body.websiteUrl === 'string' ? body.websiteUrl.trim() : '';
+    const contactName = typeof body.contactName === 'string' ? body.contactName.trim() : '';
+    const contactPhone = normalizePhone(body.contactPhone);
+    const details = typeof body.details === 'string' ? body.details.trim() : '';
+    if (!businessName || businessName.length > 160 || !contactName || contactName.length > 120 ||
+        !contactPhone || !details || details.length > 2000) {
+      return res.status(400).json({ error: 'Enter a business name, authorized contact, valid Kenyan contact number, and business details (2,000 characters maximum).' });
+    }
+    if (websiteUrl) {
+      try {
+        const website = new URL(websiteUrl);
+        if (website.protocol !== 'https:' || website.hostname.length > 253) throw new Error('invalid');
+      } catch (error) {
+        return res.status(400).json({ error: 'Merchant websites must be valid HTTPS URLs.' });
+      }
+    }
+    const id = crypto.randomUUID();
+    try {
+      db.prepare(`
+        INSERT INTO gift_merchants (id,account_id,business_name,website_url,contact_name,contact_phone,application_details)
+        VALUES (?,?,?,?,?,?,?)
+      `).run(id, req.account.id, businessName, websiteUrl, contactName, contactPhone, details);
+      return res.status(201).json({ merchantId: id, status: 'pending', message: 'Your merchant application was sent for verification.' });
+    } catch (error) {
+      if (String(error.message).includes('UNIQUE constraint failed')) {
+        return res.status(409).json({ error: 'Your account already has a gift merchant application.' });
+      }
+      throw error;
+    }
+  });
+
+  app.get('/api/gift-merchants/mine', requireAccount, (req, res) => {
+    const merchant = db.prepare(`
+      SELECT id,business_name AS businessName,website_url AS websiteUrl,contact_name AS contactName,
+        contact_phone AS contactPhone,application_details AS applicationDetails,status,admin_note AS adminNote,
+        created_at AS createdAt
+      FROM gift_merchants WHERE account_id=?
+    `).get(req.account.id);
+    if (!merchant) return res.json({ merchant: null, vouchers: [], orders: [], dueKes: 0 });
+    const vouchers = db.prepare(`
+      SELECT v.id,v.title,v.description,v.face_value_kes AS faceValueKes,v.sale_price_kes AS salePriceKes,
+        v.redemption_instructions AS redemptionInstructions,v.terms,v.active,
+        (SELECT COUNT(*) FROM merchant_voucher_codes c WHERE c.voucher_id=v.id AND c.status='available') AS stock,
+        (SELECT COUNT(*) FROM merchant_voucher_orders o WHERE o.voucher_id=v.id AND o.status='paid') AS sold
+      FROM merchant_vouchers v WHERE v.merchant_id=? ORDER BY v.created_at DESC
+    `).all(merchant.id);
+    const orders = db.prepare(`
+      SELECT o.id,o.voucher_title AS title,o.amount_kes AS amountKes,o.face_value_kes AS faceValueKes,
+        o.status,o.payment_method AS paymentMethod,o.mpesa_receipt AS receipt,
+        o.unused_confirmed AS unusedConfirmed,o.created_at AS createdAt,o.paid_at AS paidAt
+      FROM merchant_voucher_orders o WHERE o.merchant_id=?
+      ORDER BY o.created_at DESC LIMIT 100
+    `).all(merchant.id);
+    const refundRequests = db.prepare(`
+      SELECT r.id AS requestId,r.reason,r.created_at AS createdAt,
+        o.id AS orderId,o.voucher_title AS title,o.amount_kes AS amountKes,
+        o.unused_confirmed AS unusedConfirmed
+      FROM gift_refund_requests r
+      JOIN merchant_voucher_orders o ON o.id=r.instrument_id
+      WHERE r.instrument_type='merchant_voucher' AND r.status='pending' AND o.merchant_id=?
+      ORDER BY r.created_at DESC LIMIT 100
+    `).all(merchant.id);
+    const totals = db.prepare(`
+      SELECT COALESCE(SUM(CASE WHEN o.status='paid' THEN o.amount_kes ELSE 0 END),0) AS salesKes,
+        COALESCE((SELECT SUM(p.amount_kes) FROM merchant_payouts p WHERE p.merchant_id=?),0) AS paidOutKes
+      FROM merchant_voucher_orders o WHERE o.merchant_id=?
+    `).get(merchant.id, merchant.id);
+    return res.json({
+      merchant,
+      vouchers,
+      orders,
+      refundRequests,
+      salesKes: totals.salesKes,
+      paidOutKes: totals.paidOutKes,
+      dueKes: totals.salesKes - totals.paidOutKes
+    });
+  });
+
+  app.post('/api/gift-merchants/vouchers', requireAccount, (req, res) => {
+    const merchant = db.prepare('SELECT id,status FROM gift_merchants WHERE account_id=?').get(req.account.id);
+    if (!merchant || merchant.status !== 'approved') {
+      return res.status(403).json({ error: 'Only approved gift merchants can list vouchers.' });
+    }
+    const body = req.body || {};
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    const description = typeof body.description === 'string' ? body.description.trim() : '';
+    const faceValueKes = body.faceValueKes;
+    const salePriceKes = body.salePriceKes;
+    const redemptionInstructions = typeof body.redemptionInstructions === 'string' ? body.redemptionInstructions.trim() : '';
+    const terms = typeof body.terms === 'string' ? body.terms.trim() : '';
+    if (!title || title.length > 120 || !description || description.length > 2000 ||
+        !Number.isSafeInteger(faceValueKes) || faceValueKes < 1 ||
+        !Number.isSafeInteger(salePriceKes) || salePriceKes < 1 || salePriceKes > faceValueKes ||
+        !redemptionInstructions || redemptionInstructions.length > 2000 || terms.length > 2000) {
+      return res.status(400).json({ error: 'Provide a title, description, face value, sale price no greater than face value, redemption instructions, and terms within the stated limits.' });
+    }
+    const id = crypto.randomUUID();
+    db.prepare(`
+      INSERT INTO merchant_vouchers (
+        id,merchant_id,title,description,face_value_kes,sale_price_kes,
+        redemption_instructions,terms,active
+      ) VALUES (?,?,?,?,?,?,?,?,1)
+    `).run(id, merchant.id, title, description, faceValueKes, salePriceKes, redemptionInstructions, terms);
+    return res.status(201).json({ voucherId: id, active: true });
+  });
+
+  app.patch('/api/gift-merchants/vouchers/:id', requireAccount, (req, res) => {
+    const merchant = db.prepare('SELECT id,status FROM gift_merchants WHERE account_id=?').get(req.account.id);
+    const existing = merchant && db.prepare('SELECT * FROM merchant_vouchers WHERE id=? AND merchant_id=?').get(req.params.id, merchant.id);
+    if (!existing) return res.status(404).json({ error: 'Voucher not found in your merchant account.' });
+    if (merchant.status !== 'approved') return res.status(403).json({ error: 'Your merchant account must be approved to edit voucher listings.' });
+    const body = req.body || {};
+    const title = typeof body.title === 'string' ? body.title.trim() : existing.title;
+    const description = typeof body.description === 'string' ? body.description.trim() : existing.description;
+    const faceValueKes = body.faceValueKes === undefined ? existing.face_value_kes : body.faceValueKes;
+    const salePriceKes = body.salePriceKes === undefined ? existing.sale_price_kes : body.salePriceKes;
+    const redemptionInstructions = typeof body.redemptionInstructions === 'string'
+      ? body.redemptionInstructions.trim()
+      : existing.redemption_instructions;
+    const terms = typeof body.terms === 'string' ? body.terms.trim() : existing.terms;
+    const active = body.active === undefined ? Boolean(existing.active) : body.active;
+    if (!title || title.length > 120 || !description || description.length > 2000 ||
+        !Number.isSafeInteger(faceValueKes) || faceValueKes < 1 ||
+        !Number.isSafeInteger(salePriceKes) || salePriceKes < 1 || salePriceKes > faceValueKes ||
+        !redemptionInstructions || redemptionInstructions.length > 2000 || terms.length > 2000 ||
+        typeof active !== 'boolean') {
+      return res.status(400).json({ error: 'Voucher fields are invalid.' });
+    }
+    db.prepare(`
+      UPDATE merchant_vouchers SET title=?,description=?,face_value_kes=?,sale_price_kes=?,
+        redemption_instructions=?,terms=?,active=?,updated_at=datetime('now')
+      WHERE id=? AND merchant_id=?
+    `).run(title, description, faceValueKes, salePriceKes, redemptionInstructions, terms, active ? 1 : 0, existing.id, merchant.id);
+    return res.json({ voucherId: existing.id, active });
+  });
+
+  app.post('/api/gift-merchants/vouchers/:id/inventory', requireAccount, (req, res, next) => {
+    const merchant = db.prepare('SELECT id,status FROM gift_merchants WHERE account_id=?').get(req.account.id);
+    const voucher = merchant && db.prepare('SELECT id FROM merchant_vouchers WHERE id=? AND merchant_id=?').get(req.params.id, merchant.id);
+    if (!merchant || merchant.status !== 'approved' || !voucher) {
+      return res.status(404).json({ error: 'Approved merchant voucher not found.' });
+    }
+    const codesValue = req.body && req.body.codes;
+    if (typeof codesValue !== 'string' || codesValue.length > 12000) {
+      return res.status(400).json({ error: 'Add up to 100 unique voucher codes, one per line.' });
+    }
+    const codes = codesValue.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
+    if (!codes.length || codes.length > 100 || codes.some((value) => value.length < 4 || value.length > 120 || /[\u0000-\u001f]/.test(value)) ||
+        new Set(codes.map((value) => value.toUpperCase())).size !== codes.length) {
+      return res.status(400).json({ error: 'Add 1–100 unique codes (4–120 characters each), one per line.' });
+    }
+    try {
+      const protectedCodes = codes.map((code) => ({
+        hash: sha256(code),
+        ...protectGiftCode(code)
+      }));
+      db.transaction(() => {
+        for (const code of protectedCodes) {
+          db.prepare(`
+            INSERT INTO merchant_voucher_codes (
+              id,voucher_id,code_hash,code_ciphertext,code_nonce,code_auth_tag
+            ) VALUES (?,?,?,?,?,?)
+          `).run(
+            crypto.randomUUID(), voucher.id, code.hash, code.codeCiphertext, code.codeNonce, code.codeAuthTag
+          );
+        }
+      })();
+      return res.status(201).json({ added: codes.length, message: 'Codes were encrypted and added to your inventory. Code values are not shown again.' });
+    } catch (error) {
+      if (String(error.message).includes('UNIQUE constraint failed')) {
+        return res.status(409).json({ error: 'One or more codes already exist in marketplace inventory. No codes were added.' });
+      }
+      return next(error);
+    }
+  });
+
+  app.post('/api/gift-merchants/refunds/:requestId/confirm-unused', requireAccount, (req, res) => {
+    const merchant = db.prepare('SELECT id,status FROM gift_merchants WHERE account_id=?').get(req.account.id);
+    if (!merchant || merchant.status !== 'approved') return res.status(403).json({ error: 'An approved merchant account is required.' });
+    const request = db.prepare(`
+      SELECT r.id,r.instrument_id AS instrumentId,o.id AS orderId
+      FROM gift_refund_requests r JOIN merchant_voucher_orders o ON o.id=r.instrument_id
+      WHERE r.id=? AND r.instrument_type='merchant_voucher' AND r.status='pending' AND o.merchant_id=?
+    `).get(req.params.requestId, merchant.id);
+    if (!request) return res.status(404).json({ error: 'Pending refund request not found for your merchant account.' });
+    const updated = db.prepare('UPDATE merchant_voucher_orders SET unused_confirmed=1 WHERE id=? AND status=?')
+      .run(request.orderId, 'paid');
+    if (updated.changes !== 1) return res.status(409).json({ error: 'This voucher order is no longer eligible for unused confirmation.' });
+    return res.json({ message: 'You confirmed the voucher is unused. Valor support will review the refund request.' });
+  });
+
+  app.post('/api/merchant-voucher-orders', requireAccount, giftPurchaseLimiter, async (req, res, next) => {
+    const body = req.body || {};
+    const voucherId = typeof body.voucherId === 'string' ? body.voucherId : '';
+    const paymentMethod = body.paymentMethod || 'wallet';
+    const clientRequestId = body.clientRequestId;
+    const buyerName = typeof body.buyerName === 'string' ? body.buyerName.trim() : '';
+    if (!voucherId || !buyerName || buyerName.length > 120 ||
+        !['wallet','mpesa'].includes(paymentMethod) ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRequestId || '')) {
+      return res.status(400).json({ error: 'Choose a voucher, enter your name, select a supported payment method, and refresh the purchase request.' });
+    }
+    const wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
+    if (paymentMethod === 'wallet' && !wallet) return res.status(409).json({ error: 'Link a Valor Wallet before paying with wallet balance.' });
+    const phone = paymentMethod === 'wallet' ? wallet.phone : normalizePhone(body.phone);
+    if (!phone) return res.status(400).json({ error: 'Enter a valid Kenyan M-Pesa number.' });
+    if (paymentMethod === 'mpesa' && paymentsUnavailable(res)) return;
+    let order;
+    try {
+      order = db.transaction(() => {
+        const duplicate = db.prepare(`
+          SELECT id,voucher_id AS voucherId,status,payment_method AS paymentMethod
+          FROM merchant_voucher_orders WHERE account_id=? AND client_request_id=?
+        `).get(req.account.id, clientRequestId);
+        if (duplicate) {
+          if (duplicate.voucherId !== voucherId || duplicate.paymentMethod !== paymentMethod) {
+            throw Object.assign(new Error('This retry key was already used for a different voucher purchase. Refresh and try again.'), { statusCode: 409 });
+          }
+          return { ...duplicate, duplicate: true };
+        }
+        const voucher = db.prepare(`
+          SELECT v.*,m.status AS merchantStatus,m.id AS merchantId
+          FROM merchant_vouchers v JOIN gift_merchants m ON m.id=v.merchant_id
+          WHERE v.id=? AND v.active=1 AND m.status='approved'
+        `).get(voucherId);
+        if (!voucher) throw Object.assign(new Error('This merchant voucher is unavailable.'), { statusCode: 404 });
+        const code = db.prepare(`
+          SELECT id FROM merchant_voucher_codes WHERE voucher_id=? AND status='available'
+          ORDER BY created_at,id LIMIT 1
+        `).get(voucherId);
+        if (!code) throw Object.assign(new Error('This voucher just sold out. Refresh the listings.'), { statusCode: 409 });
+        if (wallet) {
+          const balanceKes = db.prepare("SELECT COALESCE(SUM(amount_kes),0) AS balance FROM wallet_transactions WHERE wallet_id=? AND status='completed'")
+            .get(wallet.id).balance;
+          if (balanceKes < voucher.sale_price_kes) {
+            throw Object.assign(new Error('Your wallet balance is too low. Add funds and try again.'), { statusCode: 402 });
+          }
+        }
+        const id = crypto.randomUUID();
+        const status = paymentMethod === 'wallet' ? 'paid' : 'pending';
+        db.prepare(`
+          INSERT INTO merchant_voucher_orders (
+            id,account_id,merchant_id,voucher_id,code_id,amount_kes,face_value_kes,voucher_title,
+            redemption_instructions,voucher_terms,payment_method,status,client_request_id,buyer_name,phone,paid_at
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CASE WHEN ?='paid' THEN datetime('now') END)
+        `).run(
+          id, req.account.id, voucher.merchantId, voucher.id, code.id, voucher.sale_price_kes,
+          voucher.face_value_kes, voucher.title, voucher.redemption_instructions, voucher.terms,
+          paymentMethod, status, clientRequestId, buyerName, phone, status
+        );
+        const reserved = db.prepare(`
+          UPDATE merchant_voucher_codes SET status=?,order_id=? WHERE id=? AND status='available'
+        `).run(status === 'paid' ? 'sold' : 'reserved', id, code.id);
+        if (reserved.changes !== 1) throw Object.assign(new Error('This voucher just sold out. Refresh the listings.'), { statusCode: 409 });
+        if (wallet) {
+          recordWalletTransaction(
+            wallet.id, -voucher.sale_price_kes, 'merchant_voucher_purchase',
+            'merchant_voucher_order', id, `Merchant voucher: ${voucher.title}`
+          );
+        }
+        if (status === 'paid') {
+          db.prepare(`
+            INSERT INTO merchant_voucher_ledger
+              (id,merchant_id,order_id,transaction_type,amount_kes,reference_id,description)
+            VALUES (?,?,?,'sale',?,?,?)
+          `).run(`sale-${id}`, voucher.merchantId, id, voucher.sale_price_kes, id, 'Confirmed merchant voucher sale.');
+        }
+        return { id, amountKes: voucher.sale_price_kes, paymentMethod, status, duplicate: false };
+      })();
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+      return next(error);
+    }
+    if (order.duplicate) {
+      return res.json({ orderId: order.id, status: order.status, message: 'This voucher purchase was already recorded.' });
+    }
+    if (paymentMethod === 'wallet') {
+      return res.status(201).json({
+        orderId: order.id,
+        status: 'paid',
+        amountKes: order.amountKes,
+        message: 'Your voucher purchase is paid. View the code and redemption instructions in Your gifts.'
+      });
+    }
+    try {
+      const checkout = await paymentGateway.initiateStkPush({
+        id: order.id,
+        amountKes: order.amountKes,
+        phone,
+        orderType: 'merchant_voucher'
+      });
+      db.prepare('UPDATE merchant_voucher_orders SET checkout_request_id=?,merchant_request_id=? WHERE id=? AND status=?')
+        .run(checkout.checkoutRequestId, checkout.merchantRequestId, order.id, 'pending');
+      return res.status(201).json({ orderId: order.id, status: 'pending', message: checkout.customerMessage });
+    } catch (error) {
+      db.transaction(() => {
+        db.prepare("UPDATE merchant_voucher_orders SET status='failed' WHERE id=? AND status='pending'").run(order.id);
+        db.prepare("UPDATE merchant_voucher_codes SET status='available',order_id=NULL WHERE order_id=? AND status='reserved'").run(order.id);
+      })();
+      console.error('M-Pesa merchant voucher checkout could not be started:', error.message);
+      return res.status(502).json({ error: 'M-Pesa could not start the voucher payment. Please try again shortly.' });
+    }
+  });
+
+  app.get('/api/merchant-voucher-orders/mine', requireAccount, (req, res, next) => {
+    try {
+      const orders = db.prepare(`
+        SELECT o.id,o.voucher_title AS title,o.amount_kes AS amountKes,o.face_value_kes AS faceValueKes,
+          o.redemption_instructions AS redemptionInstructions,o.voucher_terms AS terms,
+          o.status,o.mpesa_receipt AS receipt,o.created_at AS createdAt,o.paid_at AS paidAt,
+          (SELECT r.status FROM gift_refund_requests r WHERE r.instrument_type='merchant_voucher'
+            AND r.instrument_id=o.id LIMIT 1) AS refundStatus,
+          m.business_name AS merchantName,m.website_url AS merchantWebsite,
+          c.code_ciphertext,c.code_nonce,c.code_auth_tag
+        FROM merchant_voucher_orders o
+        JOIN gift_merchants m ON m.id=o.merchant_id
+        JOIN merchant_voucher_codes c ON c.id=o.code_id
+        WHERE o.account_id=? ORDER BY o.created_at DESC LIMIT 50
+      `).all(req.account.id).map((order) => ({
+        orderId: order.id,
+        title: order.title,
+        amountKes: order.amountKes,
+        faceValueKes: order.faceValueKes,
+        redemptionInstructions: order.redemptionInstructions,
+        terms: order.terms,
+        status: order.status,
+        refundStatus: order.refundStatus,
+        receipt: order.receipt,
+        createdAt: order.createdAt,
+        paidAt: order.paidAt,
+        merchantName: order.merchantName,
+        merchantWebsite: order.merchantWebsite,
+        code: order.status === 'paid' ? revealGiftCode(order) : ''
+      }));
+      return res.json({ orders });
+    } catch (error) {
+      return next(error);
     }
   });
 
@@ -1655,6 +2329,250 @@ function createApp(options = {}) {
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .slice(0, 200);
     res.json({ orders });
+  });
+
+  app.get('/api/gift-merchants/admin', requireAdmin, (req, res) => {
+    const merchants = db.prepare(`
+      SELECT m.id,m.business_name AS businessName,m.website_url AS websiteUrl,
+        m.contact_name AS contactName,m.contact_phone AS contactPhone,
+        m.application_details AS applicationDetails,m.status,m.admin_note AS adminNote,
+        m.created_at AS createdAt,a.email,
+        COALESCE((SELECT SUM(o.amount_kes) FROM merchant_voucher_orders o
+          WHERE o.merchant_id=m.id AND o.status='paid'),0) AS salesKes,
+        COALESCE((SELECT SUM(p.amount_kes) FROM merchant_payouts p WHERE p.merchant_id=m.id),0) AS paidOutKes
+      FROM gift_merchants m JOIN accounts a ON a.id=m.account_id
+      ORDER BY CASE m.status WHEN 'pending' THEN 0 ELSE 1 END,m.created_at DESC LIMIT 200
+    `).all().map((merchant) => ({
+      ...merchant,
+      dueKes: merchant.salesKes - merchant.paidOutKes,
+      voucherCount: db.prepare('SELECT COUNT(*) AS count FROM merchant_vouchers WHERE merchant_id=?').get(merchant.id).count
+    }));
+    return res.json({ merchants });
+  });
+
+  app.patch('/api/gift-merchants/admin/:id', requireAdmin, (req, res) => {
+    const { status, adminNote = '' } = req.body || {};
+    if (!['approved','rejected','suspended'].includes(status)) {
+      return res.status(400).json({ error: 'Choose approved, rejected, or suspended merchant status.' });
+    }
+    if (typeof adminNote !== 'string' || adminNote.length > 1000) {
+      return res.status(400).json({ error: 'Admin note must be 1,000 characters or fewer.' });
+    }
+    const merchant = db.prepare('SELECT id FROM gift_merchants WHERE id=?').get(req.params.id);
+    if (!merchant) return res.status(404).json({ error: 'Gift merchant not found.' });
+    db.prepare(`
+      UPDATE gift_merchants SET status=?,admin_note=?,reviewed_at=datetime('now') WHERE id=?
+    `).run(status, adminNote.trim(), merchant.id);
+    return res.json({ merchantId: merchant.id, status });
+  });
+
+  app.get('/api/gift-vouchers/admin', requireAdmin, (req, res) => {
+    const vouchers = db.prepare(`
+      SELECT v.id,v.title,v.description,v.face_value_kes AS faceValueKes,
+        v.sale_price_kes AS salePriceKes,v.active,v.created_at AS createdAt,
+        m.id AS merchantId,m.business_name AS merchantName,m.status AS merchantStatus,
+        (SELECT COUNT(*) FROM merchant_voucher_codes c WHERE c.voucher_id=v.id AND c.status='available') AS stock,
+        (SELECT COUNT(*) FROM merchant_voucher_orders o WHERE o.voucher_id=v.id AND o.status='paid') AS sold
+      FROM merchant_vouchers v JOIN gift_merchants m ON m.id=v.merchant_id
+      ORDER BY v.created_at DESC LIMIT 500
+    `).all();
+    return res.json({ vouchers });
+  });
+
+  app.patch('/api/gift-vouchers/admin/:id', requireAdmin, (req, res) => {
+    if (typeof (req.body && req.body.active) !== 'boolean') {
+      return res.status(400).json({ error: 'Choose whether the voucher listing should be active.' });
+    }
+    const voucher = db.prepare('SELECT id FROM merchant_vouchers WHERE id=?').get(req.params.id);
+    if (!voucher) return res.status(404).json({ error: 'Merchant voucher not found.' });
+    db.prepare("UPDATE merchant_vouchers SET active=?,updated_at=datetime('now') WHERE id=?")
+      .run(req.body.active ? 1 : 0, voucher.id);
+    return res.json({ voucherId: voucher.id, active: req.body.active });
+  });
+
+  app.get('/api/gift-payouts/admin', requireAdmin, (req, res) => {
+    const merchants = db.prepare(`
+      SELECT m.id AS merchantId,m.business_name AS businessName,m.status,
+        COALESCE((SELECT SUM(o.amount_kes) FROM merchant_voucher_orders o
+          WHERE o.merchant_id=m.id AND o.status='paid'),0) AS salesKes,
+        COALESCE((SELECT SUM(p.amount_kes) FROM merchant_payouts p WHERE p.merchant_id=m.id),0) AS paidOutKes
+      FROM gift_merchants m ORDER BY m.business_name COLLATE NOCASE
+    `).all().map((merchant) => ({
+      ...merchant,
+      dueKes: merchant.salesKes - merchant.paidOutKes,
+      payouts: db.prepare(`
+        SELECT amount_kes AS amountKes,reference,note,created_at AS createdAt
+        FROM merchant_payouts WHERE merchant_id=? ORDER BY created_at DESC LIMIT 20
+      `).all(merchant.merchantId)
+    }));
+    return res.json({ merchants });
+  });
+
+  app.post('/api/gift-payouts/admin/:merchantId', requireAdmin, (req, res) => {
+    const { amountKes, reference, note = '' } = req.body || {};
+    if (!Number.isSafeInteger(amountKes) || amountKes < 1 ||
+        typeof reference !== 'string' || !reference.trim() || reference.trim().length > 120 ||
+        typeof note !== 'string' || note.length > 500) {
+      return res.status(400).json({ error: 'Enter a positive whole-KES payout, payment reference (120 characters maximum), and note (500 characters maximum).' });
+    }
+    try {
+      const merchant = db.prepare('SELECT id FROM gift_merchants WHERE id=? AND status=\'approved\'').get(req.params.merchantId);
+      if (!merchant) return res.status(404).json({ error: 'Approved gift merchant not found.' });
+      db.transaction(() => {
+        const totals = db.prepare(`
+          SELECT COALESCE((SELECT SUM(amount_kes) FROM merchant_voucher_orders
+            WHERE merchant_id=? AND status='paid'),0) -
+            COALESCE((SELECT SUM(amount_kes) FROM merchant_payouts WHERE merchant_id=?),0) AS dueKes
+        `).get(merchant.id, merchant.id);
+        if (amountKes > totals.dueKes) {
+          throw Object.assign(new Error(`Payout cannot exceed the KES ${totals.dueKes.toLocaleString('en-KE')} amount due.`), { statusCode: 409 });
+        }
+        const payoutId = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO merchant_payouts (id,merchant_id,amount_kes,reference,note,admin_id)
+          VALUES (?,?,?,?,?,?)
+        `).run(payoutId, merchant.id, amountKes, reference.trim(), note.trim(), req.admin.sub);
+        let remainingKes = amountKes;
+        const orders = db.prepare(`
+          SELECT id,amount_kes AS amountKes FROM merchant_voucher_orders
+          WHERE merchant_id=? AND status='paid' ORDER BY paid_at,id
+        `).all(merchant.id);
+        for (const order of orders) {
+          if (!remainingKes) break;
+          const previouslyPaidKes = db.prepare(`
+            SELECT COALESCE(-SUM(amount_kes),0) AS amountKes
+            FROM merchant_voucher_ledger WHERE order_id=? AND transaction_type='payout'
+          `).get(order.id).amountKes;
+          const allocationKes = Math.min(remainingKes, order.amountKes - previouslyPaidKes);
+          if (allocationKes <= 0) continue;
+          db.prepare(`
+            INSERT INTO merchant_voucher_ledger
+              (id,merchant_id,order_id,transaction_type,amount_kes,reference_id,description)
+            VALUES (?,?,?,'payout',?,?,?)
+          `).run(
+            `${payoutId}-${order.id}`, merchant.id, order.id, -allocationKes, payoutId,
+            `Manual merchant payout recorded (${reference.trim()}).`
+          );
+          remainingKes -= allocationKes;
+        }
+      })();
+      return res.status(201).json({ message: 'Manual merchant payout recorded.' });
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+      if (String(error.message).includes('UNIQUE constraint failed')) {
+        return res.status(409).json({ error: 'That payout reference has already been recorded for this merchant.' });
+      }
+      throw error;
+    }
+  });
+
+  app.get('/api/gift-refunds/admin', requireAdmin, (req, res) => {
+    const requests = db.prepare(`
+      SELECT r.id,r.instrument_type AS instrumentType,r.instrument_id AS instrumentId,
+        r.reason,r.status,r.admin_note AS adminNote,r.refund_reference AS refundReference,
+        r.created_at AS createdAt,a.email,
+        CASE WHEN r.instrument_type='gift_card' THEN gc.amount_kes ELSE vo.amount_kes END AS amountKes,
+        CASE WHEN r.instrument_type='gift_card' THEN gp.payment_method ELSE vo.payment_method END AS paymentMethod,
+        CASE WHEN r.instrument_type='gift_card' THEN gp.status ELSE vo.status END AS purchaseStatus,
+        CASE WHEN r.instrument_type='gift_card' THEN gc.status ELSE vo.unused_confirmed END AS instrumentStatus,
+        CASE WHEN r.instrument_type='gift_card' THEN 'Valor Africa gift card' ELSE vo.voucher_title END AS title,
+        CASE WHEN r.instrument_type='gift_card' THEN '' ELSE gm.business_name END AS merchantName
+      FROM gift_refund_requests r JOIN accounts a ON a.id=r.account_id
+      LEFT JOIN gift_card_purchases gp ON r.instrument_type='gift_card' AND gp.id=r.instrument_id
+      LEFT JOIN gift_cards gc ON gc.purchase_id=gp.id
+      LEFT JOIN merchant_voucher_orders vo ON r.instrument_type='merchant_voucher' AND vo.id=r.instrument_id
+      LEFT JOIN gift_merchants gm ON gm.id=vo.merchant_id
+      ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,r.created_at DESC LIMIT 200
+    `).all();
+    return res.json({ requests });
+  });
+
+  app.patch('/api/gift-refunds/admin/:id', requireAdmin, (req, res) => {
+    const { status, adminNote = '', refundReference = '' } = req.body || {};
+    if (!['approved','rejected'].includes(status) || typeof adminNote !== 'string' || adminNote.length > 1000 ||
+        typeof refundReference !== 'string' || refundReference.length > 120) {
+      return res.status(400).json({ error: 'Choose approved or rejected and enter valid review details.' });
+    }
+    try {
+      db.transaction(() => {
+        const request = db.prepare(`
+          SELECT id,account_id AS accountId,instrument_type AS instrumentType,
+            instrument_id AS instrumentId,status
+          FROM gift_refund_requests WHERE id=?
+        `).get(req.params.id);
+        if (!request || request.status !== 'pending') {
+          throw Object.assign(new Error('Pending gift refund request not found.'), { statusCode: 404 });
+        }
+        if (status === 'approved' && request.instrumentType === 'gift_card') {
+          const record = db.prepare(`
+            SELECT g.id AS cardId,g.amount_kes AS amountKes,g.status AS cardStatus,
+              p.id AS purchaseId,p.status AS purchaseStatus,p.payment_method AS paymentMethod,
+              p.account_id AS accountId
+            FROM gift_card_purchases p JOIN gift_cards g ON g.purchase_id=p.id
+            WHERE p.id=? AND p.account_id=?
+          `).get(request.instrumentId, request.accountId);
+          if (!record || record.cardStatus !== 'issued' || record.purchaseStatus !== 'paid') {
+            throw Object.assign(new Error('Gift cards can only be refunded while paid and unredeemed.'), { statusCode: 409 });
+          }
+          if (record.paymentMethod === 'mpesa' && !refundReference.trim()) {
+            throw Object.assign(new Error('Record the manual M-Pesa refund reference before approving this request.'), { statusCode: 400 });
+          }
+          db.prepare("UPDATE gift_cards SET status='refunded' WHERE id=? AND status='issued'").run(record.cardId);
+          db.prepare(`
+            UPDATE gift_card_purchases SET status='refunded',refund_reference=?,refunded_at=datetime('now')
+            WHERE id=? AND status='paid'
+          `).run(refundReference.trim(), record.purchaseId);
+          addGiftCardLedgerEntry(record.cardId, 'refunded', -record.amountKes, request.accountId, req.params.id, 'Unused Valor gift card refund approved.');
+          if (record.paymentMethod === 'wallet') {
+            const wallet = walletForAccount(request.accountId);
+            if (!wallet) throw new Error('Purchaser Valor Wallet is no longer linked.');
+            recordWalletTransaction(
+              wallet.id, record.amountKes, 'gift_card_refund', 'gift_refund', req.params.id,
+              `Refund for Valor gift card ${record.purchaseId}`
+            );
+          }
+        } else if (status === 'approved') {
+          const order = db.prepare(`
+            SELECT id,account_id AS accountId,merchant_id AS merchantId,code_id AS codeId,
+              amount_kes AS amountKes,payment_method AS paymentMethod,unused_confirmed AS unusedConfirmed,status
+            FROM merchant_voucher_orders WHERE id=? AND account_id=?
+          `).get(request.instrumentId, request.accountId);
+          if (!order || order.status !== 'paid' || order.unusedConfirmed !== 1) {
+            throw Object.assign(new Error('The merchant must confirm the paid voucher code is unused before this refund can be approved.'), { statusCode: 409 });
+          }
+          if (order.paymentMethod === 'mpesa' && !refundReference.trim()) {
+            throw Object.assign(new Error('Record the manual M-Pesa refund reference before approving this request.'), { statusCode: 400 });
+          }
+          db.prepare(`
+            UPDATE merchant_voucher_orders SET status='refunded',refund_reference=?,refunded_at=datetime('now')
+            WHERE id=? AND status='paid'
+          `).run(refundReference.trim(), order.id);
+          db.prepare("UPDATE merchant_voucher_codes SET status='retired' WHERE id=? AND order_id=? AND status='sold'")
+            .run(order.codeId, order.id);
+          db.prepare(`
+            INSERT INTO merchant_voucher_ledger
+              (id,merchant_id,order_id,transaction_type,amount_kes,reference_id,description)
+            VALUES (?,?,?,'refund',?,?,?)
+          `).run(`refund-${order.id}`, order.merchantId, order.id, -order.amountKes, refundReference.trim(), 'Merchant voucher refund recorded.');
+          if (order.paymentMethod === 'wallet') {
+            const wallet = walletForAccount(request.accountId);
+            if (!wallet) throw new Error('Purchaser Valor Wallet is no longer linked.');
+            recordWalletTransaction(
+              wallet.id, order.amountKes, 'gift_card_refund', 'gift_refund', req.params.id,
+              `Refund for merchant voucher ${order.id}`
+            );
+          }
+        }
+        db.prepare(`
+          UPDATE gift_refund_requests SET status=?,admin_note=?,refund_reference=?,
+            reviewed_by=?,reviewed_at=datetime('now') WHERE id=? AND status='pending'
+        `).run(status, adminNote.trim(), refundReference.trim(), req.admin.sub, request.id);
+      })();
+      return res.json({ requestId: req.params.id, status });
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
   });
 
   app.get('/api/shop/admin/products', requireAdmin, (req, res) => {

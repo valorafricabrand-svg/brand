@@ -11,6 +11,7 @@ Valor Africa is an event discovery, publishing, ticketing, and event-promotion p
 - `wallet.html` — one-time phone-wallet linking, M-Pesa deposits, and transaction history.
 - `host.html` — organizer event submission and local draft saving.
 - `partnership.html` — creator applications and tracking, plus signed-in organizer and sponsor inquiries with follow-up status alongside investor information.
+- `gifts.html` — Valor gift credit redeemable to a linked wallet and approved merchants' one-time voucher offers, with buyer and merchant tools.
 - `event.html`, `order.html`, `ticket.html`, and `advertise.html` — public event details, payment status and ticket confirmations, ticket verification, and paid ad booking.
 - `privacy-policy.html` — optional advertising-cookie and Meta Pixel consent details.
 - `backend-events/` — API and admin dashboard for publishing, review, event orders, tickets, creator affiliate referrals, organizer and sponsor inquiries, ad packages, and the merchandise catalog with Valor Wallet checkout.
@@ -58,6 +59,16 @@ Use the admin dashboard to manage live event listings, advertising-package names
 Creator/affiliate partners apply while signed in from `partnership.html`. Administrators review each application and record its individually agreed commission rate before activating a unique referral link. The latest valid referral click is attributed for 30 days; commission is calculated on ticket subtotal, excluding payment fees, and credited only after a ticket order is paid or confirmed. A partner cannot earn commission on ticket orders from their own account. The admin dashboard reports link visits, paid ticket orders, earned commission, and balances due. Payouts are manual: an administrator records the amount and transfer reference after sending funds; the system does not initiate affiliate payments.
 
 Organizer partners and event sponsors submit separate inquiries from `partnership.html` while signed in. Each account can keep one inquiry per track, view its follow-up status and applicant-facing note, and resubmit a rejected inquiry. Administrators manage these applications in the admin dashboard. An approved status means the inquiry is ready for follow-up only; fees, campaign budgets, deliverables, and contracts must be agreed separately. These inquiries do not create charges or automatically activate event sponsorships.
+
+## Gift marketplace operations and launch gate
+
+Before deploying the gift marketplace, back up the SQLite database and set `GIFT_CARD_ENCRYPTION_KEY` in the hosting provider's secret settings to a dedicated base64-encoded 32-byte key (generate one with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`). Production startup validates this key. Keep it stable and backed up separately from the database: rotating or losing it makes stored bearer codes unreadable. Do not put the key in source control or logs. Back up the database before deploying schema changes.
+
+Administrators should verify each merchant and approve the merchant account in the admin dashboard. The merchant then creates a listing, loads one-time codes, and activates the offer. Codes are encrypted at rest, are never shown again to the merchant, and are released to a buyer only after a wallet charge or verified matching Daraja callback. Purchasers share Valor codes themselves; the platform does not automatically deliver them to recipients. Configure Daraja before enabling M-Pesa gift or voucher purchases.
+
+Merchant payouts are records of manual transfers already made; recording a payout does not send money. Refund requests require support review. A merchant must confirm a voucher code is unused before support can approve a merchant-voucher refund; record any manual M-Pesa refund reference when approving. Wallet refunds are posted to the purchaser's Valor Wallet.
+
+The wallet-credit and merchant-voucher flows are product implementations, not legal or regulatory approval. Before public launch, obtain Kenya-specific legal and payments advice on stored value/payment-service classification, safeguarding/customer funds, consumer disclosures, tax, merchant agreements, settlement, expiry/refund rules, and any licensing or exemption requirements. Do not accept real gift-marketplace payments until this review and the required operational controls are complete.
 
 With the API configured, the Valor Ads carousel displays events with active paid bookings. The static-only preview still contains sample artwork/listings and cannot publish events, accept checkout, or issue tickets. Existing animated artwork and configured video previews can be used; campaign-video upload management and impression analytics are not included yet.
 
