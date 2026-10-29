@@ -1364,6 +1364,12 @@
     const slugInput = document.getElementById('eventSlug');
     const startsInput = document.getElementById('eventStarts');
     const endsInput = document.getElementById('eventEnds');
+    const categoryInput = document.getElementById('eventCategory');
+    const movieListingFields = document.getElementById('movieListingFields');
+    const movieShowtimesInput = document.getElementById('movieShowtimes');
+    const movieRuntimeInput = document.getElementById('movieRuntime');
+    const eventStartField = startsInput.closest('.form-field');
+    const eventEndField = endsInput.closest('.form-field');
     const earlyBirdPriceInput = document.getElementById('earlyBirdPrice');
     const earlyBirdEndsInput = document.getElementById('earlyBirdEnds');
     const publishWithoutEarlyBirdButton = document.getElementById('publishWithoutEarlyBirdButton');
@@ -1381,6 +1387,46 @@
       return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
     }
 
+    function isMovieListing() {
+      return /movie|cinema|film/i.test(categoryInput.value);
+    }
+
+    function parsedMovieShowtimes() {
+      return movieShowtimesInput.value.split(/\r?\n/)
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((value) => ({ value, date: new Date(value) }));
+    }
+
+    function updateMovieListingFields() {
+      const isMovie = isMovieListing();
+      movieListingFields.hidden = !isMovie;
+      eventStartField.hidden = isMovie;
+      eventEndField.hidden = isMovie;
+      startsInput.required = !isMovie;
+      endsInput.required = !isMovie;
+      movieShowtimesInput.required = isMovie;
+      if (!isMovie) return;
+
+      if (!movieShowtimesInput.value.trim() && startsInput.value) {
+        movieShowtimesInput.value = startsInput.value;
+      }
+      const showtimes = parsedMovieShowtimes()
+        .filter(({ date }) => Number.isFinite(date.getTime()))
+        .sort((left, right) => left.date - right.date);
+      if (!showtimes.length) return;
+
+      const runtime = Number(movieRuntimeInput.value);
+      if (!Number.isSafeInteger(runtime) || runtime < 15 || runtime > 600) return;
+      startsInput.value = localDateTime(showtimes[0].date);
+      endsInput.value = localDateTime(new Date(showtimes[showtimes.length - 1].date.getTime() + runtime * 60000));
+    }
+
+    categoryInput.addEventListener('change', updateMovieListingFields);
+    movieShowtimesInput.addEventListener('input', updateMovieListingFields);
+    movieRuntimeInput.addEventListener('input', updateMovieListingFields);
+    updateMovieListingFields();
+
     async function loadEventForEditing() {
       if (!editingEventId) return;
       saveDraftButton.hidden = true;
@@ -1396,6 +1442,15 @@
         });
         const event = result.events.find((entry) => entry.id === editingEventId && !entry.archived);
         if (!event) throw new Error('This event is unavailable or was removed from your account.');
+        const eventShowtimes = event.tags
+          .map((tag) => typeof tag === 'string' ? tag.match(/^Showtime:\s*(.+)$/i)?.[1] : '')
+          .filter((value) => value && !Number.isNaN(Date.parse(value)));
+        const lastShowtime = eventShowtimes.length
+          ? Math.max(...eventShowtimes.map((value) => Date.parse(value)))
+          : null;
+        const savedRuntime = lastShowtime === null
+          ? 120
+          : Math.round((Date.parse(event.endsAt) - lastShowtime) / 60000);
         const values = {
           eventTitle: event.title,
           eventDescription: event.description,
@@ -1413,7 +1468,14 @@
           earlyBirdEnds: event.earlyBirdEnds ? localDateTime(event.earlyBirdEnds) : '',
           vipPrice: event.vipPrice == null ? '' : String(event.vipPrice),
           eventSlug: event.slug,
-          campaignTags: event.tags.join(', '),
+          campaignTags: event.tags
+            .filter((tag) => !/^Showtime:\s*/i.test(tag))
+            .join(', '),
+          movieShowtimes: event.tags
+            .filter((tag) => typeof tag === 'string' && /^Showtime:\s*/i.test(tag))
+            .map((tag) => localDateTime(tag.replace(/^Showtime:\s*/i, '')))
+            .join('\n') || (/movie|cinema|film/i.test(event.category) ? localDateTime(event.startsAt) : ''),
+          movieRuntime: String(Number.isSafeInteger(savedRuntime) && savedRuntime >= 15 && savedRuntime <= 600 ? savedRuntime : 120),
           organizerName: event.organizerName,
           organizerEmail: event.organizerEmail,
           organizerPhone: event.organizerPhone
@@ -1422,6 +1484,7 @@
           const input = document.getElementById(id);
           if (input) input.value = value || '';
         });
+        updateMovieListingFields();
         slugWasEdited = true;
         if (event.poster) {
           existingPoster.hidden = false;
@@ -1574,6 +1637,42 @@
       const data = new FormData(hostForm);
       const startsAt = new Date(data.get('eventStarts'));
       const endsAt = new Date(data.get('eventEnds'));
+      let movieShowtimes = [];
+      if (isMovieListing()) {
+        movieShowtimes = parsedMovieShowtimes();
+        if (!movieShowtimes.length || movieShowtimes.length > 8
+          || movieShowtimes.some(({ date }) => !Number.isFinite(date.getTime()))) {
+          feedback.textContent = 'Add between 1 and 8 valid movie showtimes, one per line.';
+          feedback.classList.add('error');
+          movieShowtimesInput.focus();
+          return;
+        }
+        movieShowtimes.sort((left, right) => left.date - right.date);
+        if (new Set(movieShowtimes.map(({ date }) => date.getTime())).size !== movieShowtimes.length) {
+          feedback.textContent = 'Each movie showtime must be unique.';
+          feedback.classList.add('error');
+          movieShowtimesInput.focus();
+          return;
+        }
+        const runtime = Number(data.get('movieRuntime'));
+        if (!Number.isSafeInteger(runtime) || runtime < 15 || runtime > 600) {
+          feedback.textContent = 'Enter a movie runtime between 15 and 600 minutes.';
+          feedback.classList.add('error');
+          movieRuntimeInput.focus();
+          return;
+        }
+        const capacity = Number(data.get('eventCapacity'));
+        if (capacity && (!Number.isSafeInteger(capacity) || capacity > 64)) {
+          feedback.textContent = 'Movie screenings support up to 64 selectable seats per showtime.';
+          feedback.classList.add('error');
+          document.getElementById('eventCapacity').focus();
+          return;
+        }
+        startsAt.setTime(movieShowtimes[0].date.getTime());
+        endsAt.setTime(movieShowtimes[movieShowtimes.length - 1].date.getTime() + runtime * 60000);
+        startsInput.value = localDateTime(startsAt);
+        endsInput.value = localDateTime(endsAt);
+      }
       const earlyBirdEnds = data.get('earlyBirdEnds') ? new Date(data.get('earlyBirdEnds')) : null;
       if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || endsAt <= startsAt) {
         feedback.textContent = 'Choose a valid end time after the event start.';
@@ -1620,7 +1719,10 @@
         earlyBirdEnds: earlyBirdEnds ? earlyBirdEnds.toISOString() : '',
         vipPrice: data.get('vipPrice'),
         slug: data.get('eventSlug'),
-        tags: data.get('campaignTags'),
+        tags: [
+          ...movieShowtimes.map(({ date }) => `Showtime: ${date.toISOString()}`),
+          ...String(data.get('campaignTags') || '').split(',').map((tag) => tag.trim()).filter(Boolean)
+        ].join(', '),
         organizerName: data.get('organizerName'),
         organizerEmail: data.get('organizerEmail'),
         organizerPhone: data.get('organizerPhone')
@@ -1710,6 +1812,7 @@
             const field = hostForm.elements.namedItem(name);
             if (field && typeof value === 'string') field.value = value;
           });
+          updateMovieListingFields();
           editingId = draft.id;
           slugWasEdited = true;
           feedback.textContent = 'Draft loaded. Save changes when you are ready.';
@@ -1734,6 +1837,7 @@
       editingId = null;
       slugWasEdited = false;
       imageNames.textContent = 'No images selected.';
+      window.setTimeout(updateMovieListingFields, 0);
     });
     renderDrafts();
   }

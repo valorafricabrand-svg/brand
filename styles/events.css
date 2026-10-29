@@ -600,8 +600,9 @@ img { display: block; max-width: 100%; }
 .host-page { padding: 38px 0 70px; }
 .host-page-heading { margin-bottom: 27px; }
 .host-page-heading .eyebrow { font-size: 12px; }
-.host-page-heading h1 { margin: 9px 0; font: 800 clamp(32px, 5vw, 44px)/1.1 Manrope, sans-serif; letter-spacing: -.04em; }
+.host-page-heading h1 { max-width: 760px; margin: 9px 0; font: 800 clamp(32px, 5vw, 44px)/1.1 Manrope, sans-serif; letter-spacing: -.04em; }
 .host-page-heading p { color: #596a80; }
+.host-page-heading > p:not(.eyebrow) { max-width: 680px; line-height: 1.65; }
 .host-layout { display: grid; grid-template-columns: minmax(0, 900px); justify-content: center; gap: 22px; align-items: start; }
 .host-form { padding: clamp(19px, 3vw, 34px); border: 1px solid #dfe6ee; border-radius: 16px; background: #fff; box-shadow: 0 10px 32px rgba(20,39,58,.05); }
 .host-form label { margin: 0 0 6px; }
@@ -613,6 +614,19 @@ img { display: block; max-width: 100%; }
 .form-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 22px; margin-top: 18px; }
 .form-grid-2 .form-field + .form-field { margin-top: 0; }
 .field-hint { margin-top: 6px; color: #758397; font-size: 12px; }
+.movie-setup { margin-top: 22px; padding: 22px; border: 1px solid #d5e8e2; border-radius: 16px; background: linear-gradient(135deg, #f1fbf7, #f8fbff); }
+.movie-setup[hidden] { display: none; }
+.movie-setup-heading { display: flex; align-items: flex-start; gap: 13px; margin-bottom: 17px; }
+.movie-setup-icon { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border-radius: 12px; color: #fff; background: #087f5b; font-size: 15px; }
+.movie-setup-heading h2 { margin: 1px 0 5px; color: #15372e; font: 800 17px Manrope, sans-serif; }
+.movie-setup-heading p { margin: 0; color: #597469; font-size: 13px; line-height: 1.5; }
+.movie-setup label { display: block; margin: 0 0 6px; color: #33445b; font-size: 13px; font-weight: 700; }
+.movie-setup textarea { min-height: 104px; font: 500 14px/1.6 "DM Sans", sans-serif; }
+.movie-runtime { max-width: 230px; margin-top: 15px; }
+.movie-runtime-input { position: relative; }
+.movie-runtime-input input { padding-right: 74px; }
+.movie-runtime-input span { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); color: #748397; font-size: 12px; pointer-events: none; }
+.movie-setup .field-hint { line-height: 1.55; }
 .ticket-types { margin-top: 20px; padding: 20px; border: 1px solid #cceadd; border-radius: 14px; background: #f1fcf6; }
 .ticket-types h2 { margin: 0 0 9px; color: var(--green-dark); font: 800 16px Manrope, sans-serif; }
 .ticket-types > p { color: #428470; font-size: 13px; }

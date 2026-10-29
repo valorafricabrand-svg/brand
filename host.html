@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Host an Event | Valor Africa</title>
-  <meta name="description" content="Publish a concert, workshop, launch, webinar, or community meetup on Valor Africa.">
+  <meta name="description" content="List a movie screening or event, set ticket prices and showtimes, and publish it on Valor Africa.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://valorafrica.co.ke/host.html">
   <meta property="og:title" content="Host an Event | Valor Africa">
-  <meta property="og:description" content="Publish your event and set up your ticket types on Valor Africa.">
+  <meta property="og:description" content="List a movie screening or event, set ticket prices and showtimes, and publish it on Valor Africa.">
   <meta property="og:url" content="https://valorafrica.co.ke/host.html">
   <meta property="og:image" content="https://valorafrica.co.ke/images/og-image.svg">
   <meta name="theme-color" content="#087f5b">
@@ -42,8 +42,8 @@
   <main id="main" class="wrap host-page">
     <div class="host-page-heading">
       <p class="eyebrow">ORGANIZER TOOLS</p>
-      <h1>Host an event on Valor Africa</h1>
-      <p>Save your event details as a draft, or sign in and publish it immediately.</p>
+      <h1>List your event on Valor Africa.</h1>
+      <p>Create a polished listing for a movie screening, concert, workshop or more. Add showtimes and ticket options, then publish it for your audience.</p>
       <p>Published events appear in the <a href="organizer-dashboard.html">organizer dashboard</a> and public listings.</p>
     </div>
     <div class="host-layout">
@@ -62,6 +62,7 @@
             <label for="eventCategory">Category</label>
             <select id="eventCategory" name="eventCategory" required>
               <option value="Concerts">Concerts</option>
+              <option value="Movies &amp; Cinema">Movies &amp; Cinema</option>
               <option value="Festivals">Festivals</option>
               <option value="Community">Community</option>
               <option value="Food &amp; Drink">Food &amp; Drink</option>
@@ -116,6 +117,23 @@
             <select id="ticketCurrency" name="ticketCurrency" disabled><option value="KES">KES</option></select>
           </div>
         </div>
+
+        <section class="movie-setup" id="movieListingFields" aria-labelledby="movieListingHeading" hidden>
+          <div class="movie-setup-heading">
+            <span class="movie-setup-icon" aria-hidden="true">▶</span>
+            <div>
+              <h2 id="movieListingHeading">Set up your screenings</h2>
+              <p>One showtime per line. We’ll use the first and last screenings to set your listing dates.</p>
+            </div>
+          </div>
+          <label for="movieShowtimes">Showtimes</label>
+          <textarea id="movieShowtimes" name="movieShowtimes" rows="4" maxlength="400" placeholder="2026-11-06T18:30&#10;2026-11-06T21:00" aria-describedby="movieShowtimesHint"></textarea>
+          <p class="field-hint" id="movieShowtimesHint">Use your local time in YYYY-MM-DDTHH:mm format, with up to 8 screenings. Movie tickets include seat selection (maximum 64 seats per screening).</p>
+          <div class="movie-runtime">
+            <label for="movieRuntime">Movie runtime</label>
+            <div class="movie-runtime-input"><input id="movieRuntime" name="movieRuntime" type="number" min="15" max="600" step="1" value="120"><span>minutes</span></div>
+          </div>
+        </section>
 
         <section class="ticket-types" aria-labelledby="ticketTypesHeading">
           <h2 id="ticketTypesHeading"><span aria-hidden="true">▣</span> Ticket types <span style="font-weight:500;">(optional)</span></h2>

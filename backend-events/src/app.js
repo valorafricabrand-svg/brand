@@ -15,7 +15,7 @@ const walletSms = require('./wallet-sms');
 const accountEmail = require('./account-email');
 const { normalizeKenyanPhone } = require('./kenyan-phone');
 
-const allowedCategories = new Set(['Concerts','Festivals','Community','Food & Drink','Arts & Culture','Sports','Business','Other']);
+const allowedCategories = new Set(['Movies & Cinema','Concerts','Festivals','Community','Food & Drink','Arts & Culture','Sports','Business','Other']);
 const allowedTimezones = new Set(['Africa/Nairobi','UTC','Africa/Lagos','Africa/Accra']);
 const allowedFormats = new Set(['Physical','Virtual','Hybrid']);
 const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || path.join(__dirname, '..', 'data', 'uploads', 'events'));
@@ -106,7 +106,7 @@ function validateEvent(body) {
   if (body.organizerPhone.length > 24) return 'Organizer phone must be 24 characters or fewer.';
   if ((body.venueName || '').length > 180) return 'Venue name must be 180 characters or fewer.';
   if ((body.meetingUrl || '').length > 2048) return 'Meeting URL must be 2,048 characters or fewer.';
-  if ((body.tags || '').length > 250) return 'Event tags must be 250 characters or fewer.';
+  if ((body.tags || '').length > 600) return 'Event tags must be 600 characters or fewer.';
   if (!allowedCategories.has(body.category)) return 'Choose a valid event category.';
   if (!allowedFormats.has(body.format)) return 'Choose a valid event format.';
   if (!allowedTimezones.has(body.timezone)) return 'Choose a supported event timezone.';

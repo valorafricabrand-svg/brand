@@ -162,14 +162,19 @@ function createTestAccountAuth(email) {
   return { Authorization: `Bearer ${token}` };
 }
 
-function submitEvent(title = 'Test Live Festival', auth = createTestAccountAuth(`event-submitter-${crypto.randomUUID()}@example.com`)) {
+function submitEvent(
+  title = 'Test Live Festival',
+  auth = createTestAccountAuth(`event-submitter-${crypto.randomUUID()}@example.com`),
+  category = 'Festivals',
+  tags = 'music, culture'
+) {
   const future = Date.now() + 7 * 86400000;
   const starts = new Date(future).toISOString();
   const ends = new Date(future + 4 * 3600000).toISOString();
   const submission = request(app).post('/api/events/submissions')
     .field('title', title)
     .field('description', 'A live event description for a test festival.')
-    .field('category', 'Festivals')
+    .field('category', category)
     .field('format', 'Physical')
     .field('timezone', 'Africa/Nairobi')
     .field('startsAt', starts)
@@ -182,7 +187,7 @@ function submitEvent(title = 'Test Live Festival', auth = createTestAccountAuth(
     .field('earlyBirdEnds', new Date(future - 86400000).toISOString())
     .field('vipPrice', '2500')
     .field('slug', title.toLowerCase().replace(/[^a-z0-9]+/g, '-'))
-    .field('tags', 'music, culture')
+    .field('tags', tags)
     .field('organizerName', 'Event Organizer')
     .field('organizerEmail', 'organizer@example.com')
     .field('organizerPhone', '0712345678');
@@ -281,13 +286,22 @@ test('signed-in event submissions publish immediately and admins can unpublish t
   assert.equal(listing.body.events[0].tickets[0].name, 'Early bird');
   assert.equal(JSON.stringify(listing.body).includes('organizer@example.com'), false);
 
-  const legacyPending = await submitEvent('Legacy Pending Event', owner);
+  const movieShowtime = new Date(Date.now() + 7 * 86400000 + 3600000).toISOString();
+  const legacyPending = await submitEvent(
+    'Legacy Pending Event',
+    owner,
+    'Movies & Cinema',
+    `Showtime: ${movieShowtime}, premiere`
+  );
   assert.equal(legacyPending.status, 201);
   db.prepare("UPDATE events SET status='pending' WHERE id=?").run(legacyPending.body.id);
   const pendingAfterLegacy = await request(app).get('/api/events/admin/submissions?status=pending').set(admin);
   assert.equal(pendingAfterLegacy.body.events[0].organizer.email, 'organizer@example.com');
   const approvedLegacy = await approveEvent(legacyPending.body.id);
   assert.equal(approvedLegacy.body.status, 'approved');
+  const movieListing = await request(app).get(`/api/events/by-slug/${legacyPending.body.slug}`);
+  assert.equal(movieListing.body.event.category, 'Movies & Cinema');
+  assert.deepEqual(movieListing.body.event.tags, [`Showtime: ${movieShowtime}`, 'premiere']);
 
   const decision = await request(app).patch(`/api/events/admin/${legacyPending.body.id}/review`)
     .set(admin)
