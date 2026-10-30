@@ -149,7 +149,18 @@
     adPoster: 'images/events/valor-ticket-buyer-cover.png',
     tickets: []
   };
-  let adEvents = [ticketBuyerPromo, organizerPromo, ...events.slice(0, 1)];
+  const sponsoredVideoPromo = {
+    id: 'valor-sponsored-video-promo',
+    isSponsoredVideoPromo: true,
+    title: 'Valor Events and Tickets',
+    category: 'Featured on Valor Africa',
+    adVideo: 'videos/valor-sponsored-video.mp4',
+    adPoster: 'images/og-image.svg',
+    adDescription: 'Explore experiences and find your next event.',
+    adLink: 'events.html',
+    adCta: 'Get tickets now'
+  };
+  let adEvents = [sponsoredVideoPromo, ticketBuyerPromo, organizerPromo, ...events.slice(0, 1)];
   let checkoutEnabled = false;
   let mpesaCheckoutEnabled = false;
   let stripeCheckoutEnabled = false;
@@ -175,7 +186,7 @@
       };
       const liveEvents = listing.events.map(toEvent);
       events = liveEvents.length ? liveEvents : fallbackEvents;
-      adEvents = [ticketBuyerPromo, organizerPromo, ...(featured.events.length ? featured.events.map(toEvent) : liveEvents.slice(0, 1))];
+      adEvents = [sponsoredVideoPromo, ticketBuyerPromo, organizerPromo, ...(featured.events.length ? featured.events.map(toEvent) : liveEvents.slice(0, 1))];
       mpesaCheckoutEnabled = Boolean(health.paymentsConfigured);
       stripeCheckoutEnabled = Boolean(health.stripePaymentsConfigured);
       nowpaymentsCheckoutEnabled = Boolean(health.nowpaymentsConfigured);
@@ -212,7 +223,7 @@
       }
     } catch (error) {
       events = [];
-      adEvents = [ticketBuyerPromo, organizerPromo];
+      adEvents = [sponsoredVideoPromo, ticketBuyerPromo, organizerPromo];
       const adNote = document.querySelector('.ad-note');
       if (adNote) adNote.textContent = 'Host your next event with Valor Africa.';
       const sponsoredBadge = document.querySelector('.sponsored-badge');
@@ -734,6 +745,7 @@
     if (event.isPlatformPromo) {
       slide.classList.add(event.isTicketBuyerPromo ? 'is-ticket-buyer-promo' : 'is-organizer-promo');
     }
+    if (event.isSponsoredVideoPromo) slide.classList.add('is-sponsored-video-promo');
     slide.dataset.adIndex = String(index);
     slide.dataset.eventId = event.id;
     slide.setAttribute('role', 'group');
@@ -808,6 +820,41 @@
       return slide;
     }
 
+    if (event.isSponsoredVideoPromo) {
+      const video = document.createElement('video');
+      video.className = 'ad-video';
+      video.src = event.adVideo;
+      video.poster = event.adPoster;
+      video.autoplay = index === 0 && !adPaused;
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.preload = 'metadata';
+      video.setAttribute('aria-label', `Sponsored video for ${event.title}`);
+      visual.appendChild(video);
+
+      const content = document.createElement('div');
+      content.className = 'ad-content';
+      const category = document.createElement('p');
+      category.className = 'ad-category';
+      category.textContent = event.category;
+      const title = document.createElement('h2');
+      title.textContent = event.title;
+      const details = document.createElement('p');
+      details.className = 'ad-description';
+      details.textContent = event.adDescription;
+      const cta = document.createElement('a');
+      cta.className = 'ad-ticket-cta';
+      cta.href = event.adLink;
+      cta.innerHTML = `<span>${event.adCta}</span><span aria-hidden="true">→</span>`;
+      const transcript = document.createElement('p');
+      transcript.className = 'sr-only';
+      transcript.textContent = 'Valor Events and Tickets. Explore experiences and find your next event. Get tickets now.';
+      content.append(category, title, details, cta, transcript);
+      slide.append(visual, content);
+      return slide;
+    }
+
     if (event.adVideo) {
       const video = document.createElement('video');
       video.className = 'ad-video';
@@ -866,6 +913,7 @@
   function showAd(index) {
     if (!adSlides || !adDots || !adEvents.length) return;
     activeAdIndex = (index + adEvents.length) % adEvents.length;
+    adStage.classList.toggle('is-sponsored-video-stage', Boolean(adEvents[activeAdIndex].isSponsoredVideoPromo));
     adSlides.querySelectorAll('.ad-slide').forEach((slide, slideIndex) => {
       const active = slideIndex === activeAdIndex;
       slide.hidden = !active;
@@ -922,7 +970,9 @@
     stopAdRotation();
     if (!adPaused && !adPointerInside && !adHasFocus && adEvents.length > 1) {
       const activeEvent = adEvents[activeAdIndex];
-      const delay = activeEvent.isTicketBuyerPromo ? 30000 : activeEvent.isPlatformPromo ? 16000 : 7000;
+      const delay = activeEvent.isTicketBuyerPromo ? 30000
+        : activeEvent.isPlatformPromo || activeEvent.isSponsoredVideoPromo ? 16000
+          : 7000;
       adTimer = window.setTimeout(() => {
         showAd(activeAdIndex + 1);
         startAdRotation();

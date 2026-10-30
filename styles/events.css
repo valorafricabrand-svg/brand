@@ -198,6 +198,7 @@ img { display: block; max-width: 100%; }
 .ad-strip-cta { display: inline-flex; min-height: 42px; align-items: center; gap: 8px; flex: 0 0 auto; padding: 0 14px; border-radius: 10px; color: #fff; background: var(--green); font-size: 12px; font-weight: 800; }
 .ad-strip-cta:hover { background: #056d4e; }
 .ad-stage { position: relative; height: clamp(330px, 34vw, 450px); overflow: hidden; border-radius: 20px; color: #fff; background: #111827; box-shadow: 0 16px 38px rgba(12,27,44,.15); }
+.ad-stage.is-sponsored-video-stage { height: auto; aspect-ratio: 16 / 9; }
 .ad-slides, .ad-slide, .ad-visual { position: absolute; inset: 0; }
 .ad-slide { isolation: isolate; overflow: hidden; }
 .ad-slide[hidden] { display: none; }
@@ -206,6 +207,12 @@ img { display: block; max-width: 100%; }
 .ad-poster, .ad-video { width: 100%; height: 100%; object-fit: cover; object-position: center 47%; transform: scale(1.04); animation: ad-drift 16s ease-in-out infinite alternate; }
 .ad-video { display: block; }
 .is-ticket-buyer-promo .ad-video { object-position: center; transform: none; animation: none; }
+.is-sponsored-video-promo .ad-visual { background: #10131b; }
+.is-sponsored-video-promo .ad-video { object-fit: contain; object-position: center; transform: none; animation: none; }
+.is-sponsored-video-promo .ad-visual::after { background: linear-gradient(0deg, rgba(5,10,21,.78), transparent 58%); }
+.is-sponsored-video-promo .ad-content { right: 20px; bottom: clamp(18px, 3vw, 34px); left: clamp(20px, 4vw, 48px); max-width: 570px; text-shadow: 0 2px 10px rgba(0,0,0,.62); }
+.is-sponsored-video-promo .ad-content h2 { font-size: clamp(26px, 4vw, 46px); }
+.is-sponsored-video-promo .ad-description { margin-bottom: 12px; }
 .ad-visual::after { position: absolute; inset: 0; content: ""; background: linear-gradient(90deg, rgba(7,12,25,.9), rgba(7,12,25,.52) 45%, rgba(7,12,25,.12) 100%), linear-gradient(0deg, rgba(5,10,21,.52), transparent 65%); }
 .ad-motion { position: absolute; z-index: 1; inset: -40%; pointer-events: none; background: linear-gradient(113deg, transparent 42%, rgba(255,255,255,.13) 48%, transparent 53%); animation: ad-light-sweep 9s ease-in-out infinite; }
 .ad-content { position: absolute; z-index: 2; right: 24px; bottom: 27px; left: clamp(23px, 4vw, 55px); max-width: 620px; }
@@ -693,6 +700,10 @@ img { display: block; max-width: 100%; }
   .ad-strip-cta { min-height: 38px; padding-inline: 10px; font-size: 11px; }
   .ad-topic { min-height: 37px; padding-inline: 10px; font-size: 11px; }
   .ad-stage { height: clamp(285px, 83vw, 360px); border-radius: 15px; }
+  .is-sponsored-video-promo .ad-content { right: 14px; bottom: 14px; left: 16px; }
+  .is-sponsored-video-promo .ad-content h2 { font-size: clamp(21px, 6vw, 28px); }
+  .is-sponsored-video-promo .ad-description { margin-bottom: 8px; font-size: 11px; }
+  .is-sponsored-video-promo .ad-ticket-cta { min-height: 38px; padding-inline: 13px; font-size: 12px; }
   .is-organizer-promo .ad-video { object-position: left center; transform: none; animation: none; }
   .ad-visual::after { background: linear-gradient(90deg, rgba(7,12,25,.78), rgba(7,12,25,.24) 100%), linear-gradient(0deg, rgba(5,10,21,.58), transparent 72%); }
   .ad-content { right: 17px; bottom: 20px; left: 19px; }
