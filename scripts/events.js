@@ -25,7 +25,31 @@
     adLink: 'events.html',
     adCta: 'Get tickets now'
   };
-  let adEvents = [sponsoredVideoPromo, ticketBuyerPromo, ...events.slice(0, 1)];
+  const featuredVideoPromos = [
+    {
+      id: 'valor-featured-clip-002',
+      isSponsoredVideoPromo: true,
+      title: 'Discover Valor Africa',
+      category: 'Featured on Valor Africa',
+      adVideo: 'videos/valor-featured-clip-002.mp4',
+      adPoster: 'images/og-image.svg',
+      adDescription: 'Explore events and experiences across Africa.',
+      adLink: 'events.html',
+      adCta: 'Explore events'
+    },
+    {
+      id: 'valor-featured-clip-001',
+      isSponsoredVideoPromo: true,
+      title: 'Discover Valor Africa',
+      category: 'Featured on Valor Africa',
+      adVideo: 'videos/valor-featured-clip-001.mp4',
+      adPoster: 'images/og-image.svg',
+      adDescription: 'Explore events and experiences across Africa.',
+      adLink: 'events.html',
+      adCta: 'Explore events'
+    }
+  ];
+  let adEvents = [sponsoredVideoPromo, ticketBuyerPromo, ...featuredVideoPromos, ...events.slice(0, 1)];
   let checkoutEnabled = false;
   let mpesaCheckoutEnabled = false;
   let stripeCheckoutEnabled = false;
@@ -1030,6 +1054,7 @@
     adEvents = [
       sponsoredVideoPromo,
       ticketBuyerPromo,
+      ...featuredVideoPromos,
       ...(promotedEvents.length ? promotedEvents : events.slice(0, 1))
     ];
     renderAdSlides();
