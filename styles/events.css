@@ -274,7 +274,7 @@ img { display: block; max-width: 100%; }
 .branding-marquee-track { animation: branding-showcase-scroll var(--branding-marquee-duration, 600s) linear infinite; }
 .branding-marquee-group { flex: 0 0 auto; gap: 10px; padding: 8px; }
 .branding-marquee-card { position: relative; flex: 0 0 auto; width: clamp(135px, 16vw, 180px); aspect-ratio: 3 / 2; margin: 0; overflow: hidden; border: 1px solid #d9e3df; border-radius: 10px; background: #e8efeb; }
-.branding-marquee-card img { width: 100%; height: 100%; object-fit: cover; transition: transform .25s ease; }
+.branding-marquee-card img { width: 100%; height: 100%; padding: 5px; object-fit: contain; background: #f7f9f8; transition: transform .25s ease; }
 .branding-marquee-card:hover img, .branding-marquee-card:focus-visible img { transform: scale(1.04); }
 .branding-marquee-card:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .branding-marquee-number { position: absolute; right: 7px; bottom: 7px; padding: 3px 7px; border-radius: 999px; color: #fff; background: rgba(3,61,50,.86); font-size: 9px; font-weight: 800; letter-spacing: .04em; }
@@ -1053,7 +1053,7 @@ img { display: block; max-width: 100%; }
 .branding-gallery-heading > p { max-width: 470px; margin: 0; font-size: 13px; }
 .branding-gallery { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .branding-gallery-card { min-width: 0; margin: 0; overflow: hidden; border: 1px solid #e3ebe5; border-radius: 10px; background: white; }
-.branding-gallery-card img { width: 100%; aspect-ratio: 1.2 / 1; object-fit: cover; background: #e8efeb; }
+.branding-gallery-card img { width: 100%; aspect-ratio: 1.2 / 1; padding: 6px; object-fit: contain; background: #f3f6f4; }
 .branding-gallery-card figcaption { padding: 11px 13px 13px; }
 .branding-gallery-card figcaption span { font: 700 13px Manrope, sans-serif; }
 .branding-gallery-status { min-height: 20px; margin: 0 0 12px; color: #64748b; font-size: 12px; }
@@ -1089,7 +1089,7 @@ img { display: block; max-width: 100%; }
   .branding-gallery-heading, .branding-shop-callout, .branding-contact-inner { align-items: flex-start; flex-direction: column; }
   .branding-shop-callout { grid-template-columns: 1fr; }
   .branding-gallery-heading { gap: 10px; }
-  .branding-gallery-card img { aspect-ratio: 1 / 1; }
+  .branding-gallery-card img { aspect-ratio: 1 / 1; padding: 6px; }
   .branding-gallery-card figcaption { padding: 9px; }
   .branding-gallery-card figcaption span { font-size: 11px; }
   .branding-shop-callout > .button, .branding-contact-button { justify-content: center; width: 100%; white-space: normal; }
