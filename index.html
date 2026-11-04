@@ -41,10 +41,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/events.css?v=branding-gallery-1">
+  <link rel="stylesheet" href="styles/events.css?v=branding-marquee-3">
   <link rel="stylesheet" href="styles/privacy-consent.css">
   <script src="scripts/events-api.js?v=local-live-read-fallback-1" defer></script>
   <script src="scripts/events.js?v=local-live-read-fallback-1" defer></script>
+  <script src="scripts/branding-marquee.js?v=branding-marquee-3" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
 </head>
 <body>
@@ -143,6 +144,24 @@
             </label>
             <button class="button button-primary" type="submit">Find events <span aria-hidden="true">→</span></button>
       </form>
+    </section>
+
+    <section class="branding-marquee wrap" aria-labelledby="brandingMarqueeTitle">
+      <div class="branding-marquee-heading">
+        <div>
+          <p class="section-kicker">EVENT BRANDING IN ACTION</p>
+          <h2 id="brandingMarqueeTitle">Make your brand part of the event.</h2>
+          <p>Branded examples for events, vendors and sponsors.</p>
+        </div>
+        <div class="branding-marquee-actions">
+          <a href="branding.html">Explore branding options <span aria-hidden="true">→</span></a>
+          <button class="branding-marquee-toggle" id="brandingMarqueeToggle" type="button" aria-controls="brandingMarqueeTrack" aria-pressed="false" disabled>Pause movement</button>
+        </div>
+      </div>
+      <div class="branding-marquee-window">
+        <div class="branding-marquee-track" id="brandingMarqueeTrack" aria-describedby="brandingMarqueeStatus"></div>
+      </div>
+      <p class="branding-marquee-status" id="brandingMarqueeStatus" role="status" aria-live="polite">Loading branding examples…</p>
     </section>
 
     <section class="event-hub" id="events" aria-labelledby="eventsHeading">

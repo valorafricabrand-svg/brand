@@ -4,8 +4,8 @@ Valor Africa is an event discovery, publishing, ticketing, and event-promotion p
 
 ## Website
 
-- `index.html` — event discovery, approved event listings, and the paid Valor Ads carousel.
-- `events.html` — searchable and filterable event listings with M-Pesa and wallet checkout.
+- `index.html` — event discovery, approved event listings, the paid Valor Ads carousel, and a pausable right-to-left showcase of branding examples.
+- `events.html` — searchable and filterable event listings with M-Pesa and wallet checkout, alongside the same branding showcase.
 - `account.html` — Google/email account sign-in, account session management, and sign-out. Sign-in links return users to the page they came from; the account session is maintained for the current browser tab.
 - `my-tickets.html`, `event.html`, and `organizer-dashboard.html` — account-linked ticket QR passes with event love/review feedback on ticket and event pages, organizer sales summaries, and event editing/removal when there are no active ticket orders or promotions.
 - `wallet.html` — one-time phone-wallet linking, M-Pesa deposits, and transaction history.
