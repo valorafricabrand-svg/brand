@@ -2,17 +2,6 @@
   'use strict';
 
   let events = [];
-  const organizerPromo = {
-    id: 'valor-organizer-promo',
-    isPlatformPromo: true,
-    title: 'Grow your event with Valor Africa',
-    category: 'For organizers',
-    location: 'Valor Africa Events',
-    startsAt: new Date().toISOString(),
-    adVideo: 'videos/valor-ads-organizer-intro.mp4',
-    adPoster: 'images/events/valor-ads-promo-poster.svg',
-    tickets: []
-  };
   const ticketBuyerPromo = {
     id: 'valor-ticket-buyer-promo',
     isPlatformPromo: true,
@@ -36,7 +25,7 @@
     adLink: 'events.html',
     adCta: 'Get tickets now'
   };
-  let adEvents = [sponsoredVideoPromo, ticketBuyerPromo, organizerPromo, ...events.slice(0, 1)];
+  let adEvents = [sponsoredVideoPromo, ticketBuyerPromo, ...events.slice(0, 1)];
   let checkoutEnabled = false;
   let mpesaCheckoutEnabled = false;
   let stripeCheckoutEnabled = false;
@@ -1041,17 +1030,13 @@
     adEvents = [
       sponsoredVideoPromo,
       ticketBuyerPromo,
-      organizerPromo,
       ...(promotedEvents.length ? promotedEvents : events.slice(0, 1))
     ];
     renderAdSlides();
     const adNote = document.querySelector('.ad-note');
-    if (adNote) adNote.textContent = adEvents.some((event) => !event.isPlatformPromo)
-      ? 'Organizer spotlight · sponsored events'
-      : 'Host your next event with Valor Africa.';
+    if (adNote) adNote.textContent = 'Featured on Valor Africa sponsored events';
     const sponsoredBadge = document.querySelector('.sponsored-badge');
     if (sponsoredBadge) {
-      sponsoredBadge.textContent = 'FOR EVENT ORGANIZERS';
       sponsoredBadge.hidden = !adEvents.length;
     }
   }
