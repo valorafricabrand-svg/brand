@@ -315,7 +315,10 @@ function createApp(options = {}) {
   app.use(cors((req, callback) => {
     const origin = req.get('Origin');
     const sameOrigin = origin && origin === `${req.protocol}://${req.get('host')}`;
-    if (!origin || origins.includes(origin) || sameOrigin) {
+    const localDevelopmentPublicRead = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin || '')
+      && req.method === 'GET'
+      && ['/api/events', '/api/ads/featured', '/api/health'].includes(req.path);
+    if (!origin || origins.includes(origin) || sameOrigin || localDevelopmentPublicRead) {
       return callback(null, {
         origin: true,
         allowedHeaders: ['Content-Type','Authorization','X-Order-Access'],

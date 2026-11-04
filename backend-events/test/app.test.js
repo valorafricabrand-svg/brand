@@ -375,6 +375,25 @@ test('admin dashboard origin can call its same-origin API', async () => {
   assert.deepEqual(orders.body.orders, []);
 });
 
+test('local development origins can read the public API', async () => {
+  const response = await request(app).get('/api/events')
+    .set('Origin', 'http://127.0.0.1:8877');
+  assert.equal(response.status, 200);
+  assert.equal(response.headers['access-control-allow-origin'], 'http://127.0.0.1:8877');
+});
+
+test('local development origins cannot use private API routes cross-origin', async () => {
+  const response = await request(app).get('/api/auth/account')
+    .set('Origin', 'http://127.0.0.1:8877');
+  assert.notEqual(response.headers['access-control-allow-origin'], 'http://127.0.0.1:8877');
+});
+
+test('remote development origins cannot read the public API', async () => {
+  const response = await request(app).get('/api/events')
+    .set('Origin', 'http://example.com');
+  assert.notEqual(response.headers['access-control-allow-origin'], 'http://example.com');
+});
+
 test('event posters require valid image signatures', async () => {
   const response = await submitEvent('Poster Signature Test')
     .attach('eventImage', Buffer.from('not a real image'), { filename: 'poster.png', contentType: 'image/png' });

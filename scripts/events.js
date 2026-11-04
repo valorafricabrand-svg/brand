@@ -52,12 +52,12 @@
   let listingRetryTimer = null;
   let paymentHealthAvailable = false;
   if (apiBase && !document.getElementById('hostEventForm')) {
-    toPublicEvent = (event) => {
+    toPublicEvent = (event, sourceApiBase = apiBase) => {
       const availableTickets = Array.isArray(event.tickets) ? event.tickets : [];
       return {
         ...event,
         location: event.location || [event.venueName, event.city].filter(Boolean).join(', '),
-        poster: event.poster ? new URL(event.poster, apiBase).href : 'images/events/concert-crowd.svg',
+        poster: event.poster ? new URL(event.poster, sourceApiBase).href : 'images/events/concert-crowd.svg',
         earlyBirdEnds: availableTickets.find((ticket) => ticket.name === 'Early bird')?.saleEnds || '',
         tickets: availableTickets.map((ticket) => ({ ...ticket, currency: ticket.currency || 'KES' }))
       };
@@ -70,7 +70,7 @@
       window.valorEventsApi('/api/health')
     ]).then(([featuredResult, healthResult]) => ({
       featuredEvents: featuredResult.status === 'fulfilled' && Array.isArray(featuredResult.value.events)
-        ? featuredResult.value.events.map(toPublicEvent)
+        ? featuredResult.value.events.map((event) => toPublicEvent(event, featuredResult.value.apiBase))
         : [],
       featuredError: featuredResult.status === 'rejected' ? featuredResult.reason : null,
       health: healthResult.status === 'fulfilled' ? healthResult.value : null,
@@ -1073,7 +1073,7 @@
       if (!listing || !Array.isArray(listing.events)) {
         throw new Error('The event service returned an invalid event list.');
       }
-      events = listing.events.map(toPublicEvent);
+      events = listing.events.map((event) => toPublicEvent(event, listing.apiBase));
       events.sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt));
       listingAvailable = true;
     } catch (error) {

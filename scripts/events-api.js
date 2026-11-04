@@ -1,6 +1,7 @@
 (function () {
   'use strict';
   const localHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  const hasApiOverride = Boolean(window.VALOR_EVENTS_API);
   // Set VALOR_EVENTS_API before this file on the deployed site.
   const base = (window.VALOR_EVENTS_API || (localHost
     ? 'http://localhost:4001'
@@ -9,18 +10,34 @@
     if (!base) throw new Error('The Valor Africa event service is not configured for this website yet.');
     const headers = new Headers(options.headers || {});
     if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
+    const request = (apiBase, requestOptions = options) => fetch(`${apiBase}${path}`, {
+      ...requestOptions,
+      headers,
+      signal: requestOptions.signal || (typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(12000) : undefined)
+    });
     let response;
+    let responseBase = base;
     try {
-      response = await fetch(`${base}${path}`, {
-        ...options,
-        headers,
-        signal: options.signal || (typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(12000) : undefined)
-      });
+      response = await request(base);
     } catch (error) {
-      throw new Error('Could not connect to the Valor Africa event service. Please try again later.');
+      const readOnlyRequest = (options.method || 'GET').toUpperCase() === 'GET';
+      const canUseProductionFallback = localHost && !hasApiOverride && readOnlyRequest && !headers.has('Authorization');
+      if (!canUseProductionFallback) {
+        throw new Error('Could not connect to the Valor Africa event service. Please try again later.');
+      }
+      responseBase = 'https://valor-events-api-odp2.onrender.com';
+      try {
+        const { signal, ...fallbackOptions } = options;
+        response = await request(responseBase, fallbackOptions);
+      } catch (fallbackError) {
+        throw new Error('Could not connect to the local or live Valor Africa event service. Please try again later.');
+      }
     }
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || `The event service returned an error (${response.status}).`);
+    if (body && typeof body === 'object') {
+      Object.defineProperty(body, 'apiBase', { value: responseBase });
+    }
     return body;
   };
   window.valorEventsApiBase = base;
