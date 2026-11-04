@@ -44,7 +44,7 @@
   <link rel="stylesheet" href="styles/events.css?v=branding-gallery-1">
   <link rel="stylesheet" href="styles/privacy-consent.css">
   <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
-  <script src="scripts/events.js?v=price-free-merch-1" defer></script>
+  <script src="scripts/events.js?v=live-marketplace-recovery-2" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
 </head>
 <body>
@@ -161,7 +161,7 @@
         <div class="event-grid featured-grid" id="featuredEvents" aria-live="polite"></div>
         <p class="empty-state" id="homeEmpty" hidden>No events match your search yet. <a href="events.html">Browse all events</a>.</p>
         <div class="hub-bottom">
-          <p>Preview listings — confirm event details and ticket availability with the organizer.</p>
+          <p>Loading live event listings… <button class="button secondary" id="retryEventListings" type="button" hidden>Try again</button></p>
           <a href="events.html">Explore all events <span aria-hidden="true">→</span></a>
         </div>
       </div>

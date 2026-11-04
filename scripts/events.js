@@ -1,131 +1,7 @@
 (async function () {
   'use strict';
 
-  let events = [
-    {
-      id: 'baminto-festival',
-      title: 'Baminto Festival at KICC',
-      category: 'Festivals',
-      location: 'KICC, Nairobi, Kenya',
-      startsAt: '2026-12-12T15:00:00+03:00',
-      endsAt: '2026-12-13T01:00:00+03:00',
-      poster: 'images/events/baminto-festival.svg',
-      earlyBirdEnds: '2026-11-20T23:59:00+03:00',
-      tickets: [
-        { name: 'Early bird', price: 1500, currency: 'KES', regularPrice: 2500, saleEnds: '2026-11-20T23:59:00+03:00' },
-        { name: 'VIP', price: 10000, currency: 'KES' }
-      ]
-    },
-    {
-      id: 'kikuyu-homecoming',
-      title: 'Kikuyu Homecoming',
-      category: 'Community',
-      location: 'Limuru, Kenya',
-      startsAt: '2026-11-20T22:00:00+03:00',
-      endsAt: '2026-11-21T04:00:00+03:00',
-      poster: 'images/events/kikuyu-homecoming.svg',
-      tickets: [
-        { name: 'Regular', price: 10, currency: 'USD' }
-      ]
-    },
-    {
-      id: 'mixed-tape-birthday',
-      title: 'The Mixed Tape Experience: Birthday Edition (All Vinyl Party)',
-      category: 'Concerts',
-      location: 'Simba Saloon at Carnivore, Nairobi',
-      startsAt: '2026-10-19T18:00:00+03:00',
-      tickets: [{ name: 'Regular', price: 1100, currency: 'KES' }]
-    },
-    {
-      id: 'padel-tennis-experience',
-      title: 'Padel Tennis Experience',
-      category: 'Sports',
-      location: 'Sarit Centre, Lower Kabete Road, Nairobi',
-      startsAt: '2026-10-20T19:00:00+03:00',
-      tickets: [{ name: 'Regular', price: 6500, currency: 'KES' }]
-    },
-    {
-      id: 'marketplace-mastery-miracles',
-      title: 'Marketplace Mastery & Miracles',
-      category: 'Business',
-      location: 'Argyle Grand Hotel, Nairobi',
-      startsAt: '2026-10-24T09:00:00+03:00',
-      tickets: [{ name: 'Regular', price: 2200, currency: 'KES' }]
-    },
-    {
-      id: 'south-africa-wine-fair',
-      title: 'Wines of South Africa by the Glass: 3-Day Wine Fair',
-      category: 'Food & Drink',
-      location: 'Artcaffé, Rhapta Road, Nairobi',
-      startsAt: '2026-10-30T12:00:00+03:00',
-      tickets: [{ name: 'Regular', price: 2000, currency: 'KES' }]
-    },
-    {
-      id: 'ballpoint-karaoke-halloween',
-      title: 'Ballpoint Karaoke Night: Halloween Edition',
-      category: 'Concerts',
-      location: 'Ballpoint Social Club, Nairobi',
-      startsAt: '2026-10-30T19:00:00+03:00',
-      tickets: [{ name: 'Regular', price: 500, currency: 'KES' }]
-    },
-    {
-      id: 'sensory-halloween-pairing',
-      title: 'Sensory Halloween: Chocolate & Wine Pairing',
-      category: 'Food & Drink',
-      location: 'Karel T-Lounge, Village Market, Nairobi',
-      startsAt: '2026-10-30T19:30:00+03:00',
-      tickets: [{ name: 'Regular', price: 4000, currency: 'KES' }]
-    },
-    {
-      id: 'halloween-fright-night',
-      title: 'Halloween Fright Night',
-      category: 'Festivals',
-      location: 'Village Market, Limuru Road, Nairobi',
-      startsAt: '2026-10-31T14:00:00+03:00',
-      tickets: [{ name: 'Regular', price: 1500, currency: 'KES' }]
-    },
-    {
-      id: 'graveyard-halloween-party',
-      title: 'RaveYard: Thee Halloween Party',
-      category: 'Concerts',
-      location: 'Uptown Lavington, James Gichuru Road, Nairobi',
-      startsAt: '2026-10-31T18:00:00+03:00',
-      tickets: [{ name: 'Regular', price: 1500, currency: 'KES' }]
-    },
-    {
-      id: 'eco-fashion-week-africa',
-      title: 'Eco Fashion Week Africa: Season 4',
-      category: 'Arts & Culture',
-      location: 'Mawe Zuri Resort, Watamu',
-      startsAt: '2026-11-07T17:00:00+03:00',
-      tickets: [{ name: 'Regular', price: 4000, currency: 'KES' }]
-    },
-    {
-      id: 'grace-to-heal',
-      title: 'The Grace to Heal',
-      category: 'Community',
-      location: 'Global Trade Centre, Westlands, Nairobi',
-      startsAt: '2026-11-07T13:00:00+03:00',
-      tickets: [{ name: 'Regular', price: 12000, currency: 'KES' }]
-    },
-    {
-      id: 'time-attack-last-lap',
-      title: 'Time Attack: The Last Lap (Round 4 DMSC)',
-      category: 'Sports',
-      location: "Machakos People's Park, Machakos",
-      startsAt: '2026-11-08T07:00:00+03:00',
-      tickets: [{ name: 'Regular', price: 750, currency: 'KES' }]
-    },
-    {
-      id: 'amac-awards-season-two',
-      title: 'AMAC Awards: Season 2 (Ankara Edition)',
-      category: 'Arts & Culture',
-      location: 'KICC, Nairobi',
-      startsAt: '2026-11-08T07:00:00+03:00',
-      tickets: [{ name: 'Regular', price: 300, currency: 'KES' }]
-    }
-  ];
-  const fallbackEvents = events.map((event) => ({ ...event }));
+  let events = [];
   const organizerPromo = {
     id: 'valor-organizer-promo',
     isPlatformPromo: true,
@@ -167,78 +43,39 @@
   let nowpaymentsCheckoutEnabled = false;
   let nowpaymentsKesPerUsd = null;
   const apiBase = window.valorEventsApiBase;
+  let requestEventListing = null;
+  let toPublicEvent = (event) => event;
+  let promotionDataPromise = Promise.resolve(null);
+  let promotedEvents = [];
+  let listingAvailable = null;
+  let listingRequestInProgress = false;
+  let listingRetryTimer = null;
+  let paymentHealthAvailable = false;
   if (apiBase && !document.getElementById('hostEventForm')) {
-    try {
-      const [listing, featured, health] = await Promise.all([
-        window.valorEventsApi('/api/events'),
-        window.valorEventsApi('/api/ads/featured'),
-        window.valorEventsApi('/api/health')
-      ]);
-      const toEvent = (event) => {
-        const availableTickets = Array.isArray(event.tickets) ? event.tickets : [];
-        return {
-          ...event,
-          location: event.location || [event.venueName, event.city].filter(Boolean).join(', '),
-          poster: event.poster ? new URL(event.poster, apiBase).href : 'images/events/concert-crowd.svg',
-          earlyBirdEnds: availableTickets.find((ticket) => ticket.name === 'Early bird')?.saleEnds || '',
-          tickets: availableTickets.map((ticket) => ({ ...ticket, currency: ticket.currency || 'KES' }))
-        };
+    toPublicEvent = (event) => {
+      const availableTickets = Array.isArray(event.tickets) ? event.tickets : [];
+      return {
+        ...event,
+        location: event.location || [event.venueName, event.city].filter(Boolean).join(', '),
+        poster: event.poster ? new URL(event.poster, apiBase).href : 'images/events/concert-crowd.svg',
+        earlyBirdEnds: availableTickets.find((ticket) => ticket.name === 'Early bird')?.saleEnds || '',
+        tickets: availableTickets.map((ticket) => ({ ...ticket, currency: ticket.currency || 'KES' }))
       };
-      const liveEvents = listing.events.map(toEvent);
-      events = liveEvents.length ? liveEvents : fallbackEvents;
-      adEvents = [sponsoredVideoPromo, ticketBuyerPromo, organizerPromo, ...(featured.events.length ? featured.events.map(toEvent) : liveEvents.slice(0, 1))];
-      mpesaCheckoutEnabled = Boolean(health.paymentsConfigured);
-      stripeCheckoutEnabled = Boolean(health.stripePaymentsConfigured);
-      nowpaymentsCheckoutEnabled = Boolean(health.nowpaymentsConfigured);
-      nowpaymentsKesPerUsd = Number(health.nowpaymentsKesPerUsd) || null;
-      checkoutEnabled = mpesaCheckoutEnabled || stripeCheckoutEnabled || nowpaymentsCheckoutEnabled;
-      const status = document.querySelector('.listing-disclaimer, .hub-bottom p');
-      if (status) {
-        status.textContent = !events.length
-          ? 'No approved upcoming events are listed right now. Check back soon or submit an event for review.'
-          : checkoutEnabled
-            ? `Paid tickets are available through ${[
-              mpesaCheckoutEnabled && 'M-Pesa',
-              stripeCheckoutEnabled && 'Stripe Checkout',
-              nowpaymentsCheckoutEnabled && 'NOWPayments'
-            ].filter(Boolean).join(' and ')}. Tickets are issued only after payment is confirmed.`
-            : 'Paid ticket checkout is temporarily unavailable. Free-event registrations remain open.';
-      }
-      const adNote = document.querySelector('.ad-note');
-      if (adNote) adNote.textContent = adEvents.some((event) => !event.isPlatformPromo)
-        ? 'Organizer spotlight · sponsored events'
-        : 'Host your next event with Valor Africa.';
-      const sponsoredBadge = document.querySelector('.sponsored-badge');
-      if (sponsoredBadge) {
-        sponsoredBadge.textContent = 'FOR EVENT ORGANIZERS';
-        sponsoredBadge.hidden = !adEvents.length;
-      }
-      if (!adEvents.length) {
-        const stage = document.getElementById('adStage');
-        const controls = document.querySelector('.ad-controls');
-        if (stage) stage.hidden = true;
-        if (controls) controls.hidden = true;
-        const sponsoredBadge = document.querySelector('.sponsored-badge');
-        if (sponsoredBadge) sponsoredBadge.hidden = true;
-      }
-    } catch (error) {
-      events = [];
-      adEvents = [sponsoredVideoPromo, ticketBuyerPromo, organizerPromo];
-      const adNote = document.querySelector('.ad-note');
-      if (adNote) adNote.textContent = 'Host your next event with Valor Africa.';
-      const sponsoredBadge = document.querySelector('.sponsored-badge');
-      if (sponsoredBadge) {
-        sponsoredBadge.textContent = 'FOR EVENT ORGANIZERS';
-        sponsoredBadge.hidden = false;
-      }
-      const status = document.querySelector('.listing-disclaimer');
-      if (status) status.textContent = error.message;
-      const empty = document.getElementById('homeEmpty');
-      if (empty) {
-        empty.hidden = false;
-        empty.textContent = 'Events are temporarily unavailable. Please try again later.';
-      }
-    }
+    };
+    requestEventListing = () => window.valorEventsApi('/api/events', {
+      signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(30000) : undefined
+    });
+    promotionDataPromise = Promise.allSettled([
+      window.valorEventsApi('/api/ads/featured'),
+      window.valorEventsApi('/api/health')
+    ]).then(([featuredResult, healthResult]) => ({
+      featuredEvents: featuredResult.status === 'fulfilled' && Array.isArray(featuredResult.value.events)
+        ? featuredResult.value.events.map(toPublicEvent)
+        : [],
+      featuredError: featuredResult.status === 'rejected' ? featuredResult.reason : null,
+      health: healthResult.status === 'fulfilled' ? healthResult.value : null,
+      healthError: healthResult.status === 'rejected' ? healthResult.reason : null
+    }));
   }
 
   events.sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt));
@@ -722,17 +559,6 @@
   renderEvents(featured, events);
   const allEvents = document.getElementById('allEvents');
   renderEvents(allEvents, events);
-  if (allEvents && !events.length) {
-    const noResults = document.getElementById('noResults');
-    if (noResults) noResults.hidden = false;
-  }
-  if (featured && !events.length) {
-    const empty = document.getElementById('homeEmpty');
-    if (empty) {
-      empty.hidden = false;
-      if (apiBase) empty.textContent = 'No approved upcoming events are listed right now. Check back soon or host one with Valor Africa.';
-    }
-  }
 
   const adSlides = document.getElementById('adSlides');
   const adDots = document.getElementById('adDots');
@@ -987,7 +813,12 @@
     }
   }
 
-  if (adSlides && adDots && adStage) {
+  function renderAdSlides() {
+    if (!adSlides || !adDots || !adStage) return;
+    stopAdRotation();
+    activeAdIndex = 0;
+    adSlides.replaceChildren();
+    adDots.replaceChildren();
     adEvents.forEach((event, index) => {
       adSlides.appendChild(createAdSlide(event, index));
       const dot = document.createElement('button');
@@ -1001,12 +832,16 @@
       adDots.appendChild(dot);
     });
     showAd(0);
+    startAdRotation();
+  }
+
+  if (adSlides && adDots && adStage) {
+    renderAdSlides();
     if (adPlayToggle) {
       adPlayToggle.setAttribute('aria-pressed', String(adPaused));
       adPlayToggle.setAttribute('aria-label', adPaused ? 'Play advertisement rotation' : 'Pause advertisement rotation');
       adPlayToggle.classList.toggle('is-paused', adPaused);
     }
-    startAdRotation();
 
     document.getElementById('adPrevious')?.addEventListener('click', () => {
       showAd(activeAdIndex - 1);
@@ -1069,13 +904,15 @@
   }
 
   const nextCountdown = document.getElementById('nextEventCountdown');
-  if (nextCountdown) {
+  function updateNextCountdown() {
+    if (!nextCountdown) return;
     const next = events
       .filter((event) => new Date(event.startsAt).getTime() > Date.now())
       .sort((left, right) => new Date(left.startsAt) - new Date(right.startsAt))[0];
     nextCountdown.textContent = next ? `◷ ${countdown(next.startsAt, 'Next event')}` : '◷ New events coming soon';
     nextCountdown.dataset.countdownTo = next ? next.startsAt : '';
   }
+  updateNextCountdown();
 
   let homeCategory = 'All';
 
@@ -1094,7 +931,14 @@
       if (show) visible += 1;
     });
     const empty = document.getElementById('homeEmpty');
-    if (empty) empty.hidden = visible > 0;
+    if (empty) {
+      empty.hidden = visible > 0 || listingAvailable !== true;
+      if (!events.length) {
+        empty.textContent = 'No approved upcoming events are listed right now. Browse all events or check back soon.';
+      } else {
+        empty.innerHTML = 'No events match your search yet. <a href="events.html">Browse all events</a>.';
+      }
+    }
   }
 
   const exploreNav = document.querySelector('.explore-nav');
@@ -1128,6 +972,7 @@
 
   const allCategories = document.getElementById('allCategories');
   const allSearch = document.getElementById('eventSearch');
+  let refreshAllEvents = () => {};
   if (allCategories && allEvents) {
     const filterAllEvents = () => {
       const active = allCategories.querySelector('.is-active');
@@ -1143,11 +988,17 @@
         if (show) visible += 1;
       });
       const noResults = document.getElementById('noResults');
-      if (noResults) noResults.hidden = visible > 0;
+      if (noResults) {
+        noResults.hidden = listingAvailable !== true || visible > 0;
+        noResults.textContent = events.length
+          ? 'No events match that search. Try another name or category.'
+          : 'No approved upcoming events are listed right now. Check back soon.';
+      }
       allEvents.querySelectorAll('.sponsored-ticket-rail').forEach((rail) => {
         rail.hidden = visible === 0 && rail.classList.contains('sponsored-events-rail');
       });
     };
+    refreshAllEvents = filterAllEvents;
     allCategories.addEventListener('click', (event) => {
       const button = event.target.closest('button[data-category]');
       if (!button) return;
@@ -1160,6 +1011,118 @@
     });
     if (allSearch) allSearch.addEventListener('input', filterAllEvents);
   }
+
+  function updateListingStatus() {
+    const status = document.querySelector('.listing-disclaimer, .hub-bottom p');
+    const retryButton = document.getElementById('retryEventListings');
+    if (retryButton) {
+      retryButton.hidden = listingAvailable !== false;
+      retryButton.disabled = listingRequestInProgress;
+    }
+    if (!status) return;
+    status.firstChild.textContent = listingAvailable === null
+      ? 'Loading live event listings… '
+      : !listingAvailable
+        ? 'Could not connect to live event listings. We’ll retry automatically. '
+      : !events.length
+        ? 'No approved upcoming events are listed right now. Check back soon or submit an event for review.'
+        : !paymentHealthAvailable
+          ? 'Event listings are available. Ticket payment options may be temporarily unavailable.'
+          : checkoutEnabled
+            ? `Paid tickets are available through ${[
+              mpesaCheckoutEnabled && 'M-Pesa',
+              stripeCheckoutEnabled && 'Stripe Checkout',
+              nowpaymentsCheckoutEnabled && 'NOWPayments'
+            ].filter(Boolean).join(' and ')}. Tickets are issued only after payment is confirmed.`
+            : 'Paid ticket checkout is temporarily unavailable. Free-event registrations remain open.';
+  }
+
+  function refreshPromotionalCarousel() {
+    adEvents = [
+      sponsoredVideoPromo,
+      ticketBuyerPromo,
+      organizerPromo,
+      ...(promotedEvents.length ? promotedEvents : events.slice(0, 1))
+    ];
+    renderAdSlides();
+    const adNote = document.querySelector('.ad-note');
+    if (adNote) adNote.textContent = adEvents.some((event) => !event.isPlatformPromo)
+      ? 'Organizer spotlight · sponsored events'
+      : 'Host your next event with Valor Africa.';
+    const sponsoredBadge = document.querySelector('.sponsored-badge');
+    if (sponsoredBadge) {
+      sponsoredBadge.textContent = 'FOR EVENT ORGANIZERS';
+      sponsoredBadge.hidden = !adEvents.length;
+    }
+  }
+
+  async function refreshLiveEvents() {
+    if (!requestEventListing || listingRequestInProgress) return;
+    listingRequestInProgress = true;
+    updateListingStatus();
+    if (listingRetryTimer) window.clearTimeout(listingRetryTimer);
+    listingRetryTimer = null;
+    try {
+      let listing;
+      try {
+        listing = await requestEventListing();
+      } catch (error) {
+        console.warn('The first live event listing request failed; retrying once:', error);
+        listing = await requestEventListing();
+      }
+      if (!listing || !Array.isArray(listing.events)) {
+        throw new Error('The event service returned an invalid event list.');
+      }
+      events = listing.events.map(toPublicEvent);
+      events.sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt));
+      listingAvailable = true;
+    } catch (error) {
+      listingAvailable = false;
+      console.error('Live event listings could not be loaded:', error);
+    } finally {
+      listingRequestInProgress = false;
+    }
+
+    if (featured) renderEvents(featured, events);
+    if (allEvents) renderEvents(allEvents, events);
+    applyHomeFilters();
+    refreshAllEvents();
+    updateNextCountdown();
+    refreshPromotionalCarousel();
+    updateListingStatus();
+    if (!listingAvailable) {
+      listingRetryTimer = window.setTimeout(refreshLiveEvents, 15000);
+    }
+  }
+
+  document.getElementById('retryEventListings')?.addEventListener('click', refreshLiveEvents);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && listingAvailable === false) refreshLiveEvents();
+  });
+  refreshLiveEvents();
+
+  promotionDataPromise.then((data) => {
+    if (!data) return;
+    promotedEvents = data.featuredEvents;
+    if (data.featuredError) console.warn('Sponsored event listings could not be loaded:', data.featuredError);
+    if (data.health) {
+      paymentHealthAvailable = true;
+      mpesaCheckoutEnabled = Boolean(data.health.paymentsConfigured);
+      stripeCheckoutEnabled = Boolean(data.health.stripePaymentsConfigured);
+      nowpaymentsCheckoutEnabled = Boolean(data.health.nowpaymentsConfigured);
+      nowpaymentsKesPerUsd = Number(data.health.nowpaymentsKesPerUsd) || null;
+      checkoutEnabled = mpesaCheckoutEnabled || stripeCheckoutEnabled || nowpaymentsCheckoutEnabled;
+      if (paymentMethodSelect && buyerPhoneInput && ticketPaymentNote && ticketForm) {
+        updateTicketPaymentMethod();
+      }
+    } else {
+      console.warn('Payment availability could not be confirmed:', data.healthError);
+    }
+    refreshPromotionalCarousel();
+    updateListingStatus();
+  }).catch((error) => {
+    console.error('Could not update sponsored event and payment information:', error);
+  });
 
   const ticketDialog = document.getElementById('ticketDialog');
   const ticketSelect = document.getElementById('ticketType');
@@ -1201,6 +1164,16 @@
     feedback.classList.add('error');
   }
   function updateTicketPaymentMethod() {
+    const stripeTicketOption = paymentMethodSelect.querySelector('option[value="stripe"]');
+    if (stripeTicketOption) {
+      stripeTicketOption.disabled = !stripeCheckoutEnabled;
+      stripeTicketOption.textContent = stripeCheckoutEnabled ? 'Card (Stripe Checkout)' : 'Card (Stripe Checkout; coming soon)';
+    }
+    const nowpaymentsTicketOption = paymentMethodSelect.querySelector('option[value="nowpayments"]');
+    if (nowpaymentsTicketOption) {
+      nowpaymentsTicketOption.disabled = !nowpaymentsCheckoutEnabled;
+      nowpaymentsTicketOption.textContent = nowpaymentsCheckoutEnabled ? 'Cryptocurrency (NOWPayments)' : 'Cryptocurrency (NOWPayments; coming soon)';
+    }
     const usesWallet = paymentMethodSelect.value === 'wallet';
     const usesStripe = paymentMethodSelect.value === 'stripe';
     const usesNowpayments = paymentMethodSelect.value === 'nowpayments';
@@ -1229,16 +1202,6 @@
     ticketForm.querySelector('[type=submit]').innerHTML = `Pay with ${paymentLabel} <span aria-hidden="true">→</span>`;
   }
   if (paymentMethodSelect && buyerPhoneInput && ticketPaymentNote && ticketForm) {
-    const stripeTicketOption = paymentMethodSelect.querySelector('option[value="stripe"]');
-    if (stripeTicketOption) {
-      stripeTicketOption.disabled = !stripeCheckoutEnabled;
-      stripeTicketOption.textContent = stripeCheckoutEnabled ? 'Card (Stripe Checkout)' : 'Card (Stripe Checkout; coming soon)';
-    }
-    const nowpaymentsTicketOption = paymentMethodSelect.querySelector('option[value="nowpayments"]');
-    if (nowpaymentsTicketOption) {
-      nowpaymentsTicketOption.disabled = !nowpaymentsCheckoutEnabled;
-      nowpaymentsTicketOption.textContent = nowpaymentsCheckoutEnabled ? 'Cryptocurrency (NOWPayments)' : 'Cryptocurrency (NOWPayments; coming soon)';
-    }
     paymentMethodSelect.addEventListener('change', updateTicketPaymentMethod);
     ticketSelect.addEventListener('change', updateTicketPaymentMethod);
     ticketForm.elements.quantity.addEventListener('input', updateTicketPaymentMethod);
