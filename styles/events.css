@@ -553,11 +553,12 @@ img { display: block; max-width: 100%; }
 .shop-wallet-link { flex: 0 0 auto; color: var(--green-dark); font-size: 13px; font-weight: 800; }
 .shop-product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
 .shop-product-card { overflow: hidden; background: transparent; }
-.shop-product-image { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: #f3f2ee; }
+.shop-product-image { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: contain; background: #f3f6f7; }
 .shop-product-details { display: grid; justify-items: center; align-content: start; gap: 8px; padding: 18px 8px 12px; text-align: center; }
 .shop-product-brand { color: #6c706b; font-size: 10px; font-weight: 800; letter-spacing: .16em; }
 .shop-product-details h3 { margin: 0; font: 700 17px/1.3 Manrope, sans-serif; }
-.shop-product-details > p { min-height: 38px; margin: 0; color: #69706a; font-size: 13px; }
+.shop-product-details > p { min-height: 42px; margin: 0; color: #69706a; font-size: 13px; line-height: 1.6; }
+.shop-product-inquiry { margin-top: 2px; color: var(--green-dark); font-size: 13px; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
 .shop-product-price { color: var(--ink); font-size: 16px; }
 .shop-product-stock { color: #6c706b; font-size: 11px; }
 .shop-add-button { min-height: 40px; margin-top: 3px; padding-inline: 20px; }
@@ -988,4 +989,74 @@ img { display: block; max-width: 100%; }
   .merchant-stat { min-width: 0; }
   .site-footer > .wrap:not(.footer-inner) { align-items: flex-start; flex-direction: column; }
   .site-footer > .wrap:not(.footer-inner) nav { flex-wrap: wrap; }
+}
+
+.branding-page { overflow: hidden; }
+.branding-hero { padding: clamp(38px, 6vw, 64px) 0; background: #fff; }
+.branding-hero-grid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(360px, 1.05fr); align-items: center; gap: clamp(36px, 7vw, 90px); }
+.branding-hero-copy .eyebrow { margin: 0 0 14px; }
+.branding-hero-copy h1 { max-width: 640px; margin: 0; font: 800 clamp(36px, 5vw, 56px)/1.08 Manrope, sans-serif; letter-spacing: -.045em; }
+.branding-hero-copy > p:not(.eyebrow) { max-width: 480px; margin: 15px 0 0; color: #536477; font-size: 16px; line-height: 1.65; }
+.branding-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 27px; }
+.branding-hero-actions .button { display: inline-flex; width: auto; align-items: center; gap: 9px; }
+.branding-text-link { color: var(--green-dark); font-size: 13px; font-weight: 800; text-decoration: underline; text-underline-offset: 4px; }
+.branding-hero-visual { position: relative; min-height: 360px; margin: 0; overflow: hidden; border-radius: 12px; background: #e4eee8; }
+.branding-hero-visual img { width: 100%; height: 100%; min-height: 360px; object-fit: cover; }
+.branding-hero-visual figcaption { position: absolute; right: 16px; bottom: 16px; left: 16px; display: flex; justify-content: space-between; gap: 12px; padding: 13px 15px; border: 1px solid rgba(255,255,255,.25); border-radius: 10px; color: white; background: rgba(8, 29, 22, .76); backdrop-filter: blur(8px); font-size: 10px; font-weight: 800; letter-spacing: .12em; }
+.branding-offer { padding-top: clamp(42px, 6vw, 64px); padding-bottom: clamp(42px, 6vw, 64px); }
+.branding-section-heading { max-width: 710px; margin-bottom: 30px; }
+.branding-section-heading .eyebrow, .branding-gallery-heading .eyebrow, .branding-shop-callout .eyebrow, .branding-contact .eyebrow { margin: 0 0 10px; }
+.branding-section-heading h2, .branding-gallery-heading h2, .branding-shop-callout h2, .branding-contact h2 { margin: 0; font: 800 clamp(29px, 4vw, 42px)/1.13 Manrope, sans-serif; letter-spacing: -.04em; }
+.branding-section-heading > p:last-child, .branding-gallery-heading > p, .branding-shop-callout > div > p:last-child, .branding-contact-inner > div > p:last-child { color: #5b6b7f; font-size: 15px; line-height: 1.75; }
+.branding-section-heading > p:last-child { max-width: 610px; margin: 12px 0 0; }
+.branding-offer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.branding-offer-card { min-height: 0; padding: 19px; border: 1px solid #e1ebe5; border-radius: 10px; background: #fff; }
+.branding-offer-card > span { color: var(--green); font-size: 11px; font-weight: 800; }
+.branding-offer-card h3 { margin: 10px 0 6px; font: 800 16px Manrope, sans-serif; }
+.branding-offer-card p { margin: 0; color: #607087; font-size: 13px; line-height: 1.7; }
+.branding-gallery-section { padding: clamp(42px, 6vw, 64px) 0; background: #f6f9f7; }
+.branding-gallery-heading { display: flex; align-items: end; justify-content: space-between; gap: 30px; margin-bottom: 27px; }
+.branding-gallery-heading > p { max-width: 470px; margin: 0; font-size: 13px; }
+.branding-gallery { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.branding-gallery-card { min-width: 0; margin: 0; overflow: hidden; border: 1px solid #e3ebe5; border-radius: 10px; background: white; }
+.branding-gallery-card img { width: 100%; aspect-ratio: 1.2 / 1; object-fit: cover; background: #e8efeb; }
+.branding-gallery-card figcaption { padding: 11px 13px 13px; }
+.branding-gallery-card figcaption span { font: 700 13px Manrope, sans-serif; }
+.branding-gallery-status { min-height: 20px; margin: 0 0 12px; color: #64748b; font-size: 12px; }
+.branding-gallery-status.error { color: #a3261a; }
+.branding-gallery-note { margin: 17px 0 0; color: #748195; font-size: 11px; }
+.branding-shop-callout { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; margin-top: clamp(38px, 6vw, 64px); margin-bottom: clamp(38px, 6vw, 64px); padding: clamp(22px, 4vw, 34px); border: 1px solid #dcebe1; border-radius: 12px; background: #f6fbf8; }
+.branding-shop-callout > div { min-width: 0; max-width: 640px; }
+.branding-shop-callout h2 { font-size: clamp(25px, 3.5vw, 34px); }
+.branding-shop-callout > div > p:last-child { margin: 9px 0 0; font-size: 13px; }
+.branding-shop-callout > .button { display: inline-flex; width: auto; flex: 0 0 auto; align-items: center; gap: 8px; white-space: nowrap; }
+.branding-contact { padding: clamp(36px, 5vw, 54px) 0; color: #fff; background: #073d31; }
+.branding-contact-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.branding-contact .eyebrow { color: #a7e6c6; }
+.branding-contact h2 { max-width: 570px; }
+.branding-contact-inner > div > p:last-child { margin: 10px 0 0; color: #c1d9cf; font-size: 14px; }
+.branding-contact-button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; color: #073d31; background: #fff; }
+.branding-contact-button:hover { color: #073d31; background: #e7f6ed; }
+@media (max-width: 850px) {
+  .branding-hero-grid { grid-template-columns: minmax(0, 1fr) minmax(280px, .9fr); gap: 30px; }
+  .branding-hero-visual, .branding-hero-visual img { min-height: 320px; }
+  .branding-gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .branding-hero { padding-top: 42px; }
+  .branding-hero-grid { grid-template-columns: 1fr; gap: 28px; }
+  .branding-hero-copy h1 { font-size: clamp(38px, 11vw, 54px); }
+  .branding-hero-visual, .branding-hero-visual img { min-height: 300px; }
+  .branding-hero-actions { align-items: flex-start; flex-direction: column; gap: 14px; }
+  .branding-hero-actions .button { justify-content: center; width: 100%; }
+  .branding-offer-grid { grid-template-columns: 1fr; }
+  .branding-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .branding-offer-card { min-height: 0; }
+  .branding-gallery-heading, .branding-shop-callout, .branding-contact-inner { align-items: flex-start; flex-direction: column; }
+  .branding-shop-callout { grid-template-columns: 1fr; }
+  .branding-gallery-heading { gap: 10px; }
+  .branding-gallery-card img { aspect-ratio: 1 / 1; }
+  .branding-gallery-card figcaption { padding: 9px; }
+  .branding-gallery-card figcaption span { font-size: 11px; }
+  .branding-shop-callout > .button, .branding-contact-button { justify-content: center; width: 100%; white-space: normal; }
 }

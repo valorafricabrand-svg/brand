@@ -576,11 +576,11 @@
   function createSponsoredAdRail() {
     const rail = document.createElement('aside');
     rail.className = 'sponsored-ticket-rail';
-    rail.setAttribute('aria-label', 'Top selling tickets and products');
+    rail.setAttribute('aria-label', 'Featured tickets, products and event branding');
 
     const header = document.createElement('div');
     header.className = 'sponsored-ticket-heading';
-    header.innerHTML = '<div><span>★</span><strong>Top selling tickets &amp; products</strong></div><a href="advertise.html">Advertise &amp; sell <span aria-hidden="true">→</span></a>';
+    header.innerHTML = '<div><span>★</span><strong>Featured tickets, products &amp; branding</strong></div><a href="advertise.html">Advertise &amp; sell <span aria-hidden="true">→</span></a>';
 
     const windowEl = document.createElement('div');
     windowEl.className = 'sponsored-ticket-window';
@@ -589,8 +589,8 @@
 
     const ticketEvents = events.filter((event) => Array.isArray(event.tickets) && event.tickets.length).slice(0, 2);
     const products = [
-      { name: 'Valor Africa Tote Bag', price: 'KES 4,500', image: 'images/one.jpg' },
-      { name: 'Community Print Tee', price: 'KES 2,800', image: 'images/IMG_0729.jpg' }
+      { name: 'Valor Africa Tote Bag', image: 'images/Valor%20Shop/52D62502-C0A7-4EDD-AEE3-370A48668A0E.jpg' },
+      { name: 'Valor Africa Sweatshirt and Joggers', image: 'images/Valor%20Shop/IMG_0729.jpg' }
     ];
 
     ticketEvents.forEach((event) => {
@@ -602,11 +602,18 @@
       track.appendChild(card);
     });
 
+    const brandingCard = document.createElement('a');
+    brandingCard.className = 'sponsored-ticket-card sponsored-merch-card';
+    brandingCard.href = 'branding.html';
+    brandingCard.setAttribute('aria-label', 'Explore event branding and merchandise ideas');
+    brandingCard.innerHTML = '<span class="sponsored-ticket-label">EVENT BRANDING</span><img src="images/Branding%20images/7b3dbcf1bf8b05bc890e6fb02faccc8f.jpg" alt="Branded event canopy and flags" loading="lazy"><div><small>For events, vendors &amp; sponsors</small><strong>Make your brand part of the event</strong><p>Explore branded displays and merchandise</p><span class="sponsored-ticket-button">See branding ideas <b aria-hidden="true">→</b></span></div>';
+    track.appendChild(brandingCard);
+
     products.forEach((product) => {
       const card = document.createElement('a');
       card.className = 'sponsored-ticket-card sponsored-merch-card';
       card.href = 'shop.html';
-      card.innerHTML = `<span class="sponsored-ticket-label">TOP PRODUCT</span><img src="${product.image}" alt="${product.name}" loading="lazy"><div><small>Valor Africa shop</small><strong>${product.name}</strong><p>${product.price}</p><span class="sponsored-ticket-button">Buy now <b aria-hidden="true">→</b></span></div>`;
+      card.innerHTML = `<span class="sponsored-ticket-label">VALOR COLLECTION</span><img src="${product.image}" alt="${product.name}" loading="lazy"><div><small>Official merchandise</small><strong>${product.name}</strong><p>Explore the Valor Africa collection</p><span class="sponsored-ticket-button">View collection <b aria-hidden="true">→</b></span></div>`;
       track.appendChild(card);
     });
 
@@ -702,7 +709,7 @@
   function renderEvents(container, list) {
     if (!container) return;
     const cards = list.map(createEventCard);
-    if ((container.id === 'featuredEvents' || container.id === 'allEvents') && list.length >= 2) {
+    if (container.id === 'featuredEvents' || container.id === 'allEvents') {
       cards.splice(Math.min(2, cards.length), 0, createSponsoredAdRail());
       if (list.length >= 8) {
         cards.splice(Math.min(8, cards.length), 0, createSponsoredEventsRail());
@@ -1138,7 +1145,7 @@
       const noResults = document.getElementById('noResults');
       if (noResults) noResults.hidden = visible > 0;
       allEvents.querySelectorAll('.sponsored-ticket-rail').forEach((rail) => {
-        rail.hidden = visible === 0;
+        rail.hidden = visible === 0 && rail.classList.contains('sponsored-events-rail');
       });
     };
     allCategories.addEventListener('click', (event) => {

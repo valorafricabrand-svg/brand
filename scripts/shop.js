@@ -1,323 +1,113 @@
 (function () {
   'use strict';
 
-  const accountTokenKey = 'valor-account-token';
-  const cartKey = 'valor-shop-cart';
-  const cart = new Map();
-  try {
-    const savedCart = JSON.parse(window.localStorage.getItem(cartKey) || '[]');
-    if (Array.isArray(savedCart)) savedCart.forEach((item) => {
-      if (item && typeof item.productId === 'string' && Number.isInteger(item.quantity) && item.quantity > 0) cart.set(item.productId, item.quantity);
-    });
-  } catch (error) { window.localStorage.removeItem(cartKey); }
-  const products = new Map();
-  const productGrid = document.getElementById('shopProducts');
-  const productFeedback = document.getElementById('shopProductsFeedback');
-  const previewProducts = [
+  const products = [
     {
-      id: 'valor-tote',
-      name: 'Valor Africa Tote Bag',
-      description: 'Durable canvas tote with the Valor Africa emblem, hand-printed.',
-      priceKes: 4500,
-      imageUrl: 'images/one.jpg',
-      stock: null
+      name: 'Valor Africa Blue Sweatshirt',
+      description: 'Bright blue crewneck sweatshirt featuring the Valor Africa emblem.',
+      image: '0037AE54-4CD5-47E0-B113-979E1D34E2AF.jpg'
     },
     {
-      id: 'community-print-tee',
-      name: 'Community Print Tee',
-      description: 'Soft cotton tee celebrating African entrepreneurship.',
-      priceKes: 2800,
-      imageUrl: 'images/IMG_0729.jpg',
-      stock: null
+      name: 'Valor Africa Printed Shorts',
+      description: 'Teal shorts with a dark Valor Africa logo printed on the leg.',
+      image: '07B2D599-BA68-4FE9-B06D-0921EAA342F2.jpg'
     },
     {
-      id: 'founders-notebook',
-      name: 'Founder’s Notebook',
-      description: 'A5 hardcover notebook for brand-building notes and sketches.',
-      priceKes: 6200,
-      imageUrl: 'images/IMG_1212.jpg',
-      stock: null
+      name: 'Valor Africa Cap and Sweatshirt',
+      description: 'A dark Valor Africa sweatshirt and pink branded cap, shown together.',
+      image: '4B845D28-C5D5-4968-AA08-C57418C5B819.jpg'
+    },
+    {
+      name: 'Valor Africa Blue Tote Bag',
+      description: 'Blue carry bag with the Valor Africa emblem and wordmark.',
+      image: '52D62502-C0A7-4EDD-AEE3-370A48668A0E.jpg'
+    },
+    {
+      name: 'Valor Africa Pink T-Shirt',
+      description: 'Light pink T-shirt featuring the Valor Africa logo on the chest.',
+      image: '54F15520-FA4B-4651-9C31-C2C6EECCCE75.jpg'
+    },
+    {
+      name: 'Valor Africa T-Shirt',
+      description: 'A white Valor Africa logo T-shirt, shown in a casual outdoor setting.',
+      image: '5D006391-F19A-4DB0-970D-69A242182D19.jpg'
+    },
+    {
+      name: 'Valor Africa Emblem Artwork',
+      description: 'Gold Valor Africa emblem artwork on a deep blue patterned background.',
+      image: '5D6B6CFD-C2A5-4369-9B24-DDE4E6016A1D.jpg'
+    },
+    {
+      name: 'Valor Africa Community T-Shirt',
+      description: 'A Valor Africa logo T-shirt worn at an outdoor community gathering.',
+      image: '772F7391-0EAD-49FE-8812-4B11449393AD.jpg'
+    },
+    {
+      name: 'Valor Africa Event T-Shirt',
+      description: 'A branded black T-shirt worn at a colorful Valor Africa event.',
+      image: 'AACDD523-E3D8-4B09-8A3C-438958EC6002.jpg'
+    },
+    {
+      name: 'Valor Africa Yellow Hoodie',
+      description: 'Yellow Valor Africa hoodie shown with coordinating branded accessories.',
+      image: 'B7B98527-ADA7-4AB4-8ED4-607E6F5ADC49.jpg'
+    },
+    {
+      name: 'Valor Africa Paper Gift Bag',
+      description: 'White paper shopping bag with a gold Valor Africa emblem and wordmark.',
+      image: 'BE7C77E3-23C9-48EF-AC6C-DBA72F90EC37.jpg'
+    },
+    {
+      name: 'Valor Africa Sweatshirt and Joggers',
+      description: 'A matching dark sweatshirt and joggers set with Valor Africa emblems.',
+      image: 'IMG_0729.jpg'
+    },
+    {
+      name: 'Valor Africa Gold Emblem Artwork',
+      description: 'A glowing gold Valor Africa emblem graphic on a dark background.',
+      image: 'IMG_1212.jpg'
+    },
+    {
+      name: 'Valor Africa Lanyards and ID Badges',
+      description: 'Branded neck lanyards paired with printed Valor Africa identification badges.',
+      image: 'PhotoRoom_20220831_074744.png'
     }
   ];
-  const cartItems = document.getElementById('shopCartItems');
-  const cartCount = document.getElementById('shopCartCount');
-  const cartTotal = document.getElementById('shopCartTotal');
-  const checkoutForm = document.getElementById('shopCheckoutForm');
-  const checkoutButton = document.getElementById('shopCheckoutButton');
-  const checkoutFeedback = document.getElementById('shopCheckoutFeedback');
-  const walletStatus = document.getElementById('shopWalletStatus');
-  const signInNote = document.getElementById('shopSignInNote');
-  const walletLinkNote = document.getElementById('shopWalletLinkNote');
-  const paymentMethod = document.getElementById('shopPaymentMethod');
-  let accountToken = '';
-  let walletBalance = 0;
-  let walletLinked = false;
-  let catalogAvailable = false;
-  let clientRequestId = '';
 
-  function formatMoney(amount) {
-    return new Intl.NumberFormat('en-KE', {
-      style: 'currency',
-      currency: 'KES',
-      maximumFractionDigits: 0
-    }).format(amount);
-  }
+  const productGrid = document.getElementById('shopProducts');
+  products.forEach((product) => {
+    const card = document.createElement('article');
+    card.className = 'shop-product-card';
 
-  function setFeedback(element, message, error = false) {
-    element.textContent = message;
-    element.classList.toggle('error', error);
-  }
+    const image = document.createElement('img');
+    image.className = 'shop-product-image';
+    image.src = `images/Valor%20Shop/${product.image}`;
+    image.alt = product.name;
+    image.loading = 'lazy';
+    image.addEventListener('error', () => {
+      image.alt = `${product.name} image could not be loaded`;
+    }, { once: true });
 
-  function makeButton(label, className, action, disabled = false) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = className;
-    button.dataset.cartAction = action;
-    button.textContent = label;
-    button.disabled = disabled;
-    return button;
-  }
+    const details = document.createElement('div');
+    details.className = 'shop-product-details';
 
-  function renderProducts() {
-    productGrid.replaceChildren();
-    if (!products.size) {
-      const empty = document.createElement('p');
-      empty.className = 'shop-empty';
-      empty.textContent = 'No merchandise is available right now. Please check back soon.';
-      productGrid.appendChild(empty);
-      return;
-    }
+    const brand = document.createElement('span');
+    brand.className = 'shop-product-brand';
+    brand.textContent = 'VALOR AFRICA';
 
-    products.forEach((product) => {
-      const card = document.createElement('article');
-      card.className = 'shop-product-card';
-      const image = document.createElement('img');
-      image.className = 'shop-product-image';
-      image.src = product.imageUrl;
-      image.alt = product.name;
-      image.loading = 'lazy';
-      image.addEventListener('error', () => image.remove(), { once: true });
-      card.appendChild(image);
+    const name = document.createElement('h3');
+    name.textContent = product.name;
 
-      const details = document.createElement('div');
-      details.className = 'shop-product-details';
-      const brand = document.createElement('span');
-      brand.className = 'shop-product-brand';
-      brand.textContent = 'VALOR AFRICA';
-      const name = document.createElement('h3');
-      name.textContent = product.name;
-      const description = document.createElement('p');
-      description.textContent = product.description;
-      const price = document.createElement('strong');
-      price.className = 'shop-product-price';
-      price.textContent = formatMoney(product.priceKes);
-      const stock = document.createElement('span');
-      stock.className = 'shop-product-stock';
-      stock.textContent = !catalogAvailable
-        ? 'Preview only — shop service unavailable'
-        : product.stock === null ? 'Available' : product.stock > 0 ? `${product.stock} in stock` : 'Out of stock';
-      stock.hidden = !catalogAvailable;
-      const add = makeButton(
-        !catalogAvailable ? 'Temporarily unavailable' : product.stock === 0 ? 'Out of stock' : 'Add to bag',
-        'button button-primary shop-add-button',
-        'add',
-        !catalogAvailable || product.stock === 0
-      );
-      add.hidden = !catalogAvailable;
-      add.dataset.productId = product.id;
-      details.append(brand, name, description, price, stock, add);
-      card.appendChild(details);
-      productGrid.appendChild(card);
-    });
-  }
+    const description = document.createElement('p');
+    description.textContent = product.description;
 
-  function renderCart() {
-    window.localStorage.setItem(cartKey, JSON.stringify(Array.from(cart, ([productId, quantity]) => ({ productId, quantity }))));
-    cartItems.replaceChildren();
-    let quantityTotal = 0;
-    let total = 0;
+    const inquiry = document.createElement('a');
+    inquiry.className = 'shop-product-inquiry';
+    inquiry.href = `mailto:hello@valorafrica.co.ke?subject=${encodeURIComponent(`Merchandise enquiry: ${product.name}`)}`;
+    inquiry.textContent = 'Ask about this item';
 
-    cart.forEach((quantity, productId) => {
-      const product = products.get(productId);
-      if (!product) return;
-      quantityTotal += quantity;
-      total += product.priceKes * quantity;
-
-      const row = document.createElement('article');
-      row.className = 'shop-cart-item';
-      const info = document.createElement('div');
-      info.className = 'shop-cart-item-info';
-      const name = document.createElement('strong');
-      name.textContent = product.name;
-      const price = document.createElement('span');
-      price.textContent = `${formatMoney(product.priceKes)} each`;
-      info.append(name, price);
-      const controls = document.createElement('div');
-      controls.className = 'shop-quantity-controls';
-      const decrease = makeButton('−', 'shop-quantity-button', 'decrease');
-      decrease.dataset.productId = productId;
-      decrease.setAttribute('aria-label', `Remove one ${product.name}`);
-      const quantityLabel = document.createElement('span');
-      quantityLabel.textContent = String(quantity);
-      const available = product.stock === null ? Infinity : product.stock;
-      const increase = makeButton('+', 'shop-quantity-button', 'increase', quantity >= 10 || quantity >= available);
-      increase.dataset.productId = productId;
-      increase.setAttribute('aria-label', `Add one ${product.name}`);
-      const remove = makeButton('Remove', 'shop-remove-button', 'remove');
-      remove.dataset.productId = productId;
-      controls.append(decrease, quantityLabel, increase, remove);
-      row.append(info, controls);
-      cartItems.appendChild(row);
-    });
-
-    if (!cart.size) {
-      const empty = document.createElement('p');
-      empty.className = 'shop-cart-empty';
-      empty.textContent = 'Your bag is empty. Add something you like.';
-      cartItems.appendChild(empty);
-    }
-
-    cartCount.textContent = `${quantityTotal} ${quantityTotal === 1 ? 'item' : 'items'}`;
-    cartTotal.textContent = formatMoney(total);
-    checkoutButton.disabled = !catalogAvailable || !cart.size || !walletLinked || total > walletBalance;
-    if (walletLinked && total > walletBalance && cart.size) {
-      walletStatus.textContent = `Wallet balance: ${formatMoney(walletBalance)}. Add funds to cover your merchandise subtotal.`;
-      walletStatus.classList.add('error');
-    } else if (walletLinked) {
-      walletStatus.textContent = `Valor Wallet balance: ${formatMoney(walletBalance)}`;
-      walletStatus.classList.remove('error');
-    }
-  }
-
-  async function loadProducts() {
-    productGrid.setAttribute('aria-busy', 'true');
-    try {
-      const result = await window.valorEventsApi('/api/shop/products');
-      if (!Array.isArray(result.products)) throw new Error('The shop returned an invalid product list.');
-      catalogAvailable = true;
-      products.clear();
-      result.products.forEach((product) => products.set(product.id, product));
-      for (const productId of cart.keys()) {
-        if (!products.has(productId)) cart.delete(productId);
-      }
-      setFeedback(productFeedback, '');
-      renderProducts();
-      renderCart();
-    } catch (error) {
-      catalogAvailable = false;
-      products.clear();
-      previewProducts.forEach((product) => products.set(product.id, product));
-      setFeedback(productFeedback, error.message, true);
-      renderProducts();
-      renderCart();
-    } finally {
-      productGrid.removeAttribute('aria-busy');
-    }
-  }
-
-  async function loadWallet() {
-    accountToken = window.valorAccountToken();
-    if (!accountToken) {
-      walletStatus.textContent = 'Sign in and use a linked Valor Wallet to pay.';
-      checkoutForm.hidden = true;
-      signInNote.hidden = false;
-      walletLinkNote.hidden = true;
-      walletLinked = false;
-      renderCart();
-      return;
-    }
-    signInNote.hidden = true;
-    try {
-      const headers = { Authorization: `Bearer ${accountToken}` };
-      const [account, wallet] = await Promise.all([
-        window.valorEventsApi('/api/auth/account', { headers }),
-        window.valorEventsApi('/api/wallet', { headers })
-      ]);
-      if (!checkoutForm.elements.customerName.value) {
-        checkoutForm.elements.customerName.value = account.account.displayName || '';
-      }
-      walletLinked = Boolean(wallet.linked);
-      walletBalance = wallet.balanceKes;
-      checkoutForm.hidden = !walletLinked;
-      walletLinkNote.hidden = walletLinked;
-      walletStatus.textContent = walletLinked
-        ? `Valor Wallet balance: ${formatMoney(walletBalance)}`
-        : 'Link your phone wallet to pay for merchandise.';
-      walletStatus.classList.remove('error');
-      renderCart();
-    } catch (error) {
-      walletLinked = false;
-      checkoutForm.hidden = true;
-      walletStatus.textContent = error.message;
-      walletStatus.classList.add('error');
-      renderCart();
-    }
-  }
-
-  productGrid.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-cart-action="add"]');
-    if (!button) return;
-    const product = products.get(button.dataset.productId);
-    if (!catalogAvailable || !product || product.stock === 0) return;
-    const current = cart.get(product.id) || 0;
-    const maximum = product.stock === null ? 10 : Math.min(10, product.stock);
-    if (current >= maximum) return;
-    cart.set(product.id, current + 1);
-    setFeedback(checkoutFeedback, '');
-    renderCart();
+    details.append(brand, name, description, inquiry);
+    card.append(image, details);
+    productGrid.appendChild(card);
   });
-
-  cartItems.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-cart-action]');
-    if (!button) return;
-    const productId = button.dataset.productId;
-    const quantity = cart.get(productId);
-    if (!quantity) return;
-    if (button.dataset.cartAction === 'remove' || (button.dataset.cartAction === 'decrease' && quantity === 1)) {
-      cart.delete(productId);
-    } else if (button.dataset.cartAction === 'decrease') {
-      cart.set(productId, quantity - 1);
-    } else if (button.dataset.cartAction === 'increase') {
-      const product = products.get(productId);
-      const maximum = product && product.stock !== null ? Math.min(10, product.stock) : 10;
-      if (quantity < maximum) cart.set(productId, quantity + 1);
-    }
-    renderCart();
-  });
-
-  checkoutForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    if (!accountToken || !walletLinked || !cart.size) return;
-    const items = Array.from(cart, ([productId, quantity]) => ({ productId, quantity }));
-    if (!clientRequestId) clientRequestId = crypto.randomUUID();
-    checkoutButton.disabled = true;
-    setFeedback(checkoutFeedback, 'Confirming your Valor Wallet payment…');
-    try {
-      const result = await window.valorEventsApi('/api/orders/merchandise', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accountToken}` },
-        body: JSON.stringify({
-          items,
-          customerName: checkoutForm.elements.customerName.value,
-          phone: checkoutForm.elements.phone.value,
-          deliveryAddress: checkoutForm.elements.deliveryAddress.value,
-          paymentMethod: paymentMethod.value,
-          clientRequestId
-        })
-      });
-      cart.clear();
-      clientRequestId = '';
-      walletBalance = result.balanceKes;
-      setFeedback(checkoutFeedback, `Order ${result.orderId} paid successfully. Our team will contact you about delivery.`);
-      await Promise.all([loadProducts(), loadWallet()]);
-      renderCart();
-    } catch (error) {
-      setFeedback(checkoutFeedback, error.message, true);
-      if (error.message.toLowerCase().includes('wallet balance is too low')) await loadWallet();
-      renderCart();
-    }
-  });
-
-  loadProducts();
-  loadWallet();
 })();

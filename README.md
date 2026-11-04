@@ -12,6 +12,7 @@ Valor Africa is an event discovery, publishing, ticketing, and event-promotion p
 - `host.html` — organizer event submission and local draft saving.
 - `partnership.html` — creator applications and tracking, plus signed-in organizer and sponsor inquiries with follow-up status alongside investor information.
 - `gifts.html` — Valor gift credit redeemable to a linked wallet and approved merchants' one-time voucher offers, with buyer and merchant tools.
+- `branding.html` — event branding and merchandise examples for organizers, vendors and sponsors, with an inquiry link and a separate path to the official Valor Africa shop.
 - `event.html`, `order.html`, `ticket.html`, and `advertise.html` — public event details, payment status and ticket confirmations, ticket verification, and paid ad booking.
 - `privacy-policy.html` — optional advertising-cookie and Meta Pixel consent details.
 - `backend-events/` — API and admin dashboard for publishing, review, event orders, tickets, creator affiliate referrals, organizer and sponsor inquiries, ad packages, and the merchandise catalog with Valor Wallet checkout.
