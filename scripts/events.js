@@ -14,17 +14,6 @@
     adPoster: 'images/events/valor-ticket-buyer-cover.png',
     tickets: []
   };
-  const sponsoredVideoPromo = {
-    id: 'valor-sponsored-video-promo',
-    isSponsoredVideoPromo: true,
-    title: 'Valor Events and Tickets',
-    category: 'Featured on Valor Africa',
-    adVideo: 'videos/valor-sponsored-video.mp4',
-    adPoster: 'images/og-image.svg',
-    adDescription: 'Explore experiences and find your next event.',
-    adLink: 'events.html',
-    adCta: 'Get tickets now'
-  };
   const featuredVideoPromos = [
     {
       id: 'valor-featured-clip-002',
@@ -49,7 +38,7 @@
       adCta: 'Explore events'
     }
   ];
-  let adEvents = [sponsoredVideoPromo, ticketBuyerPromo, ...featuredVideoPromos, ...events.slice(0, 1)];
+  let adEvents = [...featuredVideoPromos, ticketBuyerPromo, ...events.slice(0, 1)];
   let checkoutEnabled = false;
   let mpesaCheckoutEnabled = false;
   let stripeCheckoutEnabled = false;
@@ -1052,9 +1041,8 @@
 
   function refreshPromotionalCarousel() {
     adEvents = [
-      sponsoredVideoPromo,
-      ticketBuyerPromo,
       ...featuredVideoPromos,
+      ticketBuyerPromo,
       ...(promotedEvents.length ? promotedEvents : events.slice(0, 1))
     ];
     renderAdSlides();
