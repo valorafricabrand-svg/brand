@@ -584,14 +584,26 @@ db.exec(`
 `);
 
 const starterProducts = [
-  ['valor-tote', 'Valor Africa Tote Bag', 'Durable canvas tote with the Valor Africa emblem, hand-printed.', 4500, '/images/one.jpg'],
-  ['community-print-tee', 'Community Print Tee', 'Soft cotton tee celebrating African entrepreneurship.', 2800, '/images/IMG_0729.jpg'],
-  ['founders-notebook', 'Founder’s Notebook', 'A5 hardcover notebook for brand-building notes and sketches.', 6200, '/images/IMG_1212.jpg']
+  ['valor-tote', 'Valor Africa Tote Bag', 'Durable canvas tote with the Valor Africa emblem, hand-printed.', 4500, '/images/Valor%20Shop/52D62502-C0A7-4EDD-AEE3-370A48668A0E.jpg'],
+  ['community-print-tee', 'Community Print Tee', 'Soft cotton tee celebrating African entrepreneurship.', 2800, '/images/Valor%20Shop/IMG_0729.jpg'],
+  ['founders-notebook', 'Founder’s Notebook', 'A5 hardcover notebook for brand-building notes and sketches.', 6200, '/images/Valor%20Shop/IMG_1212.jpg']
 ];
 const insertStarterProduct = db.prepare(`
   INSERT OR IGNORE INTO merchandise_products (id,name,description,price_kes,image_url)
   VALUES (?,?,?,?,?)
 `);
 for (const product of starterProducts) insertStarterProduct.run(...product);
+db.prepare(`
+  UPDATE merchandise_products
+  SET image_url = CASE id
+    WHEN 'valor-tote' THEN '/images/Valor%20Shop/52D62502-C0A7-4EDD-AEE3-370A48668A0E.jpg'
+    WHEN 'community-print-tee' THEN '/images/Valor%20Shop/IMG_0729.jpg'
+    WHEN 'founders-notebook' THEN '/images/Valor%20Shop/IMG_1212.jpg'
+  END,
+  updated_at = datetime('now')
+  WHERE (id='valor-tote' AND image_url='/images/one.jpg')
+    OR (id='community-print-tee' AND image_url='/images/IMG_0729.jpg')
+    OR (id='founders-notebook' AND image_url='/images/IMG_1212.jpg')
+`).run();
 
 module.exports = db;
