@@ -284,6 +284,27 @@ db.exec(`
     PRIMARY KEY (account_id,event_id)
   );
 
+  CREATE TABLE IF NOT EXISTS event_views (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    first_viewed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_viewed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    view_reminder_status TEXT NOT NULL DEFAULT 'not_sent' CHECK (view_reminder_status IN ('not_sent','sent','failed','skipped')),
+    view_reminder_attempted_at TEXT,
+    view_reminder_error TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (account_id,event_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS ticket_reminder_log (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    days_before INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('sent','failed')),
+    error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (account_id,event_id,days_before)
+  );
+
   CREATE TABLE IF NOT EXISTS merchandise_products (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -599,6 +620,11 @@ if (!ticketColumns.some((column) => column.name === 'seat_label')) {
 if (!ticketColumns.some((column) => column.name === 'showtime_at')) {
   db.exec("ALTER TABLE tickets ADD COLUMN showtime_at TEXT NOT NULL DEFAULT ''");
 }
+const accountColumns = db.prepare('PRAGMA table_info(accounts)').all();
+if (!accountColumns.some((column) => column.name === 'marketing_emails_opt_out')) {
+  db.exec('ALTER TABLE accounts ADD COLUMN marketing_emails_opt_out INTEGER NOT NULL DEFAULT 0 CHECK (marketing_emails_opt_out IN (0,1))');
+}
+db.exec('CREATE INDEX IF NOT EXISTS event_views_reminder ON event_views(view_reminder_status,last_viewed_at)');
 db.exec('DROP TABLE IF EXISTS wallet_sessions');
 
 const walletTransactionSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='wallet_transactions'").get().sql;

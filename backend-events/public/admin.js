@@ -653,6 +653,27 @@
   });
 
   document.getElementById('logoutButton').addEventListener('click', showLoggedOut);
+  document.getElementById('sendRemindersButton').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    const remindersFeedback = document.getElementById('remindersFeedback');
+    button.disabled = true;
+    setFeedback(remindersFeedback, 'Sending…');
+    try {
+      const result = await api('/api/reminders/admin/send', { method: 'POST' });
+      if (!result.configured) {
+        setFeedback(remindersFeedback, 'Resend is not configured yet, so no reminder emails were sent.', true);
+      } else {
+        setFeedback(remindersFeedback,
+          `Sent ${result.ticketRemindersSent} ticket countdown and ${result.viewRemindersSent} re-engagement emails. ` +
+          `${result.ticketRemindersFailed + result.viewRemindersFailed} failed.`,
+          Boolean(result.ticketRemindersFailed || result.viewRemindersFailed));
+      }
+    } catch (error) {
+      setFeedback(remindersFeedback, error.message, true);
+    } finally {
+      button.disabled = false;
+    }
+  });
   document.getElementById('submissionStatus').addEventListener('change', () => {
     loadSubmissions().catch((error) => setFeedback(feedback, error.message, true));
   });
@@ -669,6 +690,7 @@
     document.getElementById('partnersSection').hidden = button.dataset.adminTab !== 'partners';
     document.getElementById('partnershipApplicationsSection').hidden = button.dataset.adminTab !== 'partnership-applications';
     document.getElementById('giftsSection').hidden = button.dataset.adminTab !== 'gifts';
+    document.getElementById('remindersSection').hidden = button.dataset.adminTab !== 'reminders';
     if (button.dataset.adminTab === 'partners') {
       loadPartners().catch((error) => setFeedback(feedback, error.message, true));
     }

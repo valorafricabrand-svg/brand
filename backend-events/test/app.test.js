@@ -14,6 +14,7 @@ const crypto = require('crypto');
 const assert = require('node:assert/strict');
 const { after, test } = require('node:test');
 const request = require('supertest');
+const jwt = require('jsonwebtoken');
 const db = require('../src/db');
 const { createApp, initializeAdmin } = require('../src/app');
 const { login } = require('../src/auth');
@@ -121,6 +122,28 @@ const ticketEmailGateway = {
     }
   }
 };
+const reminderEmailAttempts = [];
+const reminderEmailGateway = {
+  enabled: true,
+  failNext: false,
+  isConfigured() {
+    return this.enabled;
+  },
+  async sendTicketCountdown(args) {
+    reminderEmailAttempts.push({ type: 'ticket', ...args });
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error('Temporary Resend test failure.');
+    }
+  },
+  async sendViewReminder(args) {
+    reminderEmailAttempts.push({ type: 'view', ...args });
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error('Temporary Resend test failure.');
+    }
+  }
+};
 const app = createApp({
   mpesa: paymentGateway,
   stripe: stripeGateway,
@@ -128,6 +151,7 @@ const app = createApp({
   sms: smsGateway,
   email: emailGateway,
   ticketEmail: ticketEmailGateway,
+  reminderEmail: reminderEmailGateway,
   verifyGoogleToken: async (idToken) => {
     const profiles = {
       'valid-google-token': { sub: 'google-subject-123', email: 'google@example.com', name: 'Google Member' },
@@ -1563,6 +1587,131 @@ test('verified merchants can load one-time vouchers, fulfill wallet orders, conf
   `).get(application.body.merchantId).balanceKes, 250);
   assert.ok(merchantWallet.walletId);
   assert.ok(buyerWallet.walletId);
+});
+
+test('ticket countdown reminders send once per threshold and the admin trigger reports a summary', async () => {
+  const buyerAuth = createTestAccountAuth('reminder-buyer@example.com');
+  const buyerTokenHash = crypto.createHash('sha256').update(buyerAuth.Authorization.slice('Bearer '.length)).digest('hex');
+  const buyerAccountId = db.prepare('SELECT account_id FROM account_sessions WHERE token_hash=?').get(buyerTokenHash).account_id;
+  const organizerAuth = createTestAccountAuth(`reminder-organizer-${crypto.randomUUID()}@example.com`);
+  const soonEvent = createStoredTestEvent('Reminder Countdown Festival', organizerAuth);
+  db.prepare('UPDATE events SET starts_at=? WHERE id=?')
+    .run(new Date(Date.now() + 6 * 86400000).toISOString(), soonEvent.id);
+
+  const checkout = await request(app).post('/api/orders/tickets').set(buyerAuth).send({
+    eventId: soonEvent.id, ticketType: 'Regular', buyerName: 'Reminder Buyer', phone: '0712345678',
+    quantity: 2, paymentMethod: 'stripe'
+  });
+  assert.equal(checkout.status, 201);
+  const order = db.prepare('SELECT * FROM orders WHERE id=?').get(checkout.body.orderId);
+  await stripeWebhook({
+    id: order.stripe_session_id, payment_status: 'paid', amount_total: order.amount_kes * 100,
+    currency: 'kes', metadata: { orderId: order.id }
+  });
+  assert.match(db.prepare('SELECT status FROM orders WHERE id=?').get(order.id).status, /paid|confirmed/);
+
+  const unauthorizedTrigger = await request(app).post('/api/reminders/admin/send');
+  assert.equal(unauthorizedTrigger.status, 401);
+
+  const firstRun = await request(app).post('/api/reminders/admin/send').set(admin);
+  assert.equal(firstRun.status, 200);
+  assert.equal(firstRun.body.configured, true);
+  assert.equal(firstRun.body.ticketRemindersSent >= 1, true);
+  const log = db.prepare('SELECT * FROM ticket_reminder_log WHERE account_id=? AND event_id=? AND days_before=7')
+    .get(buyerAccountId, soonEvent.id);
+  assert.equal(log.status, 'sent');
+  const sentAttempt = reminderEmailAttempts.find((attempt) =>
+    attempt.type === 'ticket' && attempt.email === 'reminder-buyer@example.com');
+  assert.ok(sentAttempt);
+  assert.equal(sentAttempt.ticketCount, 2);
+  assert.equal(sentAttempt.daysRemaining, 6);
+
+  const attemptsBeforeRetry = reminderEmailAttempts.length;
+  const secondRun = await request(app).post('/api/reminders/admin/send').set(admin);
+  assert.equal(secondRun.status, 200);
+  assert.equal(reminderEmailAttempts.length, attemptsBeforeRetry);
+
+  reminderEmailGateway.enabled = false;
+  const unconfiguredRun = await request(app).post('/api/reminders/admin/send').set(admin);
+  assert.equal(unconfiguredRun.body.configured, false);
+  assert.equal(unconfiguredRun.body.ticketRemindersSent, 0);
+  reminderEmailGateway.enabled = true;
+});
+
+test('event view reminders respect opt-out, exclude ticket holders, and support one-click unsubscribe', async () => {
+  const viewerAuth = createTestAccountAuth('reminder-viewer@example.com');
+  const viewerTokenHash = crypto.createHash('sha256').update(viewerAuth.Authorization.slice('Bearer '.length)).digest('hex');
+  const viewerAccountId = db.prepare('SELECT account_id FROM account_sessions WHERE token_hash=?').get(viewerTokenHash).account_id;
+  const organizerAuth = createTestAccountAuth(`reminder-organizer-${crypto.randomUUID()}@example.com`);
+  const browsedEvent = createStoredTestEvent('Reminder Browse Event', organizerAuth);
+
+  const anonymousView = await request(app).post(`/api/account/events/${browsedEvent.id}/view`);
+  assert.equal(anonymousView.status, 401);
+  const viewResponse = await request(app).post(`/api/account/events/${browsedEvent.id}/view`).set(viewerAuth);
+  assert.equal(viewResponse.status, 204);
+
+  const tooSoonRun = await request(app).post('/api/reminders/admin/send').set(admin);
+  assert.equal(tooSoonRun.body.viewRemindersSent, 0);
+  assert.equal(db.prepare('SELECT view_reminder_status FROM event_views WHERE account_id=? AND event_id=?')
+    .get(viewerAccountId, browsedEvent.id).view_reminder_status, 'not_sent');
+
+  db.prepare("UPDATE event_views SET last_viewed_at=datetime('now','-2 days') WHERE account_id=? AND event_id=?")
+    .run(viewerAccountId, browsedEvent.id);
+  const secondRun = await request(app).post('/api/reminders/admin/send').set(admin);
+  assert.equal(secondRun.body.viewRemindersSent >= 1, true);
+  assert.equal(db.prepare('SELECT view_reminder_status FROM event_views WHERE account_id=? AND event_id=?')
+    .get(viewerAccountId, browsedEvent.id).view_reminder_status, 'sent');
+  const viewAttempt = reminderEmailAttempts.find((attempt) =>
+    attempt.type === 'view' && attempt.email === 'reminder-viewer@example.com');
+  assert.ok(viewAttempt);
+  assert.match(viewAttempt.unsubscribeUrl, /\/unsubscribe\.html\?token=/);
+
+  const attemptsBeforeRerun = reminderEmailAttempts.length;
+  await request(app).post('/api/reminders/admin/send').set(admin);
+  assert.equal(reminderEmailAttempts.length, attemptsBeforeRerun);
+
+  const optOutAuth = createTestAccountAuth('reminder-optout@example.com');
+  const optOutTokenHash = crypto.createHash('sha256').update(optOutAuth.Authorization.slice('Bearer '.length)).digest('hex');
+  const optOutAccountId = db.prepare('SELECT account_id FROM account_sessions WHERE token_hash=?').get(optOutTokenHash).account_id;
+  const prefsResponse = await request(app).post('/api/account/preferences').set(optOutAuth)
+    .send({ marketingEmailsOptOut: true });
+  assert.equal(prefsResponse.status, 200);
+  assert.equal(prefsResponse.body.marketingEmailsOptOut, true);
+  await request(app).post(`/api/account/events/${browsedEvent.id}/view`).set(optOutAuth);
+  db.prepare("UPDATE event_views SET last_viewed_at=datetime('now','-2 days') WHERE account_id=? AND event_id=?")
+    .run(optOutAccountId, browsedEvent.id);
+  await request(app).post('/api/reminders/admin/send').set(admin);
+  assert.equal(reminderEmailAttempts.some((attempt) =>
+    attempt.type === 'view' && attempt.email === 'reminder-optout@example.com'), false);
+
+  const ticketedEvent = createStoredTestEvent('Reminder Browse Ticketed Event', organizerAuth);
+  const checkout = await request(app).post('/api/orders/tickets').set(viewerAuth).send({
+    eventId: ticketedEvent.id, ticketType: 'Regular', buyerName: 'Viewer Buyer', phone: '0712345678',
+    quantity: 1, paymentMethod: 'stripe'
+  });
+  const order = db.prepare('SELECT * FROM orders WHERE id=?').get(checkout.body.orderId);
+  await stripeWebhook({
+    id: order.stripe_session_id, payment_status: 'paid', amount_total: order.amount_kes * 100,
+    currency: 'kes', metadata: { orderId: order.id }
+  });
+  await request(app).post(`/api/account/events/${ticketedEvent.id}/view`).set(viewerAuth);
+  db.prepare("UPDATE event_views SET last_viewed_at=datetime('now','-2 days') WHERE account_id=? AND event_id=?")
+    .run(viewerAccountId, ticketedEvent.id);
+  await request(app).post('/api/reminders/admin/send').set(admin);
+  assert.equal(db.prepare('SELECT view_reminder_status FROM event_views WHERE account_id=? AND event_id=?')
+    .get(viewerAccountId, ticketedEvent.id).view_reminder_status, 'not_sent');
+
+  const invalidUnsubscribe = await request(app).post('/api/account/unsubscribe').send({ token: 'not-a-real-token' });
+  assert.equal(invalidUnsubscribe.status, 401);
+  const wrongPurposeToken = jwt.sign({ sub: viewerAccountId, purpose: 'something-else' }, process.env.JWT_SECRET);
+  const wrongPurpose = await request(app).post('/api/account/unsubscribe').send({ token: wrongPurposeToken });
+  assert.equal(wrongPurpose.status, 401);
+  assert.equal(db.prepare('SELECT marketing_emails_opt_out FROM accounts WHERE id=?').get(viewerAccountId).marketing_emails_opt_out, 0);
+  const validToken = jwt.sign({ sub: viewerAccountId, purpose: 'unsubscribe-marketing' }, process.env.JWT_SECRET);
+  const validUnsubscribe = await request(app).post('/api/account/unsubscribe').send({ token: validToken });
+  assert.equal(validUnsubscribe.status, 200);
+  assert.equal(validUnsubscribe.body.unsubscribed, true);
+  assert.equal(db.prepare('SELECT marketing_emails_opt_out FROM accounts WHERE id=?').get(viewerAccountId).marketing_emails_opt_out, 1);
 });
 
 after(() => {

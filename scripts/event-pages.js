@@ -183,7 +183,19 @@
       feedback.classList.add('event-detail-feedback');
       root.appendChild(feedback);
     }).catch((error) => { status.textContent = error.message; status.classList.add('error'); });
-  }  async function loadEventDetails() {
+  }
+
+  function recordEventView(event) {
+    if (!event.id) return;
+    const token = window.valorAccountToken();
+    if (!token) return;
+    api('/api/account/events/' + encodeURIComponent(event.id) + '/view', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token }
+    }).catch((error) => { console.error('Could not record this event view:', error.message); });
+  }
+
+  async function loadEventDetails() {
     const root = document.getElementById('eventDetails');
     if (!root) return;
     try {
@@ -432,6 +444,7 @@
       if (slug) {
         loadPublicEventReviews(event);
         loadEventFeedback(event);
+        recordEventView(event);
       }
       if (!slug) return;
       const form = document.getElementById('eventTicketForm');

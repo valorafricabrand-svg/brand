@@ -45,6 +45,7 @@
         <button class="tab" type="button" data-admin-tab="partners">Creator partners</button>
         <button class="tab" type="button" data-admin-tab="partnership-applications">Organizer &amp; sponsor inquiries</button>
         <button class="tab" type="button" data-admin-tab="gifts">Gift marketplace</button>
+        <button class="tab" type="button" data-admin-tab="reminders">Reminder emails</button>
       </nav>
       <section class="card admin-section" id="heroSlidesSection" hidden>
         <div class="section-heading">
@@ -132,6 +133,13 @@
           <h3 id="giftRefundsHeading">Refund requests</h3>
           <div class="record-list" id="giftRefundsList"></div>
         </section>
+      </section>
+      <section class="card admin-section" id="remindersSection" hidden>
+        <div class="section-heading">
+          <div><h2>Reminder emails</h2><p>Sends automatically every hour once Resend is configured. Use this to trigger a batch now: countdown reminders to ticket holders (7 and 1 days before their event), and re-engagement emails to signed-in visitors who viewed an event but haven't booked (they can unsubscribe from these any time).</p></div>
+        </div>
+        <button class="button primary" id="sendRemindersButton" type="button">Send reminder emails now</button>
+        <p class="feedback" id="remindersFeedback" aria-live="polite"></p>
       </section>
       <p class="feedback" id="dashboardFeedback" aria-live="polite"></p>
     </section>

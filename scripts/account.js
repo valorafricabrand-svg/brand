@@ -95,9 +95,28 @@
     accountSignedIn.hidden = false;
     document.getElementById('accountDisplayName').textContent = result.account.displayName || 'Welcome to Valor Africa';
     document.getElementById('accountEmailAddress').textContent = result.account.email;
+    document.getElementById('marketingEmailsOptOut').checked = Boolean(result.account.marketingEmailsOptOut);
     setFeedback(signOutFeedback, '');
     notifySession(result.account);
   }
+
+  document.getElementById('marketingEmailsOptOut').addEventListener('change', async (event) => {
+    const checkbox = event.currentTarget;
+    checkbox.disabled = true;
+    try {
+      await window.valorEventsApi('/api/account/preferences', {
+        method: 'POST',
+        headers: accountAuthHeaders(),
+        body: JSON.stringify({ marketingEmailsOptOut: checkbox.checked })
+      });
+      setFeedback(signOutFeedback, 'Preference saved.');
+    } catch (error) {
+      checkbox.checked = !checkbox.checked;
+      setFeedback(signOutFeedback, error.message, true);
+    } finally {
+      checkbox.disabled = false;
+    }
+  });
 
   async function accountSignInResult(result) {
     window.valorSetAccountToken(result.accessToken);

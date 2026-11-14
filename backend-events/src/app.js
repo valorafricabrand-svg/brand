@@ -5,6 +5,7 @@ const cors = require('cors');
 const express = require('express');
 const multer = require('multer');
 const QRCode = require('qrcode');
+const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const db = require('./db');
 const { createLoginLimiter, initializeAdmin, login, requireAdmin } = require('./auth');
@@ -275,6 +276,7 @@ function createApp(options = {}) {
   const smsGateway = options.sms || walletSms;
   const emailGateway = options.email || accountEmail;
   const ticketEmailGateway = options.ticketEmail || require('./ticket-email');
+  const reminderEmailGateway = options.reminderEmail || require('./reminder-email');
   const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
   const googleClient = new OAuth2Client(googleClientId || undefined);
   const verifyGoogleToken = options.verifyGoogleToken || (async (idToken) => {
@@ -356,6 +358,128 @@ function createApp(options = {}) {
       if (await deliverTicketEmail(order.id)) sent += 1;
     }
     return sent;
+  };
+
+  function unsubscribeToken(accountId) {
+    return jwt.sign({ sub: accountId, purpose: 'unsubscribe-marketing' }, process.env.JWT_SECRET, { expiresIn: '365d' });
+  }
+
+  const TICKET_REMINDER_THRESHOLDS_DAYS = [7, 1];
+
+  app.locals.sendDueReminderEmails = async () => {
+    const summary = { ticketRemindersSent: 0, ticketRemindersFailed: 0, viewRemindersSent: 0, viewRemindersFailed: 0 };
+    if (!reminderEmailGateway.isConfigured()) return summary;
+
+    for (const threshold of TICKET_REMINDER_THRESHOLDS_DAYS) {
+      const candidates = db.prepare(`
+        SELECT a.id AS accountId, a.email, a.display_name AS displayName,
+          e.id AS eventId, e.title, e.slug, e.starts_at AS startsAt, e.timezone,
+          e.venue_name AS venueName, e.city, SUM(o.quantity) AS ticketCount
+        FROM orders o
+        JOIN accounts a ON a.id = o.account_id
+        JOIN events e ON e.id = o.event_id
+        WHERE o.order_type='ticket' AND o.status IN ('paid','confirmed')
+          AND e.deleted_at IS NULL
+          AND julianday(e.starts_at) > julianday('now')
+          AND CAST(julianday(e.starts_at) - julianday('now') AS INTEGER) <= ?
+          AND EXISTS (SELECT 1 FROM tickets t WHERE t.order_id = o.id)
+          AND NOT EXISTS (
+            SELECT 1 FROM ticket_reminder_log l
+            WHERE l.account_id=a.id AND l.event_id=e.id AND l.days_before=? AND l.status='sent'
+          )
+        GROUP BY a.id, e.id
+        LIMIT 200
+      `).all(threshold, threshold);
+
+      for (const row of candidates) {
+        const daysRemaining = Math.max(0, Math.round((Date.parse(row.startsAt) - Date.now()) / 86400000));
+        try {
+          await reminderEmailGateway.sendTicketCountdown({
+            idempotencyKey: `valor-ticket-reminder-${row.accountId}-${row.eventId}-${threshold}`,
+            email: row.email,
+            displayName: row.displayName,
+            eventTitle: row.title,
+            eventSlug: row.slug,
+            startsAt: row.startsAt,
+            timezone: row.timezone,
+            venueName: row.venueName,
+            city: row.city,
+            ticketCount: row.ticketCount,
+            daysRemaining,
+            publicSiteUrl
+          });
+          db.prepare(`
+            INSERT INTO ticket_reminder_log (account_id,event_id,days_before,status,error)
+            VALUES (?,?,?,'sent','')
+            ON CONFLICT(account_id,event_id,days_before) DO UPDATE SET status='sent',error='',created_at=datetime('now')
+          `).run(row.accountId, row.eventId, threshold);
+          summary.ticketRemindersSent += 1;
+        } catch (error) {
+          const message = String(error && error.message || 'Unknown reminder email error').slice(0, 500);
+          db.prepare(`
+            INSERT INTO ticket_reminder_log (account_id,event_id,days_before,status,error)
+            VALUES (?,?,?,'failed',?)
+            ON CONFLICT(account_id,event_id,days_before) DO UPDATE SET status='failed',error=excluded.error,created_at=datetime('now')
+          `).run(row.accountId, row.eventId, threshold, message);
+          console.error(`Ticket reminder email failed for account ${row.accountId}, event ${row.eventId}:`, message);
+          summary.ticketRemindersFailed += 1;
+        }
+      }
+    }
+
+    const viewCandidates = db.prepare(`
+      SELECT a.id AS accountId, a.email, a.display_name AS displayName,
+        e.id AS eventId, e.title, e.slug, e.starts_at AS startsAt, e.timezone,
+        e.venue_name AS venueName, e.city
+      FROM event_views ev
+      JOIN accounts a ON a.id = ev.account_id
+      JOIN events e ON e.id = ev.event_id
+      WHERE a.marketing_emails_opt_out = 0
+        AND e.deleted_at IS NULL
+        AND julianday(e.starts_at) > julianday('now')
+        AND ev.last_viewed_at <= datetime('now','-24 hours')
+        AND ev.view_reminder_status != 'sent'
+        AND NOT EXISTS (
+          SELECT 1 FROM orders o2 WHERE o2.account_id=ev.account_id AND o2.event_id=ev.event_id
+            AND o2.order_type='ticket' AND o2.status IN ('paid','confirmed')
+        )
+      LIMIT 200
+    `).all();
+
+    for (const row of viewCandidates) {
+      const daysRemaining = Math.max(0, Math.round((Date.parse(row.startsAt) - Date.now()) / 86400000));
+      try {
+        await reminderEmailGateway.sendViewReminder({
+          idempotencyKey: `valor-view-reminder-${row.accountId}-${row.eventId}`,
+          email: row.email,
+          displayName: row.displayName,
+          eventTitle: row.title,
+          eventSlug: row.slug,
+          startsAt: row.startsAt,
+          timezone: row.timezone,
+          venueName: row.venueName,
+          city: row.city,
+          daysRemaining,
+          publicSiteUrl,
+          unsubscribeUrl: `${publicSiteUrl}/unsubscribe.html?token=${encodeURIComponent(unsubscribeToken(row.accountId))}`
+        });
+        db.prepare(`
+          UPDATE event_views SET view_reminder_status='sent', view_reminder_attempted_at=datetime('now'), view_reminder_error=''
+          WHERE account_id=? AND event_id=?
+        `).run(row.accountId, row.eventId);
+        summary.viewRemindersSent += 1;
+      } catch (error) {
+        const message = String(error && error.message || 'Unknown reminder email error').slice(0, 500);
+        db.prepare(`
+          UPDATE event_views SET view_reminder_status='failed', view_reminder_attempted_at=datetime('now'), view_reminder_error=?
+          WHERE account_id=? AND event_id=?
+        `).run(message, row.accountId, row.eventId);
+        console.error(`Event view reminder email failed for account ${row.accountId}, event ${row.eventId}:`, message);
+        summary.viewRemindersFailed += 1;
+      }
+    }
+
+    return summary;
   };
 
   const origins = (process.env.ALLOWED_ORIGINS || 'http://localhost:8765,http://127.0.0.1:8765')
@@ -516,9 +640,11 @@ function createApp(options = {}) {
       VALUES (?,?,datetime('now','+12 hours'))
     `).run(sha256(token), accountId);
     const account = db.prepare(`
-      SELECT id,email,display_name AS displayName,email_verified_at AS emailVerifiedAt
+      SELECT id,email,display_name AS displayName,email_verified_at AS emailVerifiedAt,
+        marketing_emails_opt_out AS marketingEmailsOptOut
       FROM accounts WHERE id=?
     `).get(accountId);
+    account.marketingEmailsOptOut = Boolean(account.marketingEmailsOptOut);
     return { accessToken: token, expiresIn: '12h', account };
   }
 
@@ -528,6 +654,7 @@ function createApp(options = {}) {
     if (!token) return res.status(401).json({ error: 'Sign in to your Valor Africa account to continue.' });
     const account = db.prepare(`
       SELECT a.id,a.email,a.display_name AS displayName,a.email_verified_at AS emailVerifiedAt,
+        a.marketing_emails_opt_out AS marketingEmailsOptOut,
         s.token_hash AS sessionTokenHash
       FROM account_sessions s JOIN accounts a ON a.id=s.account_id
       WHERE s.token_hash=? AND s.expires_at > datetime('now')
@@ -1737,7 +1864,8 @@ function createApp(options = {}) {
         id: req.account.id,
         email: req.account.email,
         displayName: req.account.displayName,
-        emailVerifiedAt: req.account.emailVerifiedAt
+        emailVerifiedAt: req.account.emailVerifiedAt,
+        marketingEmailsOptOut: Boolean(req.account.marketingEmailsOptOut)
       }
     });
   });
@@ -1745,6 +1873,58 @@ function createApp(options = {}) {
   app.post('/api/auth/account/logout', requireAccount, (req, res) => {
     db.prepare('DELETE FROM account_sessions WHERE token_hash=?').run(req.account.sessionTokenHash);
     res.json({ signedOut: true });
+  });
+
+  app.post('/api/account/preferences', requireAccount, (req, res) => {
+    const { marketingEmailsOptOut } = req.body || {};
+    if (typeof marketingEmailsOptOut !== 'boolean') {
+      return res.status(400).json({ error: 'marketingEmailsOptOut must be true or false.' });
+    }
+    db.prepare('UPDATE accounts SET marketing_emails_opt_out=? WHERE id=?')
+      .run(marketingEmailsOptOut ? 1 : 0, req.account.id);
+    res.json({ marketingEmailsOptOut });
+  });
+
+  app.post('/api/account/unsubscribe', (req, res) => {
+    const token = req.body && req.body.token;
+    if (typeof token !== 'string' || !token) {
+      return res.status(400).json({ error: 'A valid unsubscribe link is required.' });
+    }
+    let payload;
+    try {
+      payload = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({ error: 'This unsubscribe link is invalid or has expired.' });
+    }
+    if (payload.purpose !== 'unsubscribe-marketing' || typeof payload.sub !== 'string') {
+      return res.status(401).json({ error: 'This unsubscribe link is invalid or has expired.' });
+    }
+    const result = db.prepare('UPDATE accounts SET marketing_emails_opt_out=1 WHERE id=?').run(payload.sub);
+    if (result.changes === 0) return res.status(404).json({ error: 'Account not found.' });
+    res.json({ unsubscribed: true });
+  });
+
+  app.post('/api/account/events/:eventId/view', requireAccount, (req, res) => {
+    const event = db.prepare("SELECT id FROM events WHERE id=? AND deleted_at IS NULL").get(req.params.eventId);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    db.prepare(`
+      INSERT INTO event_views (account_id,event_id,first_viewed_at,last_viewed_at)
+      VALUES (?,?,datetime('now'),datetime('now'))
+      ON CONFLICT(account_id,event_id) DO UPDATE SET last_viewed_at=datetime('now')
+    `).run(req.account.id, event.id);
+    res.status(204).end();
+  });
+
+  app.post('/api/reminders/admin/send', requireAdmin, async (req, res, next) => {
+    try {
+      const summary = await app.locals.sendDueReminderEmails();
+      res.json({
+        configured: reminderEmailGateway.isConfigured(),
+        ...summary
+      });
+    } catch (error) {
+      next(error);
+    }
   });
 
   function affiliateEarnings(partnerId) {
