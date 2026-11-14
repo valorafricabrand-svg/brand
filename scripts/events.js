@@ -21,7 +21,7 @@
       title: 'Discover Valor Africa',
       category: 'Featured on Valor Africa',
       adVideo: 'videos/valor-featured-clip-002.mp4',
-      adPoster: 'images/og-image.svg',
+      adPoster: 'images/events/video-ad-poster.svg',
       adDescription: 'Explore events and experiences across Africa.',
       adLink: 'events.html',
       adCta: 'Explore events'
@@ -32,7 +32,7 @@
       title: 'Discover Valor Africa',
       category: 'Featured on Valor Africa',
       adVideo: 'videos/valor-featured-clip-001.mp4',
-      adPoster: 'images/og-image.svg',
+      adPoster: 'images/events/video-ad-poster.svg',
       adDescription: 'Explore events and experiences across Africa.',
       adLink: 'events.html',
       adCta: 'Explore events'

@@ -493,7 +493,7 @@ if (db.prepare('SELECT COUNT(*) AS count FROM hero_slides').get().count === 0) {
   [
     ['valor-sponsored-video-promo', 'Valor Events and Tickets', 'Featured on Valor Africa',
       'Explore experiences and find your next event.', 'video', 'videos/valor-sponsored-video.mp4',
-      'images/og-image.svg', 'events.html', 'Get tickets now'],
+      'images/events/video-ad-poster.svg', 'events.html', 'Get tickets now'],
     ['valor-ticket-buyer-promo', 'Your next great experience starts here.', 'For ticket buyers',
       'Discover concerts, festivals and experiences across Africa.', 'video', 'videos/valor-ticket-buyer.mp4',
       'images/events/valor-ticket-buyer-cover.png', 'events.html', 'Explore events'],
