@@ -16,7 +16,7 @@
   }
 
   function authHeaders() {
-    return { Authorization: Bearer  };
+    return { Authorization: `Bearer ${window.valorAccountToken()}` };
   }
 
   function formatMoney(amount) {
