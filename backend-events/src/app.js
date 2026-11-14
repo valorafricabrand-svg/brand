@@ -914,6 +914,87 @@ function createApp(options = {}) {
     res.json({ linked: Boolean(wallet), ...walletSnapshot(wallet && wallet.id) });
   });
 
+  const walletTransactionTypes = new Set([
+    'deposit', 'ticket_purchase', 'ad_purchase', 'merchandise_purchase',
+    'gift_card_purchase', 'gift_card_redemption', 'gift_card_refund', 'merchant_voucher_purchase'
+  ]);
+  const walletTransactionStatuses = new Set(['pending', 'completed', 'failed', 'review']);
+
+  function walletTransactionFilters(query, walletId) {
+    const clauses = ['wallet_id=?'];
+    const params = [walletId];
+    const { type, status, from, to } = query || {};
+    if (type !== undefined && type !== '' && type !== 'all') {
+      if (!walletTransactionTypes.has(type)) throw Object.assign(new Error('Unknown transaction type filter.'), { statusCode: 400 });
+      clauses.push('transaction_type=?');
+      params.push(type);
+    }
+    if (status !== undefined && status !== '' && status !== 'all') {
+      if (!walletTransactionStatuses.has(status)) throw Object.assign(new Error('Unknown transaction status filter.'), { statusCode: 400 });
+      clauses.push('status=?');
+      params.push(status);
+    }
+    if (from !== undefined && from !== '') {
+      if (!Number.isFinite(Date.parse(from))) throw Object.assign(new Error('Enter a valid "from" date.'), { statusCode: 400 });
+      clauses.push("date(created_at) >= date(?)");
+      params.push(from);
+    }
+    if (to !== undefined && to !== '') {
+      if (!Number.isFinite(Date.parse(to))) throw Object.assign(new Error('Enter a valid "to" date.'), { statusCode: 400 });
+      clauses.push("date(created_at) <= date(?)");
+      params.push(to);
+    }
+    return { where: clauses.join(' AND '), params };
+  }
+
+  app.get('/api/wallet/transactions', requireAccount, (req, res) => {
+    const wallet = walletForAccount(req.account.id);
+    if (!wallet) return res.json({ transactions: [], total: 0, hasMore: false });
+    let where, params;
+    try {
+      ({ where, params } = walletTransactionFilters(req.query, wallet.id));
+    } catch (error) {
+      return res.status(error.statusCode || 400).json({ error: error.message });
+    }
+    const limit = Math.min(200, Math.max(1, Number.parseInt(req.query.limit, 10) || 50));
+    const offset = Math.max(0, Number.parseInt(req.query.offset, 10) || 0);
+    const total = db.prepare(`SELECT COUNT(*) AS count FROM wallet_transactions WHERE ${where}`).get(...params).count;
+    const transactions = db.prepare(`
+      SELECT id,transaction_type AS type,amount_kes AS amountKes,status,receipt,description,created_at AS createdAt
+      FROM wallet_transactions WHERE ${where} ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?
+    `).all(...params, limit, offset);
+    res.json({ transactions, total, hasMore: offset + transactions.length < total });
+  });
+
+  function escapeCsvField(value) {
+    const text = String(value === null || value === undefined ? '' : value);
+    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }
+
+  app.get('/api/wallet/transactions/export', requireAccount, (req, res) => {
+    const wallet = walletForAccount(req.account.id);
+    if (!wallet) return res.status(409).json({ error: 'Link your phone wallet before exporting transactions.' });
+    let where, params;
+    try {
+      ({ where, params } = walletTransactionFilters(req.query, wallet.id));
+    } catch (error) {
+      return res.status(error.statusCode || 400).json({ error: error.message });
+    }
+    const transactions = db.prepare(`
+      SELECT transaction_type AS type,amount_kes AS amountKes,status,receipt,description,created_at AS createdAt
+      FROM wallet_transactions WHERE ${where} ORDER BY created_at DESC,id DESC LIMIT 5000
+    `).all(...params);
+    const header = ['Date', 'Type', 'Description', 'Amount (KES)', 'Status', 'M-Pesa receipt'];
+    const rows = transactions.map((transaction) => [
+      transaction.createdAt, transaction.type, transaction.description,
+      transaction.amountKes, transaction.status, transaction.receipt || ''
+    ]);
+    const csv = [header, ...rows].map((row) => row.map(escapeCsvField).join(',')).join('\r\n');
+    res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="valor-wallet-transactions-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
+  });
+
   app.get('/api/shop/products', (req, res) => {
     const products = db.prepare(`
       SELECT id,name,description,price_kes,image_url,stock,active

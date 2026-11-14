@@ -1717,6 +1717,66 @@ test('event view reminders respect opt-out, exclude ticket holders, and support 
   assert.equal(db.prepare('SELECT marketing_emails_opt_out FROM accounts WHERE id=?').get(viewerAccountId).marketing_emails_opt_out, 1);
 });
 
+test('wallet transaction history supports filtering, pagination, and CSV export', async () => {
+  const auth = createTestAccountAuth('wallet-history@example.com');
+  const { walletId } = createTestWallet(auth, 5000);
+
+  const insert = db.prepare(`
+    INSERT INTO wallet_transactions (id,wallet_id,transaction_type,amount_kes,status,receipt,description,created_at,completed_at)
+    VALUES (?,?,?,?,?,?,?,?,?)
+  `);
+  insert.run(crypto.randomUUID(), walletId, 'deposit', 2000, 'completed', 'DEP0001', 'M-Pesa deposit', '2026-01-05 10:00:00', '2026-01-05 10:00:00');
+  insert.run(crypto.randomUUID(), walletId, 'ticket_purchase', -1500, 'completed', null, 'Ticket purchase', '2026-02-10 10:00:00', '2026-02-10 10:00:00');
+  insert.run(crypto.randomUUID(), walletId, 'deposit', 1000, 'failed', null, 'Failed M-Pesa deposit', '2026-02-15 10:00:00', null);
+
+  const unauthenticated = await request(app).get('/api/wallet/transactions');
+  assert.equal(unauthenticated.status, 401);
+
+  const all = await request(app).get('/api/wallet/transactions').set(auth);
+  assert.equal(all.status, 200);
+  assert.equal(all.body.total, 4);
+  assert.equal(all.body.transactions.length, 4);
+  assert.equal(all.body.hasMore, false);
+
+  const paged = await request(app).get('/api/wallet/transactions?limit=2&offset=0').set(auth);
+  assert.equal(paged.body.transactions.length, 2);
+  assert.equal(paged.body.total, 4);
+  assert.equal(paged.body.hasMore, true);
+
+  const byType = await request(app).get('/api/wallet/transactions?type=deposit').set(auth);
+  assert.equal(byType.body.total, 3);
+  assert.ok(byType.body.transactions.every((transaction) => transaction.type === 'deposit'));
+
+  const byStatus = await request(app).get('/api/wallet/transactions?status=failed').set(auth);
+  assert.equal(byStatus.body.total, 1);
+  assert.equal(byStatus.body.transactions[0].description, 'Failed M-Pesa deposit');
+
+  const byDateRange = await request(app).get('/api/wallet/transactions?from=2026-02-01&to=2026-02-28').set(auth);
+  assert.equal(byDateRange.body.total, 2);
+
+  const badType = await request(app).get('/api/wallet/transactions?type=not-a-real-type').set(auth);
+  assert.equal(badType.status, 400);
+  const badDate = await request(app).get('/api/wallet/transactions?from=not-a-date').set(auth);
+  assert.equal(badDate.status, 400);
+
+  const exportResponse = await request(app).get('/api/wallet/transactions/export?type=deposit').set(auth);
+  assert.equal(exportResponse.status, 200);
+  assert.match(exportResponse.headers['content-type'], /text\/csv/);
+  assert.match(exportResponse.headers['content-disposition'], /attachment; filename="valor-wallet-transactions-/);
+  const csvLines = exportResponse.text.trim().split('\r\n');
+  assert.equal(csvLines[0], 'Date,Type,Description,Amount (KES),Status,M-Pesa receipt');
+  assert.equal(csvLines.length, 4);
+  assert.ok(csvLines.slice(1).every((line) => line.split(',')[1] === 'deposit'));
+  assert.ok(csvLines.slice(1).some((line) => line.includes('Failed M-Pesa deposit')));
+
+  const noWalletAuth = createTestAccountAuth('wallet-history-nowallet@example.com');
+  const noWalletList = await request(app).get('/api/wallet/transactions').set(noWalletAuth);
+  assert.equal(noWalletList.status, 200);
+  assert.deepEqual(noWalletList.body, { transactions: [], total: 0, hasMore: false });
+  const noWalletExport = await request(app).get('/api/wallet/transactions/export').set(noWalletAuth);
+  assert.equal(noWalletExport.status, 409);
+});
+
 after(() => {
   db.close();
   fs.rmSync(path.join(__dirname, '..', '.test-uploads'), { recursive: true, force: true });

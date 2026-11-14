@@ -99,12 +99,19 @@ img { display: block; max-width: 100%; }
 .wallet-heading .eyebrow { margin: 0; }
 .wallet-deposit { margin: 0; padding: 20px; border: 1px solid var(--border); border-radius: 13px; background: #f9fbfd; box-shadow: none; }
 .wallet-deposit > p { margin: 0; color: var(--muted); }
-.wallet-transactions h2 { margin: 0 0 12px; font: 800 22px Manrope, sans-serif; }
+.wallet-transactions h2 { margin: 0; font: 800 22px Manrope, sans-serif; }
+.wallet-transactions-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.wallet-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 16px; padding: 14px; border: 1px solid var(--border); border-radius: 11px; background: #f9fbfd; }
+.wallet-filters label { display: grid; gap: 4px; color: #35445a; font-size: 12px; font-weight: 700; }
+.wallet-filters select, .wallet-filters input { min-height: 40px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff; font-size: 13px; }
+.wallet-filters .button { align-self: end; min-height: 40px; }
 .wallet-transaction-list { display: grid; gap: 10px; }
 .wallet-transaction { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 8px 16px; padding: 14px; border: 1px solid var(--border); border-radius: 11px; }
 .wallet-transaction > div { display: grid; gap: 3px; }
 .wallet-transaction span, .wallet-transaction small { color: var(--muted); font-size: 12px; }
-.wallet-transaction small { grid-column: 1 / -1; }
+.wallet-transaction small, .wallet-receipt-button { grid-column: 1 / -1; }
+.wallet-receipt-button { justify-self: start; margin-top: 2px; }
+#walletLoadMore { width: 100%; margin-top: 14px; }
 .wallet-credit { color: var(--green-dark); }
 .wallet-debit { color: #35445a; }
 .wallet-status { padding: 4px 8px; border-radius: 999px; background: #eef2f6; text-align: center; text-transform: capitalize; }
@@ -777,6 +784,9 @@ img { display: block; max-width: 100%; }
   .service-nav .nav-host { padding: 9px 10px; }
   .wallet-transaction { grid-template-columns: minmax(0,1fr) auto; gap: 8px 10px; }
   .wallet-status { grid-column: 2; }
+  .wallet-filters { flex-direction: column; align-items: stretch; }
+  .wallet-filters .button { width: 100%; }
+  .wallet-transactions-heading { flex-wrap: wrap; }
   .account-auth-actions { grid-template-columns: 1fr; }
   .menu-toggle { display: block; }
   .nav-links { position: absolute; top: calc(100% - 1px); right: 0; left: 0; display: none; align-items: stretch; gap: 0; padding: 10px 16px 17px; border-bottom: 1px solid var(--border); background: #fff; box-shadow: 0 12px 18px rgba(20,39,58,.08); }

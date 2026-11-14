@@ -90,8 +90,40 @@
         <p class="page-feedback" id="walletDepositFeedback" aria-live="polite"></p>
       </form>
       <div class="wallet-transactions">
-        <h2>Recent activity</h2>
+        <div class="wallet-transactions-heading">
+          <h2>Transaction history</h2>
+          <button class="button secondary" id="walletExportButton" type="button">Export CSV</button>
+        </div>
+        <form class="wallet-filters" id="walletFilters">
+          <label>Type
+            <select name="type">
+              <option value="all">All types</option>
+              <option value="deposit">Deposit</option>
+              <option value="ticket_purchase">Ticket purchase</option>
+              <option value="ad_purchase">Ad purchase</option>
+              <option value="merchandise_purchase">Merchandise purchase</option>
+              <option value="gift_card_purchase">Gift card purchase</option>
+              <option value="gift_card_redemption">Gift card redemption</option>
+              <option value="gift_card_refund">Gift card refund</option>
+              <option value="merchant_voucher_purchase">Merchant voucher purchase</option>
+            </select>
+          </label>
+          <label>Status
+            <select name="status">
+              <option value="all">All statuses</option>
+              <option value="completed">Completed</option>
+              <option value="pending">Pending</option>
+              <option value="failed">Failed</option>
+              <option value="review">Review</option>
+            </select>
+          </label>
+          <label>From<input name="from" type="date"></label>
+          <label>To<input name="to" type="date"></label>
+          <button class="button secondary" type="submit">Apply filters</button>
+        </form>
+        <p class="page-feedback" id="walletTransactionsFeedback" aria-live="polite"></p>
         <div id="walletTransactions" class="wallet-transaction-list"></div>
+        <button class="button secondary" id="walletLoadMore" type="button" hidden>Load more</button>
       </div>
     </section>
   </main>
