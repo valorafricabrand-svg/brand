@@ -19,7 +19,11 @@ const allowedCategories = new Set(['Movies & Cinema','Concerts','Festivals','Com
 const allowedTimezones = new Set(['Africa/Nairobi','UTC','Africa/Lagos','Africa/Accra']);
 const allowedFormats = new Set(['Physical','Virtual','Hybrid']);
 const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || path.join(__dirname, '..', 'data', 'uploads', 'events'));
+const heroAdUploadDirectory = path.resolve(
+  process.env.HERO_AD_UPLOAD_DIR || path.join(uploadDirectory, '..', 'hero-ads')
+);
 fs.mkdirSync(uploadDirectory, { recursive: true });
+fs.mkdirSync(heroAdUploadDirectory, { recursive: true });
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -136,6 +140,50 @@ function validImage(buffer) {
   if (buffer.subarray(0, 6).toString('ascii').match(/^GIF8[79]a$/)) return 'gif';
   if (buffer.length >= 12 && buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP') return 'webp';
   return null;
+}
+
+function validHeroVideo(buffer) {
+  if (buffer.length >= 12 && buffer.subarray(4, 8).toString('ascii') === 'ftyp') return 'mp4';
+  if (buffer.length >= 4 && buffer.subarray(0, 4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3]))) return 'webm';
+  return null;
+}
+
+function validateHeroMediaUrl(value, field, { required = false } = {}) {
+  if (typeof value !== 'string' || !value.trim()) return required ? `${field} is required.` : null;
+  const url = value.trim();
+  if (url.length > 2048) return `${field} must be 2048 characters or fewer.`;
+  if (/^https:\/\//i.test(url)) {
+    try {
+      const parsed = new URL(url);
+      if (!parsed.hostname || parsed.username || parsed.password) return `${field} must be a valid HTTPS URL.`;
+      return null;
+    } catch (error) {
+      return `${field} must be a valid HTTPS URL.`;
+    }
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('//')
+      || /[\u0000-\u0020\\]/.test(url) || /(^|\/)\.\.?($|\/)/.test(url)) {
+    return `${field} must be a site path or HTTPS URL.`;
+  }
+  return null;
+}
+
+function heroSlideFromRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    description: row.description,
+    mediaType: row.media_type,
+    mediaUrl: row.media_url,
+    posterUrl: row.poster_url,
+    linkUrl: row.link_url,
+    ctaLabel: row.cta_label,
+    position: row.position,
+    active: Boolean(row.active),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
 }
 
 function validateEvent(body) {
@@ -317,7 +365,7 @@ function createApp(options = {}) {
     const sameOrigin = origin && origin === `${req.protocol}://${req.get('host')}`;
     const localDevelopmentPublicRead = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin || '')
       && req.method === 'GET'
-      && ['/api/events', '/api/ads/featured', '/api/health'].includes(req.path);
+      && ['/api/events', '/api/ads/featured', '/api/ads/hero', '/api/health'].includes(req.path);
     if (!origin || origins.includes(origin) || sameOrigin || localDevelopmentPublicRead) {
       return callback(null, {
         origin: true,
@@ -428,6 +476,14 @@ function createApp(options = {}) {
     }
   });
   app.use('/uploads/events', express.static(uploadDirectory, {
+    fallthrough: false,
+    maxAge: '1d',
+    setHeaders(response) {
+      response.setHeader('X-Content-Type-Options', 'nosniff');
+      response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    }
+  }));
+  app.use('/uploads/hero-ads', express.static(heroAdUploadDirectory, {
     fallthrough: false,
     maxAge: '1d',
     setHeaders(response) {
@@ -615,6 +671,16 @@ function createApp(options = {}) {
       return callback(error);
     }
   }).single('eventImage');
+  const heroVideoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024, files: 1, fields: 12, parts: 13, fieldSize: 10000 },
+    fileFilter(req, file, callback) {
+      if (['video/mp4','video/webm'].includes(file.mimetype)) return callback(null, true);
+      const error = new Error('Upload an MP4 or WebM hero video.');
+      error.status = 400;
+      return callback(error);
+    }
+  }).single('videoFile');
 
   app.get('/api/health', (req, res) => {
     res.json({
@@ -2679,6 +2745,172 @@ function createApp(options = {}) {
     res.json({ events: rows.map(publicEvent) });
   });
 
+  app.get('/api/ads/hero', (req, res) => {
+    const slides = db.prepare(`
+      SELECT * FROM hero_slides WHERE active=1 ORDER BY position ASC,created_at ASC
+    `).all();
+    res.json({ slides: slides.map(heroSlideFromRow) });
+  });
+
+  app.get('/api/ads/admin/hero-slides', requireAdmin, (req, res) => {
+    const slides = db.prepare('SELECT * FROM hero_slides ORDER BY position ASC,created_at ASC').all();
+    res.json({ slides: slides.map(heroSlideFromRow) });
+  });
+
+  app.post('/api/ads/admin/hero-slides/reorder', requireAdmin, (req, res) => {
+    const { ids } = req.body || {};
+    const currentIds = db.prepare('SELECT id FROM hero_slides ORDER BY position ASC,created_at ASC')
+      .all().map((slide) => slide.id);
+    if (!Array.isArray(ids) || ids.length !== currentIds.length
+        || ids.some((id) => typeof id !== 'string')
+        || new Set(ids).size !== currentIds.length
+        || currentIds.some((id) => !ids.includes(id))) {
+      return res.status(400).json({ error: 'The hero slide order is invalid. Refresh and try again.' });
+    }
+    db.transaction(() => {
+      const updatePosition = db.prepare('UPDATE hero_slides SET position=?,updated_at=datetime(\'now\') WHERE id=?');
+      ids.forEach((id, position) => updatePosition.run(position, id));
+    })();
+    res.json({ slides: db.prepare('SELECT * FROM hero_slides ORDER BY position ASC').all().map(heroSlideFromRow) });
+  });
+
+  function validateHeroSlideFields(body, existing, videoFile) {
+    const title = body.title ?? existing?.title ?? '';
+    const category = body.category ?? existing?.category ?? '';
+    const description = body.description ?? existing?.description ?? '';
+    const mediaType = body.mediaType ?? existing?.media_type ?? '';
+    const posterUrl = body.posterUrl ?? existing?.poster_url ?? '';
+    const linkUrl = body.linkUrl ?? existing?.link_url ?? 'events.html';
+    const ctaLabel = body.ctaLabel ?? existing?.cta_label ?? 'Learn more';
+    let mediaUrl = body.mediaUrl ?? existing?.media_url ?? '';
+    let active = existing ? Boolean(existing.active) : true;
+
+    if (videoFile && mediaType !== 'video') return { error: 'Video uploads can only be used on video slides.' };
+    if (typeof title !== 'string' || !title.trim() || title.length > 120) {
+      return { error: 'Enter a slide title (120 characters maximum).' };
+    }
+    if (typeof category !== 'string' || category.length > 80) return { error: 'The slide label must be 80 characters or fewer.' };
+    if (typeof description !== 'string' || description.length > 500) return { error: 'The slide description must be 500 characters or fewer.' };
+    if (!['video','image'].includes(mediaType)) return { error: 'Choose a video or image slide.' };
+    if (typeof posterUrl !== 'string') return { error: 'The poster URL must be text.' };
+    if (typeof linkUrl !== 'string' || !linkUrl.trim() || linkUrl.length > 2048) return { error: 'Enter a valid button destination.' };
+    if (typeof ctaLabel !== 'string' || !ctaLabel.trim() || ctaLabel.length > 60) return { error: 'Enter a button label (60 characters maximum).' };
+
+    const mediaUrlError = validateHeroMediaUrl(
+      videoFile ? '/uploads/hero-ads/new-video.mp4' : mediaUrl,
+      'Video or image URL',
+      { required: !videoFile }
+    );
+    if (mediaUrlError) return { error: mediaUrlError };
+    const posterUrlError = validateHeroMediaUrl(posterUrl, 'Poster URL');
+    if (posterUrlError) return { error: posterUrlError };
+    const linkUrlError = validateHeroMediaUrl(linkUrl, 'Button destination', { required: true });
+    if (linkUrlError) return { error: linkUrlError };
+
+    if (body.active !== undefined) {
+      if ([true,1,'1','true'].includes(body.active)) active = true;
+      else if ([false,0,'0','false'].includes(body.active)) active = false;
+      else return { error: 'Choose whether the slide is active.' };
+    }
+    mediaUrl = videoFile ? `/uploads/hero-ads/${videoFile.filename}` : mediaUrl.trim();
+    if (mediaType === 'image' && videoFile) return { error: 'Image slides cannot contain a video upload.' };
+    return {
+      fields: {
+        title: title.trim(),
+        category: category.trim(),
+        description: description.trim(),
+        mediaType,
+        mediaUrl,
+        posterUrl: posterUrl.trim(),
+        linkUrl: linkUrl.trim(),
+        ctaLabel: ctaLabel.trim(),
+        active: active ? 1 : 0
+      }
+    };
+  }
+
+  app.post('/api/ads/admin/hero-slides', requireAdmin, heroVideoUpload, (req, res, next) => {
+    const validated = validateHeroSlideFields(req.body || {}, null, req.file);
+    if (validated.error) return res.status(400).json({ error: validated.error });
+    const id = crypto.randomUUID();
+    let mediaUrl = validated.fields.mediaUrl;
+    if (req.file) {
+      const extension = validHeroVideo(req.file.buffer);
+      if (!extension) return res.status(400).json({ error: 'The uploaded file is not a supported MP4 or WebM video.' });
+      mediaUrl = `/uploads/hero-ads/${id}.${extension}`;
+      try {
+        fs.writeFileSync(path.join(heroAdUploadDirectory, `${id}.${extension}`), req.file.buffer, { flag: 'wx' });
+      } catch (error) {
+        return next(error);
+      }
+      validated.fields.mediaUrl = mediaUrl;
+    }
+    try {
+      const position = db.prepare('SELECT COALESCE(MAX(position),-1)+1 AS position FROM hero_slides').get().position;
+      const { title,category,description,mediaType,posterUrl,linkUrl,ctaLabel,active } = validated.fields;
+      db.prepare(`
+        INSERT INTO hero_slides (id,title,category,description,media_type,media_url,poster_url,link_url,cta_label,position,active)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+      `).run(id,title,category,description,mediaType,mediaUrl,posterUrl,linkUrl,ctaLabel,position,active);
+      return res.status(201).json({
+        slide: heroSlideFromRow(db.prepare('SELECT * FROM hero_slides WHERE id=?').get(id))
+      });
+    } catch (error) {
+      if (req.file) {
+        try {
+          fs.unlinkSync(path.join(heroAdUploadDirectory, path.basename(mediaUrl)));
+        } catch (cleanupError) {
+          console.error('Could not remove an unlinked hero video:', cleanupError.message);
+        }
+      }
+      return next(error);
+    }
+  });
+
+  app.patch('/api/ads/admin/hero-slides/:id', requireAdmin, heroVideoUpload, (req, res, next) => {
+    const existing = db.prepare('SELECT * FROM hero_slides WHERE id=?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Hero slide not found.' });
+    const validated = validateHeroSlideFields(req.body || {}, existing, req.file);
+    if (validated.error) return res.status(400).json({ error: validated.error });
+    let mediaUrl = validated.fields.mediaUrl;
+    if (req.file) {
+      const extension = validHeroVideo(req.file.buffer);
+      if (!extension) return res.status(400).json({ error: 'The uploaded file is not a supported MP4 or WebM video.' });
+      mediaUrl = `/uploads/hero-ads/${crypto.randomUUID()}.${extension}`;
+      try {
+        fs.writeFileSync(path.join(heroAdUploadDirectory, path.basename(mediaUrl)), req.file.buffer, { flag: 'wx' });
+      } catch (error) {
+        return next(error);
+      }
+      validated.fields.mediaUrl = mediaUrl;
+    }
+    try {
+      const { title,category,description,mediaType,posterUrl,linkUrl,ctaLabel,active } = validated.fields;
+      db.prepare(`
+        UPDATE hero_slides
+        SET title=?,category=?,description=?,media_type=?,media_url=?,poster_url=?,link_url=?,cta_label=?,active=?,updated_at=datetime('now')
+        WHERE id=?
+      `).run(title,category,description,mediaType,mediaUrl,posterUrl,linkUrl,ctaLabel,active,req.params.id);
+      if (req.file && existing.media_url.startsWith('/uploads/hero-ads/')) {
+        try {
+          fs.unlinkSync(path.join(heroAdUploadDirectory, path.basename(existing.media_url)));
+        } catch (cleanupError) {
+          if (cleanupError.code !== 'ENOENT') console.error('Could not remove the replaced hero video:', cleanupError.message);
+        }
+      }
+      return res.json({ slide: heroSlideFromRow(db.prepare('SELECT * FROM hero_slides WHERE id=?').get(req.params.id)) });
+    } catch (error) {
+      if (req.file) {
+        try {
+          fs.unlinkSync(path.join(heroAdUploadDirectory, path.basename(mediaUrl)));
+        } catch (cleanupError) {
+          console.error('Could not remove an unlinked hero video:', cleanupError.message);
+        }
+      }
+      return next(error);
+    }
+  });
+
   app.get('/api/ads/admin/packages', requireAdmin, (req, res) => {
     res.json({
       packages: db.prepare(`
@@ -2722,7 +2954,8 @@ function createApp(options = {}) {
   function createPendingOrder({
     orderType, eventId = null, adBookingId = null, accountId = null, buyerName, phone,
     ticketType = '', quantity = 1, amountKes, paymentMethod = 'mpesa',
-    affiliatePartnerId = null, affiliateCommissionPercent = null, affiliateReferralTokenHash = null
+    affiliatePartnerId = null, affiliateCommissionPercent = null, affiliateReferralTokenHash = null,
+    giftRecipientName = '', giftRecipientContact = '', giftMessage = ''
   }) {
     const id = crypto.randomUUID();
     const accessToken = crypto.randomBytes(32).toString('base64url');
@@ -2730,13 +2963,15 @@ function createApp(options = {}) {
       INSERT INTO orders (
         id,access_token_hash,order_type,event_id,ad_booking_id,account_id,buyer_name,phone,
         ticket_type,quantity,amount_kes,payment_method,ticket_email_status,
-        affiliate_partner_id,affiliate_commission_percent,affiliate_referral_token_hash
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        affiliate_partner_id,affiliate_commission_percent,affiliate_referral_token_hash,
+        gift_recipient_name,gift_recipient_contact,gift_message
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(
       id, sha256(accessToken), orderType, eventId, adBookingId, accountId, buyerName.trim(),
       phone, ticketType, quantity, amountKes, paymentMethod,
       orderType === 'ticket' ? 'not_sent' : 'not_applicable',
-      affiliatePartnerId, affiliateCommissionPercent, affiliateReferralTokenHash
+      affiliatePartnerId, affiliateCommissionPercent, affiliateReferralTokenHash,
+      giftRecipientName, giftRecipientContact, giftMessage
     );
     return { id, accessToken };
   }
@@ -2894,9 +3129,23 @@ function createApp(options = {}) {
     })();
   }
 
+  app.get('/api/events/:id/seats', (req, res) => {
+    const event = db.prepare("SELECT * FROM events WHERE id=? AND status='approved' AND deleted_at IS NULL").get(req.params.id);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    const showtimeAt = typeof req.query.showtimeAt === 'string' ? req.query.showtimeAt : '';
+    const soldSeats = showtimeAt ? db.prepare(`
+      SELECT t.seat_label AS seatLabel
+      FROM tickets t JOIN orders o ON o.id=t.order_id
+      WHERE t.event_id=? AND t.showtime_at=? AND o.status IN ('paid','confirmed','pending')
+    `).all(event.id, showtimeAt).map((row) => row.seatLabel).filter(Boolean) : [];
+    res.json({ soldSeats });
+  });
+
   app.post('/api/orders/tickets', requireAccount, async (req, res, next) => {
     try {
-      const { eventId, ticketType, buyerName, phone: inputPhone, quantity = 1 } = req.body || {};
+      const { eventId, ticketType, buyerName, phone: inputPhone, quantity = 1,
+        giftRecipientName = '', giftRecipientContact = '', giftMessage = '',
+        showtimeAt = '', seatLabels = [] } = req.body || {};
       const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
       if (!['mpesa','wallet','stripe','nowpayments'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa, Valor Wallet, Stripe Checkout, or NOWPayments as the payment method.' });
       req.wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
@@ -2913,6 +3162,26 @@ function createApp(options = {}) {
       const event = db.prepare("SELECT * FROM events WHERE id = ? AND status = 'approved' AND deleted_at IS NULL").get(eventId);
       if (!event) return res.status(404).json({ error: 'This event is not available for ticket sales.' });
       if (Date.parse(event.starts_at) <= Date.now()) return res.status(409).json({ error: 'Ticket sales for this event have closed.' });
+      let movieSeats = [];
+      const isMovie = /movie|cinema|film/i.test(`${event.category || ''} ${event.tags_json || ''}`);
+      if (giftRecipientName || giftRecipientContact || giftMessage) {
+        if (typeof giftRecipientName !== 'string' || !giftRecipientName.trim() || giftRecipientName.length > 120) return res.status(400).json({ error: 'Enter the gift recipient’s name.' });
+        if (typeof giftRecipientContact !== 'string' || !giftRecipientContact.trim() || giftRecipientContact.length > 160) return res.status(400).json({ error: 'Enter the gift recipient’s email address or phone number.' });
+        if (typeof giftMessage !== 'string' || giftMessage.length > 500) return res.status(400).json({ error: 'The gift message must be 500 characters or fewer.' });
+      }
+      if (isMovie) {
+        if (typeof showtimeAt !== 'string' || !showtimeAt || !Number.isFinite(Date.parse(showtimeAt))) return res.status(400).json({ error: 'Choose a movie showtime.' });
+        if (!Array.isArray(seatLabels) || seatLabels.length !== quantity || new Set(seatLabels).size !== quantity) return res.status(400).json({ error: 'Choose one seat for every movie ticket.' });
+        movieSeats = seatLabels.map((seat) => String(seat).trim().toUpperCase());
+        if (movieSeats.some((seat) => !/^[A-Z][1-8]$/.test(seat))) return res.status(400).json({ error: 'Choose valid movie seats.' });
+        for (const seat of movieSeats) {
+          const sold = db.prepare(`
+            SELECT 1 FROM tickets t JOIN orders o ON o.id=t.order_id
+            WHERE t.event_id=? AND t.showtime_at=? AND t.seat_label=? AND o.status IN ('pending','paid','confirmed') LIMIT 1
+          `).get(eventId, showtimeAt, seat);
+          if (sold) return res.status(409).json({ error: `Seat ${seat} is already booked for this showtime.` });
+        }
+      }
       let price;
       if (ticketType === 'Regular') price = event.regular_price;
       else if (ticketType === 'Early bird' && event.early_bird_price !== null && Date.parse(event.early_bird_ends) > Date.now()) price = event.early_bird_price;
@@ -2963,7 +3232,8 @@ function createApp(options = {}) {
             amountKes: price * quantity, paymentMethod: price === 0 ? 'free' : paymentMethod,
             affiliatePartnerId: affiliate?.id || null,
             affiliateCommissionPercent: affiliate?.commission_percent ?? null,
-            affiliateReferralTokenHash: affiliate?.token_hash || null
+            affiliateReferralTokenHash: affiliate?.token_hash || null,
+            giftRecipientName, giftRecipientContact, giftMessage
           });
           if (price === 0) {
             db.prepare("UPDATE orders SET status='confirmed',result_description=?,paid_at=datetime('now') WHERE id=?")
@@ -3229,11 +3499,100 @@ function createApp(options = {}) {
     }
   });
 
+  async function completeGiftCardMpesaPayment(callback, purchase) {
+    if (purchase.status !== 'pending') return;
+    if (Number(callback.ResultCode) !== 0) {
+      db.transaction(() => {
+        db.prepare("UPDATE gift_card_purchases SET status='failed' WHERE id=? AND status='pending'").run(purchase.id);
+        db.prepare("UPDATE gift_cards SET status='revoked' WHERE purchase_id=? AND status='pending'").run(purchase.id);
+      })();
+      return;
+    }
+    const query = await paymentGateway.queryStkPush(purchase.checkout_request_id);
+    if (String(query.CheckoutRequestID) !== purchase.checkout_request_id || String(query.ResultCode) !== '0') return;
+    const metadata = callback.CallbackMetadata && callback.CallbackMetadata.Item;
+    const values = Array.isArray(metadata) ? Object.fromEntries(metadata.map((item) => [item.Name, item.Value])) : {};
+    if (Number(values.Amount) !== purchase.amount_kes || typeof values.MpesaReceiptNumber !== 'string' || !values.MpesaReceiptNumber) {
+      db.prepare("UPDATE gift_card_purchases SET status='review' WHERE id=? AND status='pending'").run(purchase.id);
+      return;
+    }
+    db.transaction(() => {
+      const current = db.prepare("SELECT id,status FROM gift_card_purchases WHERE id=? AND status='pending'").get(purchase.id);
+      if (!current) return;
+      db.prepare(`
+        UPDATE gift_card_purchases SET status='paid',mpesa_receipt=?,paid_at=datetime('now')
+        WHERE id=? AND status='pending'
+      `).run(values.MpesaReceiptNumber, purchase.id);
+      const card = db.prepare("SELECT id,amount_kes FROM gift_cards WHERE purchase_id=? AND status='pending'").get(purchase.id);
+      if (!card) throw new Error('Pending gift card is missing for a confirmed M-Pesa purchase.');
+      db.prepare("UPDATE gift_cards SET status='issued',issued_at=datetime('now') WHERE id=? AND status='pending'").run(card.id);
+      addGiftCardLedgerEntry(card.id, 'issued', card.amount_kes, purchase.account_id, purchase.id, 'Gift card purchase confirmed by M-Pesa.');
+    })();
+  }
+
+  async function completeMerchantVoucherMpesaPayment(callback, order) {
+    if (order.status !== 'pending') return;
+    if (Number(callback.ResultCode) !== 0) {
+      db.transaction(() => {
+        db.prepare("UPDATE merchant_voucher_orders SET status='failed' WHERE id=? AND status='pending'").run(order.id);
+        db.prepare("UPDATE merchant_voucher_codes SET status='available',order_id=NULL WHERE order_id=? AND status='reserved'").run(order.id);
+      })();
+      return;
+    }
+    const query = await paymentGateway.queryStkPush(order.checkout_request_id);
+    if (String(query.CheckoutRequestID) !== order.checkout_request_id || String(query.ResultCode) !== '0') return;
+    const metadata = callback.CallbackMetadata && callback.CallbackMetadata.Item;
+    const values = Array.isArray(metadata) ? Object.fromEntries(metadata.map((item) => [item.Name, item.Value])) : {};
+    if (Number(values.Amount) !== order.amount_kes || typeof values.MpesaReceiptNumber !== 'string' || !values.MpesaReceiptNumber) {
+      db.prepare("UPDATE merchant_voucher_orders SET status='review' WHERE id=? AND status='pending'").run(order.id);
+      return;
+    }
+    db.transaction(() => {
+      const current = db.prepare("SELECT id,code_id FROM merchant_voucher_orders WHERE id=? AND status='pending'").get(order.id);
+      if (!current) return;
+      const sold = db.prepare("UPDATE merchant_voucher_codes SET status='sold' WHERE id=? AND order_id=? AND status='reserved'")
+        .run(current.code_id, order.id);
+      if (sold.changes !== 1) throw new Error('Reserved merchant voucher code is missing for a confirmed M-Pesa purchase.');
+      db.prepare(`
+        UPDATE merchant_voucher_orders SET status='paid',mpesa_receipt=?,paid_at=datetime('now')
+        WHERE id=? AND status='pending'
+      `).run(values.MpesaReceiptNumber, order.id);
+      db.prepare(`
+        INSERT INTO merchant_voucher_ledger
+          (id,merchant_id,order_id,transaction_type,amount_kes,reference_id,description)
+        SELECT 'sale-' || id,merchant_id,id,'sale',amount_kes,id,'Confirmed merchant voucher sale.'
+        FROM merchant_voucher_orders WHERE id=? AND status='paid'
+      `).run(order.id);
+    })();
+  }
+
   app.post('/api/mpesa/callback', async (req, res) => {
     const callback = req.body && req.body.Body && req.body.Body.stkCallback;
     if (!callback || typeof callback.CheckoutRequestID !== 'string' || typeof callback.MerchantRequestID !== 'string') {
       console.error('Received an invalid M-Pesa callback payload.');
       return res.status(400).json({ ResultCode: 1, ResultDesc: 'Invalid callback payload.' });
+    }
+    const giftCardPurchase = db.prepare(`
+      SELECT * FROM gift_card_purchases WHERE checkout_request_id=? AND merchant_request_id=?
+    `).get(callback.CheckoutRequestID, callback.MerchantRequestID);
+    if (giftCardPurchase) {
+      try {
+        await completeGiftCardMpesaPayment(callback, giftCardPurchase);
+      } catch (error) {
+        console.error('M-Pesa gift-card payment verification failed; gift code remains unavailable:', error.message);
+      }
+      return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
+    }
+    const merchantVoucherOrder = db.prepare(`
+      SELECT * FROM merchant_voucher_orders WHERE checkout_request_id=? AND merchant_request_id=?
+    `).get(callback.CheckoutRequestID, callback.MerchantRequestID);
+    if (merchantVoucherOrder) {
+      try {
+        await completeMerchantVoucherMpesaPayment(callback, merchantVoucherOrder);
+      } catch (error) {
+        console.error('M-Pesa merchant voucher payment verification failed; voucher code remains unavailable:', error.message);
+      }
+      return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
     }
     const walletDeposit = db.prepare(`
       SELECT * FROM wallet_transactions WHERE checkout_request_id=? AND merchant_request_id=?
@@ -3357,6 +3716,9 @@ function createApp(options = {}) {
   app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
     if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE' && req.path.startsWith('/api/ads/admin/hero-slides')) {
+        return res.status(400).json({ error: 'Hero videos must be 100 MB or smaller.' });
+      }
       return res.status(400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'Event poster must be 10 MB or smaller.' : 'Invalid image upload.' });
     }
     if (error.status === 400) return res.status(400).json({ error: error.message || 'Invalid request.' });

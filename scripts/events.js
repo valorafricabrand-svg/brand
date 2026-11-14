@@ -2,6 +2,17 @@
   'use strict';
 
   let events = [];
+  const organizerPromo = {
+    id: 'valor-organizer-promo',
+    isPlatformPromo: true,
+    title: 'Grow your event with Valor Africa',
+    category: 'For organizers',
+    location: 'Valor Africa Events',
+    startsAt: new Date().toISOString(),
+    adVideo: 'videos/valor-ads-organizer-intro.mp4',
+    adPoster: 'images/events/valor-ads-promo-poster.svg',
+    tickets: []
+  };
   const ticketBuyerPromo = {
     id: 'valor-ticket-buyer-promo',
     isPlatformPromo: true,
@@ -14,31 +25,18 @@
     adPoster: 'images/events/valor-ticket-buyer-cover.png',
     tickets: []
   };
-  const featuredVideoPromos = [
-    {
-      id: 'valor-featured-clip-002',
-      isSponsoredVideoPromo: true,
-      title: 'Discover Valor Africa',
-      category: 'Featured on Valor Africa',
-      adVideo: 'videos/valor-featured-clip-002.mp4',
-      adPoster: 'images/og-image.svg',
-      adDescription: 'Explore events and experiences across Africa.',
-      adLink: 'events.html',
-      adCta: 'Explore events'
-    },
-    {
-      id: 'valor-featured-clip-001',
-      isSponsoredVideoPromo: true,
-      title: 'Discover Valor Africa',
-      category: 'Featured on Valor Africa',
-      adVideo: 'videos/valor-featured-clip-001.mp4',
-      adPoster: 'images/og-image.svg',
-      adDescription: 'Explore events and experiences across Africa.',
-      adLink: 'events.html',
-      adCta: 'Explore events'
-    }
-  ];
-  let adEvents = [...featuredVideoPromos, ticketBuyerPromo, ...events.slice(0, 1)];
+  const sponsoredVideoPromo = {
+    id: 'valor-sponsored-video-promo',
+    isSponsoredVideoPromo: true,
+    title: 'Valor Events and Tickets',
+    category: 'Featured on Valor Africa',
+    adVideo: 'videos/valor-sponsored-video.mp4',
+    adPoster: 'images/og-image.svg',
+    adDescription: 'Explore experiences and find your next event.',
+    adLink: 'events.html',
+    adCta: 'Get tickets now'
+  };
+  let adEvents = [sponsoredVideoPromo, ticketBuyerPromo, organizerPromo, ...events.slice(0, 1)];
   let checkoutEnabled = false;
   let mpesaCheckoutEnabled = false;
   let stripeCheckoutEnabled = false;
@@ -1041,15 +1039,19 @@
 
   function refreshPromotionalCarousel() {
     adEvents = [
-      ...featuredVideoPromos,
+      sponsoredVideoPromo,
       ticketBuyerPromo,
+      organizerPromo,
       ...(promotedEvents.length ? promotedEvents : events.slice(0, 1))
     ];
     renderAdSlides();
     const adNote = document.querySelector('.ad-note');
-    if (adNote) adNote.textContent = 'Featured on Valor Africa sponsored events';
+    if (adNote) adNote.textContent = adEvents.some((event) => !event.isPlatformPromo)
+      ? 'Organizer spotlight · sponsored events'
+      : 'Host your next event with Valor Africa.';
     const sponsoredBadge = document.querySelector('.sponsored-badge');
     if (sponsoredBadge) {
+      sponsoredBadge.textContent = 'FOR EVENT ORGANIZERS';
       sponsoredBadge.hidden = !adEvents.length;
     }
   }

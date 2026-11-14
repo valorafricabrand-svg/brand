@@ -61,6 +61,18 @@ input,select,textarea{width:100%;min-height:42px;padding:9px 11px;border:1px sol
 .gift-payout-fields{display:grid;grid-template-columns:1fr 1.4fr 1.3fr auto;align-items:end}
 .gift-payout-fields input{min-width:0}
 .gift-payout-fields .button{white-space:nowrap}
+.hero-slide-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px;margin-bottom:16px;padding:16px;border-radius:11px;background:#f7f9fb}
+.hero-slide-form label{margin:0 0 12px}
+.hero-slide-wide,.hero-slide-upload-note{grid-column:1/-1}
+.hero-slide-upload-note,.hero-slide-help{margin:0 0 12px;color:var(--muted);font-size:12px}
+.hero-slide-active{display:flex;align-items:center;gap:9px}
+.hero-slide-active input{width:18px;min-height:18px;margin:0}
+.hero-slide-form>.button{align-self:end;justify-self:start;margin-bottom:12px}
+.hero-slide-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}
+.hero-slide-row .record-meta,.hero-slide-row .record-actions{grid-column:1/-1}
+.hero-slide-row label{min-width:0;margin:0 0 10px;font-size:11px}
+.hero-slide-row input,.hero-slide-row select,.hero-slide-row textarea{min-width:0;font-size:13px}
+.button:disabled{cursor:wait;opacity:.6}
 @media(max-width:760px){.package-form,.package-row,.product-form,.product-row{grid-template-columns:1fr 1fr}.package-form .button,.product-form .button{grid-column:1/-1}.section-heading{align-items:stretch;flex-direction:column}.section-heading select{width:100%}}
 @media(max-width:760px){.gift-payout-fields{grid-template-columns:1fr 1fr}.gift-payout-fields .button{grid-column:1/-1}}
-@media(max-width:470px){.package-form,.package-row,.product-form,.product-row{grid-template-columns:1fr}.record-actions .button{flex:1 1 100%}.tabs{margin-inline:-5px}}
+@media(max-width:470px){.package-form,.package-row,.product-form,.product-row,.hero-slide-form,.hero-slide-row{grid-template-columns:1fr}.hero-slide-wide,.hero-slide-upload-note,.hero-slide-row .record-meta,.hero-slide-row .record-actions{grid-column:auto}.record-actions .button{flex:1 1 100%}.tabs{margin-inline:-5px}}

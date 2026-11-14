@@ -23,6 +23,23 @@
       <h2>Get your tickets</h2>
       <label>Ticket type<select name="ticketType" required></select></label>
       <label>Quantity<input name="quantity" type="number" min="1" max="10" value="1" required></label>
+      <fieldset class="checkout-choice" id="movieSelection" hidden>
+        <legend>Movie showtime and seats</legend>
+        <label>Showtime<select name="showtimeAt"></select></label>
+        <div id="seatSelection" class="seat-selection" aria-label="Choose seats"></div>
+        <p class="checkout-note" id="seatSelectionNote">Choose seats for each ticket.</p>
+      </fieldset>
+      <fieldset class="checkout-choice">
+        <legend>Who are the tickets for?</legend>
+        <label><input type="radio" name="deliveryType" value="self" checked> For me</label>
+        <label><input type="radio" name="deliveryType" value="gift"> Send as a gift</label>
+      </fieldset>
+      <fieldset class="checkout-choice" id="giftFields" hidden>
+        <legend>Gift recipient</legend>
+        <label>Recipient name<input name="giftRecipientName" maxlength="120"></label>
+        <label>Recipient email or phone<input name="giftRecipientContact" maxlength="160" autocomplete="email"></label>
+        <label>Gift message<textarea name="giftMessage" maxlength="500" rows="3" placeholder="Write a personal message"></textarea></label>
+      </fieldset>
       <label>Your name<input name="buyerName" maxlength="120" autocomplete="name" required></label>
       <label>Payment method<select name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="stripe" disabled>Card (Stripe Checkout; coming soon)</option><option value="nowpayments" disabled>Cryptocurrency (NOWPayments; coming soon)</option></select></label>
       <p class="checkout-note" id="nowpaymentsPriceNote" hidden></p>

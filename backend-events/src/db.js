@@ -87,6 +87,27 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS hero_slides (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    media_type TEXT NOT NULL CHECK (media_type IN ('video','image')),
+    media_url TEXT NOT NULL,
+    poster_url TEXT NOT NULL DEFAULT '',
+    link_url TEXT NOT NULL DEFAULT 'events.html',
+    cta_label TEXT NOT NULL DEFAULT 'Learn more',
+    position INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS hero_slides_position ON hero_slides(active,position);
+  CREATE TABLE IF NOT EXISTS hero_slide_migrations (
+    migration TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS ad_bookings (
     id TEXT PRIMARY KEY,
     event_id TEXT NOT NULL REFERENCES events(id),
@@ -463,6 +484,45 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS gift_refund_requests_review ON gift_refund_requests(status,created_at);
 `);
 
+if (db.prepare('SELECT COUNT(*) AS count FROM hero_slides').get().count === 0) {
+  const insertHeroSlide = db.prepare(`
+    INSERT INTO hero_slides (
+      id,title,category,description,media_type,media_url,poster_url,link_url,cta_label,position
+    ) VALUES (?,?,?,?,?,?,?,?,?,?)
+  `);
+  [
+    ['valor-sponsored-video-promo', 'Valor Events and Tickets', 'Featured on Valor Africa',
+      'Explore experiences and find your next event.', 'video', 'videos/valor-sponsored-video.mp4',
+      'images/og-image.svg', 'events.html', 'Get tickets now'],
+    ['valor-ticket-buyer-promo', 'Your next great experience starts here.', 'For ticket buyers',
+      'Discover concerts, festivals and experiences across Africa.', 'video', 'videos/valor-ticket-buyer.mp4',
+      'images/events/valor-ticket-buyer-cover.png', 'events.html', 'Explore events'],
+    ['valor-organizer-promo', 'Grow your event with Valor Africa', 'For organizers',
+      'Turn your next event into a full house. Create your event listing, choose ticket types and prices, and promote your event with Valor Ads.',
+      'video', 'videos/valor-ads-organizer-intro.mp4', 'images/events/valor-ads-promo-poster.svg',
+      'host.html', 'Host with Valor']
+  ].forEach((slide, position) => insertHeroSlide.run(...slide.slice(0, 9), position));
+}
+
+const insertFeaturedClip = db.prepare(`
+  INSERT OR IGNORE INTO hero_slides (
+    id,title,category,description,media_type,media_url,poster_url,link_url,cta_label,position
+  ) VALUES (?,?,?,?,?,?,'','events.html','Explore events',?)
+`);
+[
+  ['valor-featured-clip-002', 'Discover Valor Africa',
+    'Featured on Valor Africa', 'Explore events and experiences across Africa.',
+    'video', 'videos/valor-featured-clip-002.mp4'],
+  ['valor-featured-clip-001', 'Discover Valor Africa',
+    'Featured on Valor Africa', 'Explore events and experiences across Africa.',
+    'video', 'videos/valor-featured-clip-001.mp4']
+].forEach((slide) => {
+  const exists = db.prepare('SELECT 1 FROM hero_slides WHERE id=?').get(slide[0]);
+  if (exists) return;
+  const position = db.prepare('SELECT COALESCE(MAX(position),-1)+1 AS position FROM hero_slides').get().position;
+  insertFeaturedClip.run(...slide, position);
+});
+
 const eventColumns = db.prepare('PRAGMA table_info(events)').all();
 if (!eventColumns.some((column) => column.name === 'organizer_account_id')) {
   db.exec('ALTER TABLE events ADD COLUMN organizer_account_id TEXT REFERENCES accounts(id)');
@@ -519,16 +579,43 @@ if (!orderColumns.some((column) => column.name === 'affiliate_commission_percent
 if (!orderColumns.some((column) => column.name === 'affiliate_referral_token_hash')) {
   db.exec('ALTER TABLE orders ADD COLUMN affiliate_referral_token_hash TEXT');
 }
+if (!orderColumns.some((column) => column.name === 'gift_recipient_name')) {
+  db.exec("ALTER TABLE orders ADD COLUMN gift_recipient_name TEXT NOT NULL DEFAULT ''");
+}
+if (!orderColumns.some((column) => column.name === 'gift_recipient_contact')) {
+  db.exec("ALTER TABLE orders ADD COLUMN gift_recipient_contact TEXT NOT NULL DEFAULT ''");
+}
+if (!orderColumns.some((column) => column.name === 'gift_message')) {
+  db.exec("ALTER TABLE orders ADD COLUMN gift_message TEXT NOT NULL DEFAULT ''");
+}
 db.exec('CREATE INDEX IF NOT EXISTS orders_affiliate_partner ON orders(affiliate_partner_id, status, paid_at)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS wallets_account ON wallets(account_id)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_session ON orders(stripe_session_id) WHERE stripe_session_id IS NOT NULL');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS orders_nowpayments_invoice ON orders(nowpayments_invoice_id) WHERE nowpayments_invoice_id IS NOT NULL');
+const ticketColumns = db.prepare('PRAGMA table_info(tickets)').all();
+if (!ticketColumns.some((column) => column.name === 'seat_label')) {
+  db.exec("ALTER TABLE tickets ADD COLUMN seat_label TEXT NOT NULL DEFAULT ''");
+}
+if (!ticketColumns.some((column) => column.name === 'showtime_at')) {
+  db.exec("ALTER TABLE tickets ADD COLUMN showtime_at TEXT NOT NULL DEFAULT ''");
+}
 db.exec('DROP TABLE IF EXISTS wallet_sessions');
 
 const walletTransactionSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='wallet_transactions'").get().sql;
-if (!walletTransactionSchema.includes("'merchandise_purchase'")) {
+const walletTransactionColumns = db.prepare('PRAGMA table_info(wallet_transactions)').all();
+const walletTransactionColumnNames = new Set(walletTransactionColumns.map((column) => column.name));
+if (!walletTransactionSchema.includes("'merchant_voucher_purchase'")) {
   db.exec('PRAGMA foreign_keys = OFF');
   try {
+    const oldMerchandiseOrderId = walletTransactionColumnNames.has('merchandise_order_id')
+      ? 'merchandise_order_id'
+      : 'NULL';
+    const oldReferenceType = walletTransactionColumnNames.has('reference_type')
+      ? 'reference_type'
+      : "''";
+    const oldReferenceId = walletTransactionColumnNames.has('reference_id')
+      ? 'reference_id'
+      : "''";
     db.exec(`
       BEGIN IMMEDIATE;
       CREATE TABLE wallet_transactions_new (

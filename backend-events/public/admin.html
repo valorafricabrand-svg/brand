@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Event admin | Valor Africa</title>
-  <link rel="stylesheet" href="/admin-assets/admin.css?v=gift-marketplace-1">
-  <script src="/admin-assets/admin.js?v=gift-marketplace-1" defer></script>
+  <link rel="stylesheet" href="/admin-assets/admin.css?v=hero-slide-manager-2">
+  <script src="/admin-assets/admin.js?v=hero-slide-manager-2" defer></script>
 </head>
 <body>
   <main class="admin-shell">
@@ -19,8 +19,8 @@
     </header>
     <section class="card login-card" id="loginPanel">
       <p class="kicker">SECURE ORGANIZER TOOLS</p>
-      <h1>Manage event listings</h1>
-      <p>Sign in to manage event listings, merchandise, advertising, orders, and creator partners.</p>
+      <h1>Manage Valor Africa</h1>
+      <p>Sign in to manage event listings, homepage hero slides, merchandise, advertising, orders, and creator partners.</p>
       <form id="loginForm">
         <label for="username">Admin username</label>
         <input id="username" name="username" autocomplete="username" required>
@@ -38,6 +38,7 @@
       </div>
       <nav class="tabs" aria-label="Admin sections">
         <button class="tab is-active" type="button" data-admin-tab="submissions">Event submissions</button>
+        <button class="tab" type="button" data-admin-tab="hero-slides">Homepage hero</button>
         <button class="tab" type="button" data-admin-tab="merchandise">Merchandise</button>
         <button class="tab" type="button" data-admin-tab="packages">Ad packages</button>
         <button class="tab" type="button" data-admin-tab="orders">All orders</button>
@@ -45,6 +46,27 @@
         <button class="tab" type="button" data-admin-tab="partnership-applications">Organizer &amp; sponsor inquiries</button>
         <button class="tab" type="button" data-admin-tab="gifts">Gift marketplace</button>
       </nav>
+      <section class="card admin-section" id="heroSlidesSection" hidden>
+        <div class="section-heading">
+          <div><h2>Homepage hero slides</h2><p>Add video or image promos, remove slides from rotation, and move a slide up to make it appear first.</p></div>
+        </div>
+        <form class="hero-slide-form" id="heroSlideForm" enctype="multipart/form-data">
+          <label>Slide title<input name="title" maxlength="120" required></label>
+          <label>Eyebrow / category<input name="category" maxlength="80" placeholder="For ticket buyers"></label>
+          <label class="hero-slide-wide">Description<textarea name="description" rows="2" maxlength="500"></textarea></label>
+          <label>Slide type<select name="mediaType" required><option value="video">Video</option><option value="image">Image</option></select></label>
+          <label class="hero-slide-url">Video or image URL<input name="mediaUrl" maxlength="2048" placeholder="videos/my-promo.mp4 or https://…"></label>
+          <label class="hero-slide-upload">Upload MP4 or WebM<input name="videoFile" type="file" accept="video/mp4,video/webm"></label>
+          <p class="hero-slide-upload-note">For video slides, upload a video (up to 100 MB) or enter an existing site path / HTTPS video URL. Image slides use an image URL.</p>
+          <label>Video poster image URL<input name="posterUrl" maxlength="2048" placeholder="images/events/poster.jpg"></label>
+          <label>Button label<input name="ctaLabel" maxlength="60" value="Learn more" required></label>
+          <label class="hero-slide-wide">Button destination<input name="linkUrl" maxlength="2048" value="events.html" required></label>
+          <label class="hero-slide-active"><input name="active" type="checkbox" checked> Show in homepage rotation</label>
+          <button class="button primary" type="submit">Add hero slide</button>
+        </form>
+        <p class="hero-slide-help">Slides rotate in the order shown. Use Move up to choose the first video or image visitors see. Deactivated slides are kept so you can restore them later.</p>
+        <div class="record-list" id="heroSlidesList"></div>
+      </section>
       <section class="card admin-section" id="submissionsSection">
         <div class="section-heading">
           <div><h2>Event listings</h2><p>Events publish immediately; unpublish listings that need correction or removal.</p></div>

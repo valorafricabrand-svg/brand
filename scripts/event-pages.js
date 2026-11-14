@@ -445,6 +445,80 @@
         ticket.name
       )));
       form.hidden = false;
+      const giftFields = document.getElementById('giftFields');
+      const deliveryRadios = form.querySelectorAll('[name="deliveryType"]');
+      const updateGiftFields = () => {
+        const isGift = form.elements.deliveryType.value === 'gift';
+        giftFields.hidden = !isGift;
+        form.elements.giftRecipientName.required = isGift;
+        form.elements.giftRecipientContact.required = isGift;
+      };
+      deliveryRadios.forEach((radio) => radio.addEventListener('change', updateGiftFields));
+      updateGiftFields();
+
+      const movieSelection = document.getElementById('movieSelection');
+      const seatSelection = document.getElementById('seatSelection');
+      const seatSelectionNote = document.getElementById('seatSelectionNote');
+      let selectedSeats = [];
+      const isMovie = /movie|cinema|film/i.test(`${event.category || ''} ${event.tags?.join(' ') || ''}`);
+      if (isMovie) {
+        movieSelection.hidden = false;
+        const showtimes = event.tags
+          .map((tag) => typeof tag === 'string' ? tag.match(/^Showtime:\s*(.+)$/i)?.[1] : '')
+          .filter((value) => value && !Number.isNaN(Date.parse(value)))
+          .map((value) => new Date(value));
+        if (!showtimes.length) showtimes.push(new Date(event.startsAt));
+        form.elements.showtimeAt.replaceChildren(...showtimes.map((showtime) => new Option(
+          new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(showtime),
+          showtime.toISOString()
+        )));
+
+        const soldSeats = new Set();
+        const loadSoldSeats = async () => {
+          selectedSeats = [];
+          soldSeats.clear();
+          try {
+            const response = await api(`/api/events/${encodeURIComponent(event.id)}/seats?showtimeAt=${encodeURIComponent(form.elements.showtimeAt.value)}`);
+            (response.soldSeats || []).forEach((seat) => soldSeats.add(seat));
+          } catch (_) { /* Seat inventory remains available until checkout validation. */ }
+          const quantity = Number(form.elements.quantity.value) || 1;
+          const capacity = Math.min(Number(event.capacity) || 64, 64);
+          seatSelection.replaceChildren();
+          const rows = Math.ceil(capacity / 8);
+          for (let index = 0; index < capacity; index += 1) {
+            const row = String.fromCharCode(65 + Math.floor(index / 8));
+            const label = `${row}${(index % 8) + 1}`;
+            const seat = document.createElement('button');
+            seat.type = 'button';
+            seat.className = 'seat-button';
+            seat.textContent = label;
+            if (soldSeats.has(label)) {
+              seat.disabled = true;
+              seat.classList.add('sold');
+              seat.title = 'Seat already booked';
+            } else {
+              seat.addEventListener('click', () => {
+                if (selectedSeats.includes(label)) {
+                  selectedSeats = selectedSeats.filter((entry) => entry !== label);
+                } else if (selectedSeats.length < quantity) {
+                  selectedSeats.push(label);
+                }
+                Array.from(seatSelection.children).forEach((button) => button.classList.toggle('selected', selectedSeats.includes(button.textContent)));
+                seatSelectionNote.textContent = `${selectedSeats.length}/${quantity} seats selected`;
+              });
+            }
+            seatSelection.appendChild(seat);
+          }
+          seatSelectionNote.textContent = `0/${quantity} seats selected`;
+        };
+        form.elements.showtimeAt.addEventListener('change', loadSoldSeats);
+        form.elements.quantity.addEventListener('change', () => {
+          if (selectedSeats.length > Number(form.elements.quantity.value)) selectedSeats = selectedSeats.slice(0, Number(form.elements.quantity.value));
+          Array.from(seatSelection.children).forEach((button) => button.classList.toggle('selected', selectedSeats.includes(button.textContent)));
+          seatSelectionNote.textContent = `${selectedSeats.length}/${Number(form.elements.quantity.value)} seats selected`;
+        });
+        loadSoldSeats();
+      }
       const health = await api('/api/health');
       const stripePaymentsConfigured = Boolean(health.stripePaymentsConfigured);
       const nowpaymentsConfigured = Boolean(health.nowpaymentsConfigured);
@@ -555,6 +629,11 @@
           button.disabled = false;
           return;
         }
+        if (isMovie && selectedSeats.length !== Number(form.elements.quantity.value)) {
+          showError(document.getElementById('pageFeedback'), `Choose exactly ${form.elements.quantity.value} seat(s).`);
+          button.disabled = false;
+          return;
+        }
         await window.valorAffiliateReferralReady;
         await startCheckout('/api/orders/tickets', {
           eventId: event.id,
@@ -563,6 +642,11 @@
           buyerName: form.elements.buyerName.value,
           phone: form.elements.phone.value,
           paymentMethod: selectedMethod,
+          giftRecipientName: form.elements.deliveryType.value === 'gift' ? form.elements.giftRecipientName.value : '',
+          giftRecipientContact: form.elements.deliveryType.value === 'gift' ? form.elements.giftRecipientContact.value : '',
+          giftMessage: form.elements.deliveryType.value === 'gift' ? form.elements.giftMessage.value : '',
+          showtimeAt: isMovie ? form.elements.showtimeAt.value : '',
+          seatLabels: isMovie ? selectedSeats : [],
           affiliateReferralToken: window.valorAffiliateReferralToken()
         }, document.getElementById('pageFeedback'), currentAccountToken);
         button.disabled = false;

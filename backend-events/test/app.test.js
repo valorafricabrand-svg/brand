@@ -1,6 +1,7 @@
 process.env.NODE_ENV = 'test';
 process.env.DB_PATH = ':memory:';
 process.env.UPLOAD_DIR = require('path').join(__dirname, '..', '.test-uploads');
+process.env.HERO_AD_UPLOAD_DIR = require('path').join(__dirname, '..', '.test-uploads', 'hero-ads');
 process.env.JWT_SECRET = 'test-only-secret-not-used-outside-test-1234567890';
 process.env.ADMIN_USERNAME = 'test-admin';
 process.env.ADMIN_PASSWORD = 'test-admin-password-long-enough';
@@ -380,6 +381,10 @@ test('local development origins can read the public API', async () => {
     .set('Origin', 'http://127.0.0.1:8877');
   assert.equal(response.status, 200);
   assert.equal(response.headers['access-control-allow-origin'], 'http://127.0.0.1:8877');
+  const heroSlides = await request(app).get('/api/ads/hero')
+    .set('Origin', 'http://127.0.0.1:8877');
+  assert.equal(heroSlides.status, 200);
+  assert.equal(heroSlides.headers['access-control-allow-origin'], 'http://127.0.0.1:8877');
 });
 
 test('local development origins cannot use private API routes cross-origin', async () => {
@@ -392,6 +397,81 @@ test('remote development origins cannot read the public API', async () => {
   const response = await request(app).get('/api/events')
     .set('Origin', 'http://example.com');
   assert.notEqual(response.headers['access-control-allow-origin'], 'http://example.com');
+});
+
+test('homepage hero slides are public, ordered, editable, and admin protected', async () => {
+  const initial = await request(app).get('/api/ads/hero');
+  assert.equal(initial.status, 200);
+  assert.equal(initial.body.slides.length, 5);
+  assert.equal(initial.body.slides[0].id, 'valor-sponsored-video-promo');
+  assert.deepEqual(initial.body.slides.slice(-2).map((slide) => slide.id), [
+    'valor-featured-clip-002',
+    'valor-featured-clip-001'
+  ]);
+  assert.deepEqual(initial.body.slides.slice(-2).map((slide) => slide.title), [
+    'Discover Valor Africa',
+    'Discover Valor Africa'
+  ]);
+  assert.deepEqual(initial.body.slides.slice(-2).map((slide) => slide.mediaUrl), [
+    'videos/valor-featured-clip-002.mp4',
+    'videos/valor-featured-clip-001.mp4'
+  ]);
+  assert.equal((await request(app).get('/api/ads/admin/hero-slides')).status, 401);
+
+  const created = await request(app).post('/api/ads/admin/hero-slides').set(admin).send({
+    title: 'Weekend festival spotlight',
+    category: 'Featured events',
+    description: 'Find your next live experience.',
+    mediaType: 'image',
+    mediaUrl: 'images/weekend-festival.jpg',
+    posterUrl: '',
+    linkUrl: 'events.html',
+    ctaLabel: 'Browse events'
+  });
+  assert.equal(created.status, 201);
+  const slideId = created.body.slide.id;
+  assert.equal(created.body.slide.position, 5);
+
+  const invalidDestination = await request(app).patch(`/api/ads/admin/hero-slides/${slideId}`)
+    .set(admin).send({ linkUrl: 'javascript:alert(1)' });
+  assert.equal(invalidDestination.status, 400);
+
+  const allSlides = (await request(app).get('/api/ads/admin/hero-slides').set(admin)).body.slides;
+  const reordered = await request(app).post('/api/ads/admin/hero-slides/reorder').set(admin)
+    .send({ ids: [slideId, ...allSlides.filter((slide) => slide.id !== slideId).map((slide) => slide.id)] });
+  assert.equal(reordered.status, 200);
+  assert.equal((await request(app).get('/api/ads/hero')).body.slides[0].id, slideId);
+
+  assert.equal((await request(app).patch(`/api/ads/admin/hero-slides/${slideId}`)
+    .set(admin).send({ active: false })).body.slide.active, false);
+  assert.equal((await request(app).get('/api/ads/hero')).body.slides.some((slide) => slide.id === slideId), false);
+  assert.equal((await request(app).patch(`/api/ads/admin/hero-slides/${slideId}`)
+    .set(admin).send({ active: true })).body.slide.active, true);
+
+  const linkedVideo = await request(app).post('/api/ads/admin/hero-slides').set(admin).send({
+    title: 'Linked video spotlight',
+    mediaType: 'video',
+    mediaUrl: 'videos/linked-promo.mp4',
+    linkUrl: 'events.html',
+    ctaLabel: 'Explore events'
+  });
+  assert.equal(linkedVideo.status, 201);
+  assert.equal(linkedVideo.body.slide.mediaUrl, 'videos/linked-promo.mp4');
+
+  const uploaded = await request(app).post('/api/ads/admin/hero-slides').set(admin)
+    .field('title', 'Uploaded video spotlight')
+    .field('mediaType', 'video')
+    .field('linkUrl', 'events.html')
+    .field('ctaLabel', 'Explore events')
+    .attach('videoFile', Buffer.from([0,0,0,24,0x66,0x74,0x79,0x70,0x69,0x73,0x6f,0x6d]), {
+      filename: 'spotlight.mp4',
+      contentType: 'video/mp4'
+    });
+  assert.equal(uploaded.status, 201);
+  assert.match(uploaded.body.slide.mediaUrl, /^\/uploads\/hero-ads\/[0-9a-f-]+\.mp4$/i);
+  const videoResponse = await request(app).get(uploaded.body.slide.mediaUrl);
+  assert.equal(videoResponse.status, 200);
+  assert.match(videoResponse.headers['content-type'], /video\/mp4/);
 });
 
 test('event posters require valid image signatures', async () => {

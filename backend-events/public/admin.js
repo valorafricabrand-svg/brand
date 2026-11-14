@@ -41,6 +41,7 @@
     dashboard.hidden = false;
     document.getElementById('logoutButton').hidden = false;
     await loadSubmissions();
+    await loadHeroSlides();
     await loadProducts();
     await loadPackages();
     await loadOrders();
@@ -149,6 +150,94 @@
       toggle.dataset.active = String(Boolean(item.active));
       actions.className = 'record-actions';
       actions.append(save, toggle);
+      card.appendChild(actions);
+      list.appendChild(card);
+    });
+  }
+
+  async function loadHeroSlides() {
+    const list = document.getElementById('heroSlidesList');
+    list.replaceChildren();
+    const { slides } = await api('/api/ads/admin/hero-slides');
+    if (!slides.length) return addText(list, 'p', 'empty', 'No homepage slides yet. Add a video or image above.');
+    slides.forEach((slide, index) => {
+      const card = document.createElement('article');
+      card.className = 'record hero-slide-row';
+      card.dataset.heroSlideId = slide.id;
+      card.dataset.active = String(slide.active);
+      addText(card, 'p', 'record-meta', `${slide.active ? 'LIVE' : 'REMOVED FROM ROTATION'} · POSITION ${index + 1} · ${slide.mediaType.toUpperCase()}`);
+
+      const fields = [
+        ['Title','title',slide.title,'text',120],
+        ['Eyebrow / category','category',slide.category,'text',80],
+        ['Description','description',slide.description,'textarea',500],
+        ['Slide type','mediaType',slide.mediaType,'select',0],
+        [slide.mediaType === 'video' ? 'Video URL or site path' : 'Image URL or site path','mediaUrl',slide.mediaUrl,'text',2048],
+        ['Poster image URL','posterUrl',slide.posterUrl,'text',2048],
+        ['Button label','ctaLabel',slide.ctaLabel,'text',60],
+        ['Button destination','linkUrl',slide.linkUrl,'text',2048]
+      ];
+      fields.forEach(([labelText,name,value,type,maxLength]) => {
+        const label = document.createElement('label');
+        label.textContent = labelText;
+        let input;
+        if (type === 'textarea') {
+          input = document.createElement('textarea');
+          input.rows = 2;
+        } else if (type === 'select') {
+          input = document.createElement('select');
+          [['video','Video'],['image','Image']].forEach(([optionValue,optionLabel]) => {
+            const option = document.createElement('option');
+            option.value = optionValue;
+            option.textContent = optionLabel;
+            input.appendChild(option);
+          });
+        } else {
+          input = document.createElement('input');
+          input.type = type;
+        }
+        input.name = name;
+        input.value = value || '';
+        if (maxLength) input.maxLength = maxLength;
+        label.appendChild(input);
+        card.appendChild(label);
+      });
+
+      const uploadLabel = document.createElement('label');
+      uploadLabel.textContent = 'Replace video (optional)';
+      const videoFile = document.createElement('input');
+      videoFile.type = 'file';
+      videoFile.name = 'videoFile';
+      videoFile.accept = 'video/mp4,video/webm';
+      uploadLabel.appendChild(videoFile);
+      card.appendChild(uploadLabel);
+
+      const actions = document.createElement('div');
+      actions.className = 'record-actions';
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'button primary';
+      save.dataset.saveHeroSlide = slide.id;
+      save.textContent = 'Save changes';
+      const moveUp = document.createElement('button');
+      moveUp.type = 'button';
+      moveUp.className = 'button secondary';
+      moveUp.dataset.moveHeroSlide = 'up';
+      moveUp.textContent = 'Move up';
+      moveUp.disabled = index === 0;
+      const moveDown = document.createElement('button');
+      moveDown.type = 'button';
+      moveDown.className = 'button secondary';
+      moveDown.dataset.moveHeroSlide = 'down';
+      moveDown.textContent = 'Move down';
+      moveDown.disabled = index === slides.length - 1;
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'button secondary';
+      toggle.dataset.toggleHeroSlide = slide.id;
+      toggle.dataset.active = String(slide.active);
+      toggle.textContent = slide.active ? 'Remove from hero' : 'Restore to hero';
+      actions.append(save, moveUp, moveDown, toggle);
       card.appendChild(actions);
       list.appendChild(card);
     });
@@ -573,6 +662,7 @@
     if (!button) return;
     document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('is-active', tab === button));
     document.getElementById('submissionsSection').hidden = button.dataset.adminTab !== 'submissions';
+    document.getElementById('heroSlidesSection').hidden = button.dataset.adminTab !== 'hero-slides';
     document.getElementById('merchandiseSection').hidden = button.dataset.adminTab !== 'merchandise';
     document.getElementById('packagesSection').hidden = button.dataset.adminTab !== 'packages';
     document.getElementById('ordersSection').hidden = button.dataset.adminTab !== 'orders';
@@ -587,6 +677,99 @@
     }
     if (button.dataset.adminTab === 'gifts') {
       loadGiftMarketplace().catch((error) => setFeedback(feedback, error.message, true));
+    }
+    if (button.dataset.adminTab === 'hero-slides') {
+      loadHeroSlides().catch((error) => setFeedback(feedback, error.message, true));
+    }
+  });
+
+  const heroSlideForm = document.getElementById('heroSlideForm');
+  const heroMediaType = heroSlideForm.elements.mediaType;
+  const heroMediaUrl = heroSlideForm.elements.mediaUrl;
+  const heroVideoFile = heroSlideForm.elements.videoFile;
+  const heroVideoUploadLabel = heroSlideForm.querySelector('.hero-slide-upload');
+  function updateHeroMediaFields() {
+    const isVideo = heroMediaType.value === 'video';
+    heroVideoUploadLabel.hidden = !isVideo;
+    heroVideoFile.disabled = !isVideo;
+    heroMediaUrl.required = !isVideo || !heroVideoFile.files.length;
+    heroMediaUrl.placeholder = isVideo ? 'videos/my-promo.mp4 or https://…' : 'images/my-promo.jpg or https://…';
+  }
+  heroMediaType.addEventListener('change', updateHeroMediaFields);
+  heroVideoFile.addEventListener('change', updateHeroMediaFields);
+  updateHeroMediaFields();
+
+  heroSlideForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    if (!heroVideoFile.files.length) data.delete('videoFile');
+    data.set('active', String(form.elements.active.checked));
+    const submit = form.querySelector('[type=submit]');
+    submit.disabled = true;
+    try {
+      await api('/api/ads/admin/hero-slides', { method: 'POST', body: data });
+      form.reset();
+      updateHeroMediaFields();
+      setFeedback(feedback, 'Homepage hero slide added.');
+      await loadHeroSlides();
+    } catch (error) {
+      setFeedback(feedback, error.message, true);
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  document.getElementById('heroSlidesList').addEventListener('click', async (event) => {
+    const save = event.target.closest('[data-save-hero-slide]');
+    const toggle = event.target.closest('[data-toggle-hero-slide]');
+    const move = event.target.closest('[data-move-hero-slide]');
+    const button = save || toggle || move;
+    if (!button) return;
+    const card = button.closest('[data-hero-slide-id]');
+    button.disabled = true;
+    try {
+      if (save) {
+        const data = new FormData();
+        card.querySelectorAll('[name]').forEach((field) => {
+          if (field.type === 'file') {
+            if (field.files.length) data.append(field.name, field.files[0]);
+          } else {
+            data.set(field.name, field.value);
+          }
+        });
+        data.set('active', card.dataset.active);
+        await api(`/api/ads/admin/hero-slides/${encodeURIComponent(save.dataset.saveHeroSlide)}`, {
+          method: 'PATCH',
+          body: data
+        });
+        setFeedback(feedback, 'Homepage hero slide saved.');
+      } else if (toggle) {
+        await api(`/api/ads/admin/hero-slides/${encodeURIComponent(toggle.dataset.toggleHeroSlide)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ active: toggle.dataset.active !== 'true' })
+        });
+        setFeedback(feedback, toggle.dataset.active === 'true'
+          ? 'Slide removed from the homepage rotation.'
+          : 'Slide restored to the homepage rotation.');
+      } else {
+        const cards = [...document.querySelectorAll('#heroSlidesList [data-hero-slide-id]')];
+        const ids = cards.map((item) => item.dataset.heroSlideId);
+        const index = ids.indexOf(card.dataset.heroSlideId);
+        const target = button.dataset.moveHeroSlide === 'up' ? index - 1 : index + 1;
+        if (target < 0 || target >= ids.length) return;
+        [ids[index], ids[target]] = [ids[target], ids[index]];
+        await api('/api/ads/admin/hero-slides/reorder', {
+          method: 'POST',
+          body: JSON.stringify({ ids })
+        });
+        setFeedback(feedback, 'Homepage hero order updated.');
+      }
+      await loadHeroSlides();
+    } catch (error) {
+      setFeedback(feedback, error.message, true);
+    } finally {
+      button.disabled = false;
     }
   });
 
