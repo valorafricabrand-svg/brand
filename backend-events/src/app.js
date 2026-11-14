@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const db = require('./db');
 const { createLoginLimiter, initializeAdmin, login, requireAdmin } = require('./auth');
-const mpesa = require('./mpesa');
+const payhero = require('./payhero');
 const stripe = require('./stripe');
 const nowpayments = require('./nowpayments');
 const walletSms = require('./wallet-sms');
@@ -270,7 +270,7 @@ function safeOrderAccess(order, suppliedToken) {
 }
 
 function createApp(options = {}) {
-  const paymentGateway = options.mpesa || mpesa;
+  const paymentGateway = options.payhero || payhero;
   const stripeGateway = options.stripe || stripe;
   const nowpaymentsGateway = options.nowpayments || nowpayments;
   const smsGateway = options.sms || walletSms;
@@ -3127,7 +3127,7 @@ function createApp(options = {}) {
 
   function paymentsUnavailable(res) {
     if (paymentGateway.isConfigured()) return false;
-    res.status(503).json({ error: 'M-Pesa checkout is not enabled yet. Valor Africa must configure its Daraja account and public callback URL.' });
+    res.status(503).json({ error: 'M-Pesa checkout is not enabled yet. Valor Africa must configure its PayHero account and public callback URL.' });
     return true;
   }
 
@@ -3178,7 +3178,7 @@ function createApp(options = {}) {
         .run('failed', 'Could not start M-Pesa checkout.', order.id, 'pending');
       console.error('M-Pesa checkout could not be started:', error.message);
       res.status(502).json({
-        error: 'M-Pesa could not start the prompt. Check that this is an active Safaricom M-Pesa number. Use a Daraja test number in Sandbox, or check your Daraja setup for live payments.'
+        error: 'M-Pesa could not start the prompt. Check that this is an active Safaricom M-Pesa number, and check your PayHero setup.'
       });
     }
   }
@@ -3688,7 +3688,7 @@ function createApp(options = {}) {
       })();
       return;
     }
-    const query = await paymentGateway.queryStkPush(purchase.checkout_request_id);
+    const query = await paymentGateway.queryStkPush(purchase.checkout_request_id, purchase.merchant_request_id);
     if (String(query.CheckoutRequestID) !== purchase.checkout_request_id || String(query.ResultCode) !== '0') return;
     const metadata = callback.CallbackMetadata && callback.CallbackMetadata.Item;
     const values = Array.isArray(metadata) ? Object.fromEntries(metadata.map((item) => [item.Name, item.Value])) : {};
@@ -3719,7 +3719,7 @@ function createApp(options = {}) {
       })();
       return;
     }
-    const query = await paymentGateway.queryStkPush(order.checkout_request_id);
+    const query = await paymentGateway.queryStkPush(order.checkout_request_id, order.merchant_request_id);
     if (String(query.CheckoutRequestID) !== order.checkout_request_id || String(query.ResultCode) !== '0') return;
     const metadata = callback.CallbackMetadata && callback.CallbackMetadata.Item;
     const values = Array.isArray(metadata) ? Object.fromEntries(metadata.map((item) => [item.Name, item.Value])) : {};
@@ -3746,15 +3746,31 @@ function createApp(options = {}) {
     })();
   }
 
-  app.post('/api/mpesa/callback', async (req, res) => {
-    const callback = req.body && req.body.Body && req.body.Body.stkCallback;
-    if (!callback || typeof callback.CheckoutRequestID !== 'string' || typeof callback.MerchantRequestID !== 'string') {
-      console.error('Received an invalid M-Pesa callback payload.');
+  app.post('/api/payhero/callback', async (req, res) => {
+    const response = req.body && req.body.response;
+    if (!response || typeof response.CheckoutRequestID !== 'string' || !response.CheckoutRequestID) {
+      console.error('Received an invalid PayHero callback payload.');
       return res.status(400).json({ ResultCode: 1, ResultDesc: 'Invalid callback payload.' });
     }
+    // Normalized into the same shape the payment-completion logic below already expects.
+    // checkout_request_id alone identifies the order (it is unique); PayHero's own reference,
+    // needed to independently re-verify status, was captured separately at checkout time and is
+    // never repeated in this callback, so matching here never depends on it.
+    const callback = {
+      CheckoutRequestID: response.CheckoutRequestID,
+      MerchantRequestID: typeof response.MerchantRequestID === 'string' ? response.MerchantRequestID : '',
+      ResultCode: Number(response.ResultCode) === 0 ? 0 : 1,
+      ResultDesc: typeof response.ResultDesc === 'string' ? response.ResultDesc : '',
+      CallbackMetadata: {
+        Item: [
+          { Name: 'Amount', Value: response.Amount },
+          { Name: 'MpesaReceiptNumber', Value: response.MpesaReceiptNumber }
+        ]
+      }
+    };
     const giftCardPurchase = db.prepare(`
-      SELECT * FROM gift_card_purchases WHERE checkout_request_id=? AND merchant_request_id=?
-    `).get(callback.CheckoutRequestID, callback.MerchantRequestID);
+      SELECT * FROM gift_card_purchases WHERE checkout_request_id=?
+    `).get(callback.CheckoutRequestID);
     if (giftCardPurchase) {
       try {
         await completeGiftCardMpesaPayment(callback, giftCardPurchase);
@@ -3764,8 +3780,8 @@ function createApp(options = {}) {
       return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
     }
     const merchantVoucherOrder = db.prepare(`
-      SELECT * FROM merchant_voucher_orders WHERE checkout_request_id=? AND merchant_request_id=?
-    `).get(callback.CheckoutRequestID, callback.MerchantRequestID);
+      SELECT * FROM merchant_voucher_orders WHERE checkout_request_id=?
+    `).get(callback.CheckoutRequestID);
     if (merchantVoucherOrder) {
       try {
         await completeMerchantVoucherMpesaPayment(callback, merchantVoucherOrder);
@@ -3775,8 +3791,8 @@ function createApp(options = {}) {
       return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
     }
     const walletDeposit = db.prepare(`
-      SELECT * FROM wallet_transactions WHERE checkout_request_id=? AND merchant_request_id=?
-    `).get(callback.CheckoutRequestID, callback.MerchantRequestID);
+      SELECT * FROM wallet_transactions WHERE checkout_request_id=?
+    `).get(callback.CheckoutRequestID);
     if (walletDeposit) {
       if (walletDeposit.status !== 'pending') return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
       if (Number(callback.ResultCode) !== 0) {
@@ -3785,7 +3801,7 @@ function createApp(options = {}) {
         return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
       }
       try {
-        const query = await paymentGateway.queryStkPush(walletDeposit.checkout_request_id);
+        const query = await paymentGateway.queryStkPush(walletDeposit.checkout_request_id, walletDeposit.merchant_request_id);
         if (String(query.CheckoutRequestID) !== walletDeposit.checkout_request_id || String(query.ResultCode) !== '0') {
           return res.json({ ResultCode: 0, ResultDesc: 'Payment verification is pending.' });
         }
@@ -3806,8 +3822,8 @@ function createApp(options = {}) {
       return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
     }
     const order = db.prepare(`
-      SELECT * FROM orders WHERE checkout_request_id = ? AND merchant_request_id = ?
-    `).get(callback.CheckoutRequestID, callback.MerchantRequestID);
+      SELECT * FROM orders WHERE checkout_request_id = ?
+    `).get(callback.CheckoutRequestID);
     if (!order || order.status !== 'pending') return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
     if (Number(callback.ResultCode) !== 0) {
       db.prepare('UPDATE orders SET status = ?, result_description = ? WHERE id = ? AND status = ?')
@@ -3815,7 +3831,7 @@ function createApp(options = {}) {
       return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
     }
     try {
-      const query = await paymentGateway.queryStkPush(order.checkout_request_id);
+      const query = await paymentGateway.queryStkPush(order.checkout_request_id, order.merchant_request_id);
       if (String(query.CheckoutRequestID) !== order.checkout_request_id || String(query.ResultCode) !== '0') {
         return res.json({ ResultCode: 0, ResultDesc: 'Payment verification is pending.' });
       }

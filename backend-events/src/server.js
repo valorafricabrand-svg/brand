@@ -22,7 +22,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 const app = createApp();
 const server = app.listen(port, '0.0.0.0', () => {
   console.log(`Valor Africa event service listening on port ${port}.`);
-  console.log(`M-Pesa checkout: ${require('./mpesa').isConfigured() ? 'enabled' : 'disabled until Daraja credentials and HTTPS callback are configured'}.`);
+  console.log(`M-Pesa checkout: ${require('./payhero').isConfigured() ? 'enabled' : 'disabled until PayHero credentials and HTTPS callback are configured'}.`);
   console.log(`Ticket confirmation email: ${require('./ticket-email').isConfigured() ? 'enabled' : 'disabled until Resend credentials and a verified sender are configured'}.`);
   console.log(`Reminder emails: ${require('./reminder-email').isConfigured() ? 'enabled' : 'disabled until Resend credentials and a verified sender are configured'}.`);
 });

@@ -145,7 +145,7 @@ const reminderEmailGateway = {
   }
 };
 const app = createApp({
-  mpesa: paymentGateway,
+  payhero: paymentGateway,
   stripe: stripeGateway,
   nowpayments: nowpaymentsGateway,
   sms: smsGateway,
@@ -269,17 +269,20 @@ async function approveEvent(id) {
 }
 
 async function completePayment(checkoutRequestId, merchantRequestId, amount, receipt) {
-  return request(app).post('/api/mpesa/callback').send({
-    Body: { stkCallback: {
+  return request(app).post('/api/payhero/callback').send({
+    forward_url: '',
+    status: true,
+    response: {
+      Amount: amount,
       CheckoutRequestID: checkoutRequestId,
+      ExternalReference: '',
       MerchantRequestID: merchantRequestId,
+      MpesaReceiptNumber: receipt,
+      Phone: '+254712345678',
       ResultCode: 0,
-      ResultDesc: 'The service request is processed successfully',
-      CallbackMetadata: { Item: [
-        { Name: 'Amount', Value: amount },
-        { Name: 'MpesaReceiptNumber', Value: receipt }
-      ] }
-    } }
+      ResultDesc: 'The service request is processed successfully.',
+      Status: 'Success'
+    }
   });
 }
 
@@ -505,7 +508,7 @@ test('event posters require valid image signatures', async () => {
   assert.match(response.body.error, /not a supported image/i);
 });
 
-test('ticket checkout is unavailable until Daraja is configured', async () => {
+test('ticket checkout is unavailable until PayHero is configured', async () => {
   paymentGateway.enabled = false;
   const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
   const payload = { eventId: event.id, ticketType: 'Early bird', buyerName: 'Buyer', phone: '0712345678', quantity: 1 };
@@ -515,7 +518,7 @@ test('ticket checkout is unavailable until Daraja is configured', async () => {
   const response = await request(app).post('/api/orders/tickets').set(await ticketAccountAuth())
     .send(payload);
   assert.equal(response.status, 503);
-  assert.equal(response.body.error.includes('Daraja'), true);
+  assert.equal(response.body.error.includes('PayHero'), true);
   stripeGateway.enabled = false;
   const unavailable = await request(app).post('/api/orders/tickets')
     .set(await ticketAccountAuth())
@@ -710,7 +713,7 @@ test('NOWPayments issues tickets only after a signed, matching finished-payment 
   assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(order.id).total, 1);
 });
 
-test('paid ticket order issues only after Daraja verifies the callback', async () => {
+test('paid ticket order issues only after PayHero verifies the callback', async () => {
   const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
   const accountAuth = await ticketAccountAuth();
   const checkout = await request(app).post('/api/orders/tickets').set(accountAuth)
@@ -743,7 +746,7 @@ test('paid ticket order issues only after Daraja verifies the callback', async (
   assert.equal(db.prepare('SELECT ticket_email_status FROM orders WHERE id=?').get(checkout.body.orderId).ticket_email_status, 'sent');
 });
 
-test('forged success callbacks do not issue tickets without Daraja verification', async () => {
+test('forged success callbacks do not issue tickets without PayHero verification', async () => {
   const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
   const accountAuth = await ticketAccountAuth();
   const checkout = await request(app).post('/api/orders/tickets').set(accountAuth)

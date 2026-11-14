@@ -32,17 +32,13 @@ services:
         value: https://valorafrica.co.ke,https://valorafricabrand-svg.github.io
       - key: PUBLIC_SITE_URL
         value: https://valorafrica.co.ke
-      - key: MPESA_ENV
-        value: sandbox
-      - key: MPESA_CONSUMER_KEY
+      - key: PAYHERO_API_USERNAME
         sync: false
-      - key: MPESA_CONSUMER_SECRET
+      - key: PAYHERO_API_PASSWORD
         sync: false
-      - key: MPESA_SHORTCODE
+      - key: PAYHERO_CHANNEL_ID
         sync: false
-      - key: MPESA_PASSKEY
-        sync: false
-      - key: MPESA_CALLBACK_URL
+      - key: PAYHERO_CALLBACK_URL
         sync: false
       - key: NOWPAYMENTS_API_KEY
         sync: false
