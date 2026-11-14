@@ -23,52 +23,92 @@
       <div class="service-nav"><a href="my-tickets.html">My tickets</a><a href="wallet.html">Wallet</a><a class="nav-host" href="events.html">Browse events</a></div>
     </nav>
   </header>
-  <main id="main" class="wrap service-page">
-    <p class="eyebrow">YOUR VALOR AFRICA ACCOUNT</p>
-    <h1>Account sign-in</h1>
-    <p>Sign in to manage your account. Access to wallet balances and payments is tied to your account session.</p>
-    <section class="service-card account-card" id="accountAuth">
-      <div id="accountSignedOut">
-        <h2>Sign in to your Valor Africa account</h2>
-        <div id="googleSignInButton" class="google-sign-in"></div>
-        <p class="page-feedback" id="googleFeedback" aria-live="polite"></p>
-        <div class="auth-divider"><span>or continue with email</span></div>
-        <div class="account-auth-actions" id="emailAuthActions">
-          <button class="button button-primary" id="showEmailLogin" type="button">Sign in with email</button>
-          <button class="button secondary" id="showEmailRegister" type="button">Create an account</button>
+  <main id="main" class="auth-hero">
+    <div class="auth-hero-backdrop" aria-hidden="true"></div>
+    <div class="wrap auth-hero-inner">
+      <a href="index.html" class="auth-logo" aria-label="Valor Africa Events home">
+        <span class="brand-mark" aria-hidden="true">V</span>
+      </a>
+      <section class="auth-card" id="accountAuth">
+        <div id="accountSignedOut">
+          <div class="auth-card-heading">
+            <p class="eyebrow">VALOR AFRICA ACCOUNT</p>
+            <h1>Welcome back</h1>
+            <p class="auth-card-sub">Sign in to manage your tickets, wallet, and events.</p>
+          </div>
+          <div id="googleSignInButton" class="google-sign-in"></div>
+          <p class="page-feedback" id="googleFeedback" aria-live="polite"></p>
+          <div class="auth-divider"><span>or continue with email</span></div>
+          <div class="account-auth-actions" id="emailAuthActions">
+            <button class="button button-primary" id="showEmailLogin" type="button">Sign in with email</button>
+            <button class="button secondary" id="showEmailRegister" type="button">Create an account</button>
+          </div>
+          <form id="accountEmailForm" class="service-form auth-form" hidden>
+            <h3 id="accountEmailHeading"></h3>
+            <label id="accountNameField" class="field-with-icon" hidden>
+              <span class="field-label">Your name</span>
+              <span class="field-input">
+                <svg aria-hidden="true" viewBox="0 0 16 16"><circle cx="8" cy="5" r="2.6"/><path d="M2.5 14c.7-3 2.9-4.5 5.5-4.5s4.8 1.5 5.5 4.5"/></svg>
+                <input name="displayName" type="text" maxlength="120" autocomplete="name">
+              </span>
+            </label>
+            <label class="field-with-icon">
+              <span class="field-label">Email address</span>
+              <span class="field-input">
+                <svg aria-hidden="true" viewBox="0 0 16 16"><path d="M2 4h12v8H2z"/><path d="m2 4 6 5 6-5"/></svg>
+                <input name="email" type="email" maxlength="254" autocomplete="email" required>
+              </span>
+            </label>
+            <label id="accountPasswordField" class="field-with-icon">
+              <span class="field-label">Password</span>
+              <span class="field-input">
+                <svg aria-hidden="true" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
+                <input name="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required>
+                <button type="button" class="field-toggle-visibility" aria-label="Show password" aria-pressed="false">
+                  <svg class="icon-eye" aria-hidden="true" viewBox="0 0 16 16"><path d="M1 8s2.5-4.5 7-4.5S15 8 15 8s-2.5 4.5-7 4.5S1 8 1 8Z"/><circle cx="8" cy="8" r="2"/></svg>
+                  <svg class="icon-eye-off" aria-hidden="true" viewBox="0 0 16 16"><path d="M1 8s2.5-4.5 7-4.5c1.1 0 2.1.25 3 .68M15 8s-2.5 4.5-7 4.5c-1.1 0-2.1-.25-3-.68"/><path d="M2 2l12 12"/><path d="M6.6 6.6a2 2 0 0 0 2.8 2.8"/></svg>
+                </button>
+              </span>
+            </label>
+            <ul class="password-requirements" id="passwordRequirements" hidden>
+              <li data-rule="length"><span class="requirement-check" aria-hidden="true"></span> At least 8 characters</li>
+            </ul>
+            <label id="accountCodeField" class="field-with-icon" hidden>
+              <span class="field-label">Six-digit email code</span>
+              <span class="field-input">
+                <svg aria-hidden="true" viewBox="0 0 16 16"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5"/><path d="m1.5 5 6.5 4 6.5-4"/></svg>
+                <input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6">
+              </span>
+            </label>
+            <button class="button button-primary" id="accountEmailSubmit" type="submit"></button>
+            <button class="text-button" id="accountForgotPassword" type="button" hidden>Forgot password?</button>
+            <button class="text-button" id="accountResendCode" type="button" hidden>Resend verification code</button>
+            <button class="text-button" id="accountBackToOptions" type="button">Back to sign-in options</button>
+          </form>
+          <p class="page-feedback" id="accountEmailFeedback" aria-live="polite"></p>
+          <p class="auth-terms">By continuing, you agree to Valor Africa's <a href="refund-policy.html">Refund Policy</a> and <a href="privacy-policy.html">Privacy Policy</a>.</p>
         </div>
-        <form id="accountEmailForm" class="service-form" hidden>
-          <h3 id="accountEmailHeading"></h3>
-          <label id="accountNameField" hidden>Your name<input name="displayName" type="text" maxlength="120" autocomplete="name"></label>
-          <label>Email address<input name="email" type="email" maxlength="254" autocomplete="email" required></label>
-          <label id="accountPasswordField">Password<input name="password" type="password" minlength="8" maxlength="128" autocomplete="current-password" required></label>
-          <label id="accountCodeField" hidden>Six-digit email code<input name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"></label>
-          <button class="button button-primary" id="accountEmailSubmit" type="submit"></button>
-          <button class="text-button" id="accountForgotPassword" type="button" hidden>Forgot password?</button>
-          <button class="text-button" id="accountResendCode" type="button" hidden>Resend verification code</button>
-          <button class="text-button" id="accountBackToOptions" type="button">Back to sign-in options</button>
-        </form>
-        <p class="page-feedback" id="accountEmailFeedback" aria-live="polite"></p>
-      </div>
-      <div id="accountSignedIn" hidden>
-        <p class="eyebrow">SIGNED IN</p>
-        <h2 id="accountDisplayName"></h2>
-        <p id="accountEmailAddress" class="service-meta"></p>
-        <p>Your account session is active. Wallet details and balances are only available after you sign in.</p>
-        <div class="account-auth-actions">
-          <a class="button secondary" href="my-tickets.html">My tickets</a>
-          <a class="button secondary" href="organizer-dashboard.html">Organizer dashboard</a>
-          <a class="button button-primary" href="wallet.html">Open your wallet</a>
-          <a class="button secondary" href="events.html">Browse events</a>
+        <div id="accountSignedIn" hidden>
+          <div class="auth-card-heading">
+            <p class="eyebrow">SIGNED IN</p>
+            <h1 id="accountDisplayName"></h1>
+            <p class="auth-card-sub" id="accountEmailAddress"></p>
+          </div>
+          <div class="account-auth-actions">
+            <a class="button secondary" href="my-tickets.html">My tickets</a>
+            <a class="button secondary" href="organizer-dashboard.html">Organizer dashboard</a>
+            <a class="button button-primary" href="wallet.html">Open your wallet</a>
+            <a class="button secondary" href="events.html">Browse events</a>
+          </div>
+          <label class="account-wallet-note auth-preference">
+            <input type="checkbox" id="marketingEmailsOptOut">
+            Don't email me about events I've viewed but haven't booked
+          </label>
+          <p class="page-feedback" id="accountEmailFeedbackSignedIn" aria-live="polite"></p>
+          <button class="button secondary" id="accountSignOut" type="button">Sign out</button>
         </div>
-        <label class="account-wallet-note" style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" id="marketingEmailsOptOut" style="width:auto;min-height:auto">
-          Don't email me about events I've viewed but haven't booked
-        </label>
-        <p class="page-feedback" id="accountEmailFeedbackSignedIn" aria-live="polite"></p>
-        <button class="button secondary" id="accountSignOut" type="button">Sign out</button>
-      </div>
-    </section>
+      </section>
+    </div>
   </main>
   <footer class="site-footer">
     <div class="wrap footer-inner">

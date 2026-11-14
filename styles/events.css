@@ -111,8 +111,7 @@ img { display: block; max-width: 100%; }
 .wallet-status-completed { color: var(--green-dark) !important; background: var(--mint); }
 .wallet-status-failed, .wallet-status-review { color: #a3261a !important; background: #fff1ef; }
 .wallet-empty { padding: 18px; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); text-align: center; }
-.account-card h2 { margin: 0 0 18px; font: 800 22px Manrope, sans-serif; }
-.account-card h3 { margin: 0; font: 800 18px Manrope, sans-serif; }
+.auth-card h3 { margin: 0; font: 800 18px Manrope, sans-serif; }
 .google-sign-in { display: flex; min-height: 44px; justify-content: center; }
 .google-unavailable { color: var(--muted); font-size: 13px; }
 .auth-divider { display: flex; align-items: center; gap: 14px; margin: 22px 0; color: var(--muted); font-size: 12px; }
@@ -120,11 +119,51 @@ img { display: block; max-width: 100%; }
 .account-auth-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .account-auth-actions .button { width: 100%; }
 .account-auth-actions .button:disabled { cursor: not-allowed; opacity: .55; }
-.account-card .service-form { margin-top: 18px; padding: 20px; box-shadow: none; }
+.auth-card .service-form { margin-top: 18px; padding: 0; border: 0; box-shadow: none; }
 .text-button { justify-self: start; padding: 0; border: 0; color: var(--green-dark); background: transparent; font-size: 13px; font-weight: 800; text-decoration: underline; }
 .account-wallet-note { padding: 12px; border-radius: 9px; color: #53647a; background: var(--mint-light); font-size: 13px; }
-.account-card .page-feedback { margin-bottom: 0; }
+.auth-card .page-feedback { margin-bottom: 0; }
 .page-feedback { color: var(--green-dark); }
+
+/* Account sign-in: full-bleed entry point */
+.auth-hero { position: relative; min-height: 80vh; display: flex; align-items: center; overflow: hidden; padding: 48px 0 64px; background: #061a15; }
+.auth-hero-backdrop { position: absolute; inset: 0; z-index: 0; background: radial-gradient(640px 420px at 82% 8%, rgba(115,230,179,.22), transparent 60%), linear-gradient(135deg, #042f25 0%, #087f5b 55%, #0b4a38 100%); }
+.auth-hero-backdrop::after { position: absolute; inset: 0; content: ""; background-image: radial-gradient(rgba(255,255,255,.14) 1px, transparent 1px); background-size: 22px 22px; opacity: .5; }
+.auth-hero-inner { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.auth-logo { display: inline-flex; }
+.auth-logo .brand-mark { width: 56px; height: 56px; font-size: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.auth-card { width: min(440px, 100%); padding: clamp(28px, 4vw, 40px); border-radius: 22px; background: #fff; box-shadow: 0 30px 80px rgba(3,20,16,.35); }
+.auth-card-heading { margin-bottom: 22px; text-align: center; }
+.auth-card-heading h1 { margin: 10px 0 8px; color: #10251f; font: 800 clamp(26px, 4vw, 32px)/1.15 Manrope, sans-serif; letter-spacing: -.03em; }
+.auth-card-sub { margin: 0; color: var(--muted); font-size: 14px; }
+.field-with-icon { display: grid; gap: 6px; }
+.field-label { color: #35445a; font-size: 13px; font-weight: 700; }
+.field-input { position: relative; display: flex; min-height: 48px; align-items: center; gap: 10px; padding: 0 8px 0 14px; border: 1px solid var(--border); border-radius: 12px; background: #fbfcfd; transition: border-color .15s ease, box-shadow .15s ease; }
+.field-input:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px rgba(8,127,91,.12); }
+.field-input > svg { width: 17px; height: 17px; flex: 0 0 auto; fill: none; stroke: #8a97a8; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.field-input input { flex: 1; min-width: 0; min-height: 46px; padding: 0; border: 0; background: transparent; }
+.field-input input:focus { outline: none; }
+.field-toggle-visibility { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 34px; height: 34px; margin-left: auto; border: 0; border-radius: 8px; color: #8a97a8; background: transparent; cursor: pointer; }
+.field-toggle-visibility:hover { color: var(--green-dark); background: var(--mint-light); }
+.field-toggle-visibility svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.field-toggle-visibility .icon-eye-off { display: none; }
+.field-toggle-visibility[aria-pressed="true"] .icon-eye { display: none; }
+.field-toggle-visibility[aria-pressed="true"] .icon-eye-off { display: block; }
+.password-requirements { display: grid; gap: 6px; margin: -6px 0 0; padding: 0; list-style: none; }
+.password-requirements li { display: flex; align-items: center; gap: 8px; color: #8a97a8; font-size: 12px; font-weight: 600; transition: color .15s ease; }
+.requirement-check { display: inline-grid; width: 16px; height: 16px; flex: 0 0 auto; place-items: center; border: 1.5px solid #c7cfd8; border-radius: 50%; transition: border-color .15s ease, background .15s ease; }
+.requirement-check::after { width: 7px; height: 4px; border-bottom: 1.6px solid #fff; border-left: 1.6px solid #fff; content: ""; opacity: 0; transform: rotate(-45deg) translateY(-1px); }
+.password-requirements li.is-met { color: var(--green-dark); }
+.password-requirements li.is-met .requirement-check { border-color: var(--green); background: var(--green); }
+.password-requirements li.is-met .requirement-check::after { opacity: 1; }
+.auth-terms { margin: 18px 0 0; color: #8a97a8; font-size: 12px; line-height: 1.6; text-align: center; }
+.auth-terms a { color: var(--green-dark); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.auth-preference { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.auth-preference input[type="checkbox"] { width: auto; min-height: auto; flex: 0 0 auto; }
+@media (max-width: 520px) {
+  .auth-hero { padding: 32px 0 48px; }
+  .auth-card { border-radius: 18px; }
+}
 .page-feedback.error, .service-card.error { color: #a3261a; }
 .issued-ticket { display: grid; justify-items: center; gap: 8px; margin-top: 20px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; text-align: center; }
 .issued-ticket h2, .issued-ticket p { margin: 0; }

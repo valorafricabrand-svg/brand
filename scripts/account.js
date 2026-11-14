@@ -73,7 +73,18 @@
     passwordInput.required = !passwordField.hidden;
     passwordInput.minLength = mode === 'login' ? 1 : 8;
     passwordInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
-    passwordField.firstChild.textContent = mode === 'reset' ? 'New password' : 'Password';
+    passwordField.querySelector('.field-label').textContent = mode === 'reset' ? 'New password' : 'Password';
+    const requirements = document.getElementById('passwordRequirements');
+    if (requirements) {
+      requirements.hidden = !['register','reset'].includes(mode);
+      requirements.querySelector('[data-rule="length"]').classList.remove('is-met');
+    }
+    const passwordVisibilityToggle = document.querySelector('.field-toggle-visibility');
+    if (passwordVisibilityToggle) {
+      passwordInput.type = 'password';
+      passwordVisibilityToggle.setAttribute('aria-pressed', 'false');
+      passwordVisibilityToggle.setAttribute('aria-label', 'Show password');
+    }
     codeField.hidden = !['verify','reset'].includes(mode);
     codeInput.required = !codeField.hidden;
     document.getElementById('accountEmailSubmit').textContent = ({
@@ -210,6 +221,24 @@
     });
     document.getElementById('googleSignInButton').replaceChildren(unavailable, retryButton);
     setFeedback(emailFeedback, message, true);
+  }
+
+  const passwordToggle = document.querySelector('.field-toggle-visibility');
+  if (passwordToggle) {
+    passwordToggle.addEventListener('click', () => {
+      const input = emailForm.elements.password;
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      passwordToggle.setAttribute('aria-pressed', String(show));
+      passwordToggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    });
+  }
+  const passwordRequirements = document.getElementById('passwordRequirements');
+  if (passwordRequirements) {
+    emailForm.elements.password.addEventListener('input', (event) => {
+      passwordRequirements.querySelector('[data-rule="length"]')
+        .classList.toggle('is-met', event.target.value.length >= 8);
+    });
   }
 
   document.getElementById('showEmailLogin').addEventListener('click', () => setEmailMode('login'));
