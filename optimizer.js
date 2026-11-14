@@ -18,12 +18,12 @@ async function listImages() {
 
 async function processFile(file) {
   const inputPath = path.join(IMAGES_DIR, file);
-  const { name, ext } = path.parse(file);
+  const { name } = path.parse(file);
 
   for (const w of SIZES) {
     const outDir = path.join(OUT_DIR, `w_${w}`);
     await ensureDir(outDir);
-    const outPath = path.join(outDir, `${name}${ext.toLowerCase()}`);
+    const outPath = path.join(outDir, `${name}.jpg`);
     try {
       await sharp(inputPath)
         .resize({ width: w, withoutEnlargement: true })

@@ -63,6 +63,15 @@ img { display: block; max-width: 100%; }
 .event-detail-description { margin: 24px 0 0; font-size: 15px; line-height: 1.75; }
 .service-form { display: grid; gap: 13px; }
 .service-form label { display: grid; gap: 6px; color: #35445a; font-size: 13px; font-weight: 700; }
+.checkout-choice { margin: 0; padding: 14px; border: 1px solid var(--border); border-radius: 12px; }
+.checkout-choice legend { padding: 0 6px; color: var(--ink); font-weight: 800; }
+.checkout-choice label { margin-block: 8px; }
+.checkout-choice input[type="radio"] { width: auto; min-height: auto; margin-right: 8px; }
+.seat-selection { display: grid; grid-template-columns: repeat(8, minmax(34px, 44px)); justify-content: center; gap: 8px; padding: 16px 8px; }
+.seat-button { width: 44px; height: 44px; border: 1px solid var(--border); border-radius: 8px 8px 12px 12px; background: var(--mint-light); color: var(--green-dark); font-weight: 800; }
+.seat-button.selected { border-color: var(--green); background: var(--green); color: #fff; }
+.seat-button.sold { border-color: #d8dde4; background: #edf0f3; color: #9aa3af; cursor: not-allowed; }
+.service-form textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; resize: vertical; }
 .service-form input, .service-form select { width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: #fff; color: var(--ink); }
 .service-form .button { justify-self: start; }
 .service-form .button:disabled { cursor: not-allowed; opacity: .6; }
@@ -324,7 +333,8 @@ img { display: block; max-width: 100%; }
 .sponsored-ticket-track { display: flex; width: max-content; gap: 10px; padding: 10px; animation: sponsored-ticker 24s linear infinite; }
 .sponsored-ticket-track.is-paused { animation-play-state: paused; }
 .sponsored-ticket-card { position: relative; display: grid; width: 390px; height: 148px; grid-template-columns: 42% 58%; align-items: stretch; overflow: hidden; border-radius: 11px; color: #fff; background: #0b6650; text-decoration: none; isolation: isolate; }
-.sponsored-ticket-card > img { width: 100%; height: 100%; object-fit: cover; }
+.sponsored-ticket-card > img, .sponsored-ticket-card > picture { width: 100%; height: 100%; }
+.sponsored-ticket-card > img, .sponsored-ticket-card > picture > img { width: 100%; height: 100%; object-fit: cover; }
 .sponsored-ticket-card::after { position: absolute; inset: 0 58% 0 42%; content: ""; background: linear-gradient(90deg, transparent, rgba(8,54,43,.45)); }
 .sponsored-ticket-card div { position: relative; z-index: 1; display: flex; min-width: 0; flex-direction: column; justify-content: center; gap: 5px; padding: 15px 13px 13px 16px; background: linear-gradient(135deg, rgba(7,63,50,.98), rgba(8,127,91,.94)); }
 .sponsored-ticket-card small { color: #aee8d0; font-size: 8px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
@@ -385,6 +395,24 @@ img { display: block; max-width: 100%; }
 .poster-date small { margin-top: 3px; font-size: 10px; letter-spacing: .07em; }
 .poster-badge { position: absolute; top: 11px; right: 62px; padding: 6px 9px; border-radius: 999px; color: #4b3500; background: var(--yellow); font-size: 11px; font-weight: 800; }
 .event-card-body { display: flex; min-height: 238px; flex-direction: column; padding: 15px 16px 17px; }
+.event-card.is-skeleton { box-shadow: none; }
+.event-card.is-skeleton:hover { transform: none; box-shadow: none; }
+.skeleton-block, .skeleton-line { position: relative; overflow: hidden; background: #eef1f4; }
+.skeleton-block::after, .skeleton-line::after {
+  position: absolute; inset: 0; content: "";
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent);
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+.event-card.is-skeleton .event-poster.skeleton-block { height: 230px; border-radius: 0; }
+.event-card.is-skeleton .skeleton-line { height: 14px; margin-bottom: 10px; border-radius: 6px; }
+.event-card.is-skeleton .skeleton-line-title { width: 72%; height: 18px; }
+.event-card.is-skeleton .skeleton-line-meta { width: 50%; }
+.event-card.is-skeleton .skeleton-prices { height: 54px; margin-bottom: 8px; border-radius: 13px; }
+.event-card.is-skeleton .skeleton-line-button { width: 38%; height: 32px; margin-top: auto; margin-bottom: 0; border-radius: 8px; }
+@keyframes skeleton-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block::after, .skeleton-line::after { animation: none; }
+}
 .event-card h3 { overflow: hidden; margin: 0 0 6px; font: 800 17px/1.25 Manrope, sans-serif; letter-spacing: -.025em; text-overflow: ellipsis; white-space: nowrap; }
 .event-meta { display: flex; align-items: center; gap: 5px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .event-countdown { margin: 5px 0 9px; color: var(--green); font-size: 13px; font-weight: 800; }
@@ -578,6 +606,7 @@ img { display: block; max-width: 100%; }
 .shop-wallet-link { flex: 0 0 auto; color: var(--green-dark); font-size: 13px; font-weight: 800; }
 .shop-product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
 .shop-product-card { overflow: hidden; background: transparent; }
+.shop-product-card picture { display: block; }
 .shop-product-image { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: contain; background: #f3f6f7; }
 .shop-product-details { display: grid; justify-items: center; align-content: start; gap: 8px; padding: 18px 8px 12px; text-align: center; }
 .shop-product-brand { color: #6c706b; font-size: 10px; font-weight: 800; letter-spacing: .16em; }

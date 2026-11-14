@@ -2,17 +2,6 @@
   'use strict';
 
   let events = [];
-  const organizerPromo = {
-    id: 'valor-organizer-promo',
-    isPlatformPromo: true,
-    title: 'Grow your event with Valor Africa',
-    category: 'For organizers',
-    location: 'Valor Africa Events',
-    startsAt: new Date().toISOString(),
-    adVideo: 'videos/valor-ads-organizer-intro.mp4',
-    adPoster: 'images/events/valor-ads-promo-poster.svg',
-    tickets: []
-  };
   const ticketBuyerPromo = {
     id: 'valor-ticket-buyer-promo',
     isPlatformPromo: true,
@@ -25,18 +14,32 @@
     adPoster: 'images/events/valor-ticket-buyer-cover.png',
     tickets: []
   };
-  const sponsoredVideoPromo = {
-    id: 'valor-sponsored-video-promo',
-    isSponsoredVideoPromo: true,
-    title: 'Valor Events and Tickets',
-    category: 'Featured on Valor Africa',
-    adVideo: 'videos/valor-sponsored-video.mp4',
-    adPoster: 'images/og-image.svg',
-    adDescription: 'Explore experiences and find your next event.',
-    adLink: 'events.html',
-    adCta: 'Get tickets now'
-  };
-  let adEvents = [sponsoredVideoPromo, ticketBuyerPromo, organizerPromo, ...events.slice(0, 1)];
+  const featuredVideoPromos = [
+    {
+      id: 'valor-featured-clip-002',
+      isSponsoredVideoPromo: true,
+      title: 'Discover Valor Africa',
+      category: 'Featured on Valor Africa',
+      adVideo: 'videos/valor-featured-clip-002.mp4',
+      adPoster: 'images/og-image.svg',
+      adDescription: 'Explore events and experiences across Africa.',
+      adLink: 'events.html',
+      adCta: 'Explore events'
+    },
+    {
+      id: 'valor-featured-clip-001',
+      isSponsoredVideoPromo: true,
+      title: 'Discover Valor Africa',
+      category: 'Featured on Valor Africa',
+      adVideo: 'videos/valor-featured-clip-001.mp4',
+      adPoster: 'images/og-image.svg',
+      adDescription: 'Explore events and experiences across Africa.',
+      adLink: 'events.html',
+      adCta: 'Explore events'
+    }
+  ];
+  let managedHeroSlides = null;
+  let adEvents = [...featuredVideoPromos, ticketBuyerPromo, ...events.slice(0, 1)];
   let checkoutEnabled = false;
   let mpesaCheckoutEnabled = false;
   let stripeCheckoutEnabled = false;
@@ -67,14 +70,35 @@
     });
     promotionDataPromise = Promise.allSettled([
       window.valorEventsApi('/api/ads/featured'),
-      window.valorEventsApi('/api/health')
-    ]).then(([featuredResult, healthResult]) => ({
+      window.valorEventsApi('/api/health'),
+      window.valorEventsApi('/api/ads/hero')
+    ]).then(([featuredResult, healthResult, heroResult]) => ({
       featuredEvents: featuredResult.status === 'fulfilled' && Array.isArray(featuredResult.value.events)
         ? featuredResult.value.events.map((event) => toPublicEvent(event, featuredResult.value.apiBase))
         : [],
       featuredError: featuredResult.status === 'rejected' ? featuredResult.reason : null,
       health: healthResult.status === 'fulfilled' ? healthResult.value : null,
-      healthError: healthResult.status === 'rejected' ? healthResult.reason : null
+      healthError: healthResult.status === 'rejected' ? healthResult.reason : null,
+      heroSlides: heroResult.status === 'fulfilled' && Array.isArray(heroResult.value.slides)
+        ? heroResult.value.slides.filter((slide) => slide.id !== 'valor-organizer-promo').map((slide) => {
+          const assetUrl = (value) => value && value.startsWith('/uploads/')
+            ? new URL(value, heroResult.value.apiBase).href
+            : value;
+          return {
+            id: `hero-${slide.id}`,
+            isManagedHeroSlide: true,
+            mediaType: slide.mediaType,
+            title: slide.title,
+            category: slide.category,
+            adDescription: slide.description,
+            adVideo: slide.mediaType === 'video' ? assetUrl(slide.mediaUrl) : '',
+            adPoster: assetUrl(slide.mediaType === 'video' ? slide.posterUrl : slide.mediaUrl),
+            adLink: slide.linkUrl,
+            adCta: slide.ctaLabel
+          };
+        })
+        : null,
+      heroSlidesError: heroResult.status === 'rejected' ? heroResult.reason : null
     }));
   }
 
@@ -314,6 +338,14 @@
     }
   }
 
+  function optimizedShopImage(valorShopUrl, alt) {
+    const basename = decodeURIComponent(valorShopUrl.split('/').pop()).replace(/\.[^.]+$/, '');
+    const widths = [640, 1024, 1600];
+    const webpSrcset = widths.map((w) => `images/optimized/w_${w}/${basename}.webp ${w}w`).join(', ');
+    const jpgSrcset = widths.map((w) => `images/optimized/w_${w}/${basename}.jpg ${w}w`).join(', ');
+    return `<picture><source type="image/webp" srcset="${webpSrcset}" sizes="164px"><img src="images/optimized/w_640/${basename}.jpg" srcset="${jpgSrcset}" sizes="164px" alt="${alt}" loading="lazy"></picture>`;
+  }
+
   function eventShareUrl(event) {
     const url = new URL('event.html', window.location.href);
     if (event.slug) {
@@ -450,7 +482,7 @@
       const card = document.createElement('a');
       card.className = 'sponsored-ticket-card sponsored-merch-card';
       card.href = 'shop.html';
-      card.innerHTML = `<span class="sponsored-ticket-label">VALOR COLLECTION</span><img src="${product.image}" alt="${product.name}" loading="lazy"><div><small>Official merchandise</small><strong>${product.name}</strong><p>Explore the Valor Africa collection</p><span class="sponsored-ticket-button">View collection <b aria-hidden="true">→</b></span></div>`;
+      card.innerHTML = `<span class="sponsored-ticket-label">VALOR COLLECTION</span>${optimizedShopImage(product.image, product.name)}<div><small>Official merchandise</small><strong>${product.name}</strong><p>Explore the Valor Africa collection</p><span class="sponsored-ticket-button">View collection <b aria-hidden="true">→</b></span></div>`;
       track.appendChild(card);
     });
 
@@ -543,6 +575,19 @@
     return rail;
   }
 
+  function createSkeletonCard() {
+    const card = document.createElement('div');
+    card.className = 'event-card is-skeleton';
+    card.setAttribute('aria-hidden', 'true');
+    card.innerHTML = '<div class="event-poster skeleton-block"></div><div class="event-card-body"><div class="skeleton-line skeleton-line-title"></div><div class="skeleton-line skeleton-line-meta"></div><div class="skeleton-block skeleton-prices"></div><div class="skeleton-line skeleton-line-button"></div></div>';
+    return card;
+  }
+
+  function renderSkeletonCards(container, count) {
+    if (!container) return;
+    container.replaceChildren(...Array.from({ length: count }, createSkeletonCard));
+  }
+
   function renderEvents(container, list) {
     if (!container) return;
     const cards = list.map(createEventCard);
@@ -556,9 +601,9 @@
   }
 
   const featured = document.getElementById('featuredEvents');
-  renderEvents(featured, events);
+  renderSkeletonCards(featured, 4);
   const allEvents = document.getElementById('allEvents');
-  renderEvents(allEvents, events);
+  renderSkeletonCards(allEvents, 6);
 
   const adSlides = document.getElementById('adSlides');
   const adDots = document.getElementById('adDots');
@@ -589,6 +634,47 @@
     const visual = document.createElement('div');
     visual.className = 'ad-visual';
     const adPoster = event.adPoster || 'images/events/concert-crowd.svg';
+
+    if (event.isManagedHeroSlide) {
+      if (event.mediaType === 'video') {
+        const video = document.createElement('video');
+        video.className = 'ad-video';
+        video.src = event.adVideo;
+        if (adPoster) video.poster = adPoster;
+        video.autoplay = index === 0 && !adPaused;
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.preload = 'metadata';
+        video.setAttribute('aria-label', `Featured video: ${event.title}`);
+        visual.appendChild(video);
+      } else {
+        const image = document.createElement('img');
+        image.className = 'ad-poster';
+        image.src = adPoster;
+        image.alt = '';
+        image.loading = index === 0 ? 'eager' : 'lazy';
+        visual.appendChild(image);
+      }
+
+      const content = document.createElement('div');
+      content.className = 'ad-content';
+      const category = document.createElement('p');
+      category.className = 'ad-category';
+      category.textContent = event.category;
+      const title = document.createElement('h2');
+      title.textContent = event.title;
+      const details = document.createElement('p');
+      details.className = 'ad-description';
+      details.textContent = event.adDescription;
+      const cta = document.createElement('a');
+      cta.className = 'ad-ticket-cta';
+      cta.href = event.adLink;
+      cta.innerHTML = `<span>${event.adCta}</span><span aria-hidden="true">→</span>`;
+      content.append(category, title, details, cta);
+      slide.append(visual, content);
+      return slide;
+    }
 
     if (event.isPlatformPromo) {
       const video = document.createElement('video');
@@ -746,7 +832,10 @@
   function showAd(index) {
     if (!adSlides || !adDots || !adEvents.length) return;
     activeAdIndex = (index + adEvents.length) % adEvents.length;
-    adStage.classList.toggle('is-sponsored-video-stage', Boolean(adEvents[activeAdIndex].isSponsoredVideoPromo));
+    adStage.classList.toggle('is-sponsored-video-stage', Boolean(
+      adEvents[activeAdIndex].isSponsoredVideoPromo ||
+      (adEvents[activeAdIndex].isManagedHeroSlide && adEvents[activeAdIndex].mediaType === 'video')
+    ));
     adSlides.querySelectorAll('.ad-slide').forEach((slide, slideIndex) => {
       const active = slideIndex === activeAdIndex;
       slide.hidden = !active;
@@ -779,7 +868,8 @@
       const activeEvent = adEvents[activeAdIndex];
       const isOrganizerPromo = activeEvent.isPlatformPromo && !activeEvent.isTicketBuyerPromo;
       sponsoredBadge.hidden = isOrganizerPromo;
-      if (activeEvent.isTicketBuyerPromo) sponsoredBadge.textContent = 'TICKET BUYER VIDEO';
+      if (activeEvent.isManagedHeroSlide) sponsoredBadge.textContent = 'FEATURED ON VALOR';
+      else if (activeEvent.isTicketBuyerPromo) sponsoredBadge.textContent = 'TICKET BUYER VIDEO';
       else if (!isOrganizerPromo) sponsoredBadge.textContent = '✦ PAID PROMOTION';
     }
     if (adSoundToggle) {
@@ -804,6 +894,7 @@
     if (!adPaused && !adPointerInside && !adHasFocus && adEvents.length > 1) {
       const activeEvent = adEvents[activeAdIndex];
       const delay = activeEvent.isTicketBuyerPromo ? 30000
+        : activeEvent.isManagedHeroSlide ? 16000
         : activeEvent.isPlatformPromo || activeEvent.isSponsoredVideoPromo ? 16000
           : 7000;
       adTimer = window.setTimeout(() => {
@@ -1038,22 +1129,26 @@
   }
 
   function refreshPromotionalCarousel() {
+    const managedSlides = managedHeroSlides === null ? [ticketBuyerPromo] : managedHeroSlides;
+    const remainingManagedSlides = managedSlides.filter((slide) =>
+      slide.id !== 'hero-valor-sponsored-video-promo'
+      && slide.title !== 'Valor Events and Tickets'
+      && !featuredVideoPromos.some((promo) =>
+        slide.id === promo.id || slide.id === `hero-${promo.id}`
+        || slide.adVideo === promo.adVideo
+        || (typeof slide.adVideo === 'string' && slide.adVideo.endsWith(`/${promo.adVideo}`))
+      )
+    );
     adEvents = [
-      sponsoredVideoPromo,
-      ticketBuyerPromo,
-      organizerPromo,
+      ...featuredVideoPromos,
+      ...remainingManagedSlides,
       ...(promotedEvents.length ? promotedEvents : events.slice(0, 1))
     ];
     renderAdSlides();
     const adNote = document.querySelector('.ad-note');
-    if (adNote) adNote.textContent = adEvents.some((event) => !event.isPlatformPromo)
-      ? 'Organizer spotlight · sponsored events'
-      : 'Host your next event with Valor Africa.';
+    if (adNote) adNote.textContent = 'Featured on Valor Africa · sponsored events';
     const sponsoredBadge = document.querySelector('.sponsored-badge');
-    if (sponsoredBadge) {
-      sponsoredBadge.textContent = 'FOR EVENT ORGANIZERS';
-      sponsoredBadge.hidden = !adEvents.length;
-    }
+    if (sponsoredBadge) sponsoredBadge.hidden = !adEvents.length;
   }
 
   async function refreshLiveEvents() {
@@ -1105,6 +1200,9 @@
     if (!data) return;
     promotedEvents = data.featuredEvents;
     if (data.featuredError) console.warn('Sponsored event listings could not be loaded:', data.featuredError);
+    if (data.heroSlides !== null) managedHeroSlides = data.heroSlides;
+    else if (data.heroSlidesError) console.warn('Homepage hero slides could not be loaded:', data.heroSlidesError);
+    refreshPromotionalCarousel();
     if (data.health) {
       paymentHealthAvailable = true;
       mpesaCheckoutEnabled = Boolean(data.health.paymentsConfigured);

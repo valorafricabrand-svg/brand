@@ -74,19 +74,41 @@
     }
   ];
 
-  const productGrid = document.getElementById('shopProducts');
-  products.forEach((product) => {
-    const card = document.createElement('article');
-    card.className = 'shop-product-card';
+  const OPTIMIZED_WIDTHS = [640, 1024, 1600];
+
+  function buildProductPicture(product) {
+    const basename = product.image.replace(/\.[^.]+$/, '');
+    const picture = document.createElement('picture');
+    const source = document.createElement('source');
+    source.type = 'image/webp';
+    source.srcset = OPTIMIZED_WIDTHS
+      .map((w) => `images/optimized/w_${w}/${basename}.webp ${w}w`)
+      .join(', ');
+    source.sizes = '(max-width: 640px) 50vw, 33vw';
 
     const image = document.createElement('img');
     image.className = 'shop-product-image';
-    image.src = `images/Valor%20Shop/${product.image}`;
+    image.src = `images/optimized/w_1024/${basename}.jpg`;
+    image.srcset = OPTIMIZED_WIDTHS
+      .map((w) => `images/optimized/w_${w}/${basename}.jpg ${w}w`)
+      .join(', ');
+    image.sizes = source.sizes;
     image.alt = product.name;
     image.loading = 'lazy';
     image.addEventListener('error', () => {
       image.alt = `${product.name} image could not be loaded`;
     }, { once: true });
+
+    picture.append(source, image);
+    return picture;
+  }
+
+  const productGrid = document.getElementById('shopProducts');
+  products.forEach((product) => {
+    const card = document.createElement('article');
+    card.className = 'shop-product-card';
+
+    const image = buildProductPicture(product);
 
     const details = document.createElement('div');
     details.className = 'shop-product-details';
