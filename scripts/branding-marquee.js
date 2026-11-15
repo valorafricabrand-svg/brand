@@ -32,8 +32,8 @@
     const image = document.createElement('img');
     image.src = `images/Branding%20images/${encodeURIComponent(file)}`;
     image.alt = `Event branding example ${exampleNumber}`;
-    image.width = 180;
-    image.height = 120;
+    image.width = 200;
+    image.height = 250;
     image.loading = index < 4 ? 'eager' : 'lazy';
     image.decoding = 'async';
     image.addEventListener('error', () => {

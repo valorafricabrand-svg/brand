@@ -328,8 +328,8 @@ img { display: block; max-width: 100%; }
 .branding-marquee-track, .branding-marquee-group { display: flex; width: max-content; align-items: center; }
 .branding-marquee-track { animation: branding-showcase-scroll var(--branding-marquee-duration, 600s) linear infinite; }
 .branding-marquee-group { flex: 0 0 auto; gap: 10px; padding: 8px; }
-.branding-marquee-card { position: relative; flex: 0 0 auto; width: clamp(135px, 16vw, 180px); aspect-ratio: 3 / 2; margin: 0; overflow: hidden; border: 1px solid #d9e3df; border-radius: 10px; background: #e8efeb; }
-.branding-marquee-card img { width: 100%; height: 100%; padding: 5px; object-fit: contain; background: #f7f9f8; transition: transform .25s ease; }
+.branding-marquee-card { position: relative; flex: 0 0 auto; width: clamp(170px, 20vw, 240px); aspect-ratio: 4 / 5; margin: 0; overflow: hidden; border: 1px solid #d9e3df; border-radius: 10px; background: #e8efeb; }
+.branding-marquee-card img { width: 100%; height: 100%; object-fit: cover; background: #f7f9f8; transition: transform .25s ease; }
 .branding-marquee-card:hover img, .branding-marquee-card:focus-visible img { transform: scale(1.04); }
 .branding-marquee-card:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .branding-marquee-number { position: absolute; right: 7px; bottom: 7px; padding: 3px 7px; border-radius: 999px; color: #fff; background: rgba(3,61,50,.86); font-size: 9px; font-weight: 800; letter-spacing: .04em; }
@@ -830,7 +830,7 @@ img { display: block; max-width: 100%; }
   .branding-marquee { padding: 13px; }
   .branding-marquee-heading { align-items: flex-start; flex-direction: column; gap: 9px; }
   .branding-marquee-actions { justify-content: flex-start; gap: 8px 12px; }
-  .branding-marquee-card { width: 142px; }
+  .branding-marquee-card { width: clamp(130px, 38vw, 165px); }
   .branding-marquee-group { gap: 8px; padding: 7px; }
   .ad-arrow { width: 34px; height: 34px; }
   .advertise-link { margin-left: 3px; padding-inline: 3px; font-size: 10px; }
