@@ -75,18 +75,18 @@
         <div><p class="eyebrow">AVAILABLE BALANCE</p><h2 id="walletBalance">KES 0</h2></div>
       </div>
       <form id="walletDepositForm" class="service-form wallet-deposit">
-        <h2>Add money with M-Pesa</h2>
-        <p>A secure payment prompt will be sent to your verified wallet phone. Funds are added only after M-Pesa confirms the deposit.</p>
+        <h2>Add money to your wallet</h2>
+        <p id="walletDepositHelp">A secure M-Pesa payment prompt will be sent to your verified wallet phone. Funds are added only after M-Pesa confirms the deposit.</p>
         <label>Payment method
           <select name="paymentMethod">
             <option value="mpesa">M-Pesa</option>
+            <option value="nowpayments">Crypto (NOWPayments)</option>
             <option value="paypal" disabled>PayPal (coming soon)</option>
-            <option value="crypto" disabled>Crypto (coming soon)</option>
           </select>
         </label>
-        <p class="checkout-note">PayPal and crypto payments are coming soon; provider APIs are not connected yet.</p>
+        <p class="checkout-note">PayPal is coming soon; that provider isn't connected yet.</p>
         <label>Amount (KES)<input name="amountKes" type="number" min="100" max="150000" step="1" value="500" required></label>
-        <button class="button button-primary" type="submit">Deposit with M-Pesa</button>
+        <button class="button button-primary" type="submit" id="walletDepositSubmit">Deposit with M-Pesa</button>
         <p class="page-feedback" id="walletDepositFeedback" aria-live="polite"></p>
       </form>
       <div class="wallet-transactions">

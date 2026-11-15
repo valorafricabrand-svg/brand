@@ -295,31 +295,51 @@
     setFeedback(signInFeedback, '');
   });
 
-  document.getElementById('walletDepositForm').addEventListener('submit', async (event) => {
+  const depositForm = document.getElementById('walletDepositForm');
+  const depositSubmit = document.getElementById('walletDepositSubmit');
+  const depositHelp = document.getElementById('walletDepositHelp');
+
+  function updateDepositMethodCopy() {
+    const isCrypto = depositForm.elements.paymentMethod.value === 'nowpayments';
+    depositHelp.textContent = isCrypto
+      ? "You'll continue to NOWPayments to complete your crypto deposit. Funds are added only after payment is confirmed."
+      : 'A secure M-Pesa payment prompt will be sent to your verified wallet phone. Funds are added only after M-Pesa confirms the deposit.';
+    depositSubmit.textContent = isCrypto ? 'Continue to NOWPayments' : 'Deposit with M-Pesa';
+  }
+  depositForm.elements.paymentMethod.addEventListener('change', updateDepositMethodCopy);
+  updateDepositMethodCopy();
+
+  depositForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
-    if (form.elements.paymentMethod.value !== 'mpesa') {
-      setFeedback(depositFeedback, 'That payment method is not available yet.', true);
-      return;
-    }
-    const button = form.querySelector('[type=submit]');
-    button.disabled = true;
-    setFeedback(depositFeedback, 'Sending an M-Pesa deposit prompt…');
+    const paymentMethod = form.elements.paymentMethod.value;
+    const isCrypto = paymentMethod === 'nowpayments';
+    depositSubmit.disabled = true;
+    setFeedback(depositFeedback, isCrypto ? 'Creating your NOWPayments invoice…' : 'Sending an M-Pesa deposit prompt…');
     try {
       const result = await window.valorEventsApi('/api/wallet/deposits', {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
           amountKes: Number(form.elements.amountKes.value),
-          paymentMethod: form.elements.paymentMethod.value
+          paymentMethod
         })
       });
+      if (isCrypto && result.checkoutUrl) {
+        setFeedback(depositFeedback, 'Redirecting you to NOWPayments…');
+        window.location.assign(result.checkoutUrl);
+        return;
+      }
       setFeedback(depositFeedback, result.message || 'Approve the M-Pesa prompt to complete your deposit.');
       if (await loadWallet()) window.setTimeout(refreshWallet, 5000);
     } catch (error) {
       setFeedback(depositFeedback, error.message, true);
     } finally {
-      button.disabled = false;
+      depositSubmit.disabled = false;
     }
   });
+
+  if (new URLSearchParams(window.location.search).get('payment') === 'nowpayments') {
+    setFeedback(depositFeedback, 'Thanks — we’re waiting for NOWPayments to confirm your crypto deposit. This can take a few minutes.');
+  }
 })();

@@ -36,11 +36,10 @@ function convertKesToUsd(amountKes) {
   return amountUsd;
 }
 
-async function createInvoice(order) {
+async function createInvoice({ id, amountKes, description, successUrl, cancelUrl }) {
   if (!isConfigured()) throw new Error('NOWPayments is not configured.');
   const config = settings();
-  const priceAmountUsd = convertKesToUsd(order.amountKes);
-  const baseUrl = order.publicSiteUrl.replace(/\/+$/, '');
+  const priceAmountUsd = convertKesToUsd(amountKes);
   const response = await fetch('https://api.nowpayments.io/v1/invoice', {
     method: 'POST',
     headers: {
@@ -50,11 +49,11 @@ async function createInvoice(order) {
     body: JSON.stringify({
       price_amount: priceAmountUsd,
       price_currency: 'usd',
-      order_id: order.id,
-      order_description: `${order.eventTitle} - ${order.ticketType} x ${order.quantity}`.slice(0, 255),
+      order_id: id,
+      order_description: String(description).slice(0, 255),
       ipn_callback_url: config.callbackUrl,
-      success_url: `${baseUrl}/order.html?orderId=${encodeURIComponent(order.id)}&payment=nowpayments`,
-      cancel_url: `${baseUrl}/event.html?slug=${encodeURIComponent(order.eventSlug)}&checkout=cancelled`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       is_fixed_rate: true,
       is_fee_paid_by_user: false
     }),

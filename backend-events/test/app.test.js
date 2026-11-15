@@ -1824,6 +1824,66 @@ test('email verification links a new wallet and can also claim an existing walle
       .get(crypto.createHash('sha256').update(claimantAuth.Authorization.slice('Bearer '.length)).digest('hex')).account_id);
 });
 
+test('wallet deposits accept NOWPayments and credit the balance only after a signed, matching finished notification', async () => {
+  const auth = createTestAccountAuth('wallet-crypto@example.com');
+  createTestWallet(auth, 0);
+
+  const noWalletAuth = createTestAccountAuth('wallet-crypto-nowallet@example.com');
+  const noWallet = await request(app).post('/api/wallet/deposits').set(noWalletAuth)
+    .send({ amountKes: 500, paymentMethod: 'nowpayments' });
+  assert.equal(noWallet.status, 409);
+
+  const badMethod = await request(app).post('/api/wallet/deposits').set(auth)
+    .send({ amountKes: 500, paymentMethod: 'paypal' });
+  assert.equal(badMethod.status, 400);
+
+  const deposit = await request(app).post('/api/wallet/deposits').set(auth)
+    .send({ amountKes: 800, paymentMethod: 'nowpayments' });
+  assert.equal(deposit.status, 201);
+  assert.equal(deposit.body.paymentMethod, 'nowpayments');
+  assert.match(deposit.body.checkoutUrl, /^https:\/\/nowpayments\.test\//);
+  assert.equal(deposit.body.cryptoPriceAmountUsd, 6.15);
+  const pending = db.prepare('SELECT * FROM wallet_transactions WHERE id=?').get(deposit.body.transactionId);
+  assert.equal(pending.status, 'pending');
+  assert.ok(pending.nowpayments_invoice_id);
+  assert.equal(pending.nowpayments_price_amount_usd, 6.15);
+
+  const mismatchedPayload = {
+    payment_id: 'payment-wallet-1',
+    invoice_id: pending.nowpayments_invoice_id,
+    order_id: pending.id,
+    payment_status: 'finished',
+    price_amount: '1.00',
+    price_currency: 'usd'
+  };
+  await request(app).post('/api/nowpayments/ipn')
+    .set('x-nowpayments-sig', 'test-nowpayments-signature')
+    .send(mismatchedPayload);
+  assert.equal(db.prepare('SELECT status FROM wallet_transactions WHERE id=?').get(pending.id).status, 'review');
+
+  db.prepare("UPDATE wallet_transactions SET status='pending' WHERE id=?").run(pending.id);
+  const payload = { ...mismatchedPayload, price_amount: '6.15' };
+  const confirming = await request(app).post('/api/nowpayments/ipn')
+    .set('x-nowpayments-sig', 'test-nowpayments-signature')
+    .send({ ...payload, payment_status: 'confirming' });
+  assert.equal(confirming.status, 200);
+  assert.equal(db.prepare('SELECT status FROM wallet_transactions WHERE id=?').get(pending.id).status, 'pending');
+
+  const finished = await request(app).post('/api/nowpayments/ipn')
+    .set('x-nowpayments-sig', 'test-nowpayments-signature')
+    .send(payload);
+  assert.equal(finished.status, 200);
+  assert.equal(db.prepare('SELECT status FROM wallet_transactions WHERE id=?').get(pending.id).status, 'completed');
+  const balance = await request(app).get('/api/wallet').set(auth);
+  assert.equal(balance.body.balanceKes, 800);
+
+  await request(app).post('/api/nowpayments/ipn')
+    .set('x-nowpayments-sig', 'test-nowpayments-signature')
+    .send(payload);
+  const balanceAfterReplay = await request(app).get('/api/wallet').set(auth);
+  assert.equal(balanceAfterReplay.body.balanceKes, 800);
+});
+
 after(() => {
   db.close();
   fs.rmSync(path.join(__dirname, '..', '.test-uploads'), { recursive: true, force: true });

@@ -697,6 +697,14 @@ if (!walletTransactionSchema.includes("'merchant_voucher_purchase'")) {
   }
 }
 db.exec('CREATE INDEX IF NOT EXISTS wallet_transactions_reference ON wallet_transactions(reference_type,reference_id)');
+const walletTransactionColumnsFinal = db.prepare('PRAGMA table_info(wallet_transactions)').all();
+if (!walletTransactionColumnsFinal.some((column) => column.name === 'nowpayments_invoice_id')) {
+  db.exec('ALTER TABLE wallet_transactions ADD COLUMN nowpayments_invoice_id TEXT');
+}
+if (!walletTransactionColumnsFinal.some((column) => column.name === 'nowpayments_price_amount_usd')) {
+  db.exec('ALTER TABLE wallet_transactions ADD COLUMN nowpayments_price_amount_usd REAL');
+}
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS wallet_transactions_nowpayments_invoice ON wallet_transactions(nowpayments_invoice_id) WHERE nowpayments_invoice_id IS NOT NULL');
 db.exec(`
   INSERT OR IGNORE INTO merchant_voucher_ledger (id,merchant_id,order_id,transaction_type,amount_kes,reference_id,description,created_at)
   SELECT 'sale-' || o.id,o.merchant_id,o.id,'sale',o.amount_kes,o.id,'Confirmed merchant voucher sale.',COALESCE(o.paid_at,o.created_at)

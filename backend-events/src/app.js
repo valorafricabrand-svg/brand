@@ -531,6 +531,31 @@ function createApp(options = {}) {
       return res.status(400).json({ error: 'Invalid NOWPayments notification payload.' });
     }
     try {
+      const walletDeposit = db.prepare(`
+        SELECT * FROM wallet_transactions WHERE id=? AND transaction_type='deposit'
+      `).get(payload.order_id);
+      if (walletDeposit && walletDeposit.nowpayments_invoice_id === String(payload.invoice_id)) {
+        if (walletDeposit.status !== 'pending') return res.json({ received: true });
+        const receivedPriceKes = Number(payload.price_amount);
+        if (!Number.isFinite(receivedPriceKes) ||
+            Math.round(receivedPriceKes * 100) !== Math.round(walletDeposit.nowpayments_price_amount_usd * 100) ||
+            String(payload.price_currency).toLowerCase() !== 'usd') {
+          db.prepare("UPDATE wallet_transactions SET status='review',description=? WHERE id=? AND status='pending'")
+            .run('NOWPayments invoice total did not match this deposit; support review is required.', walletDeposit.id);
+          return res.json({ received: true });
+        }
+        if (['failed','expired'].includes(payload.payment_status)) {
+          db.prepare("UPDATE wallet_transactions SET status='failed',description=? WHERE id=? AND status='pending'")
+            .run('NOWPayments crypto deposit was not completed.', walletDeposit.id);
+          return res.json({ received: true });
+        }
+        if (payload.payment_status !== 'finished') return res.json({ received: true });
+        db.prepare(`
+          UPDATE wallet_transactions SET status='completed',description=?,completed_at=datetime('now')
+          WHERE id=? AND status='pending'
+        `).run('Crypto deposit confirmed by NOWPayments.', walletDeposit.id);
+        return res.json({ received: true });
+      }
       const order = db.prepare(`
         SELECT * FROM orders
         WHERE id=? AND order_type='ticket' AND payment_method='nowpayments'
@@ -1827,13 +1852,57 @@ function createApp(options = {}) {
   app.post('/api/wallet/deposits', requireAccount, async (req, res) => {
     const wallet = walletForAccount(req.account.id);
     if (!wallet) return res.status(409).json({ error: 'Verify and link your phone number before adding wallet funds.' });
-    if (req.body && req.body.paymentMethod !== undefined && req.body.paymentMethod !== 'mpesa') {
-      return res.status(400).json({ error: 'PayPal and crypto deposits are not available yet. Choose M-Pesa.' });
+    const paymentMethod = (req.body && req.body.paymentMethod) || 'mpesa';
+    if (!['mpesa', 'nowpayments'].includes(paymentMethod)) {
+      return res.status(400).json({ error: 'Choose M-Pesa or NOWPayments as the deposit method.' });
     }
     const amountKes = req.body && req.body.amountKes;
     if (!Number.isSafeInteger(amountKes) || amountKes < 100 || amountKes > 150000) {
       return res.status(400).json({ error: 'Deposit an amount from KES 100 to KES 150,000.' });
     }
+
+    if (paymentMethod === 'nowpayments') {
+      if (!nowpaymentsGateway.isConfigured()) {
+        return res.status(503).json({ error: 'Crypto deposits are not enabled yet. Choose M-Pesa.' });
+      }
+      const id = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO wallet_transactions (id,wallet_id,transaction_type,amount_kes,status,description)
+        VALUES (?,?,'deposit',?,'pending','Crypto wallet deposit')
+      `).run(id, wallet.id, amountKes);
+      try {
+        const baseUrl = publicSiteUrl.replace(/\/+$/, '');
+        const invoice = await nowpaymentsGateway.createInvoice({
+          id,
+          amountKes,
+          description: 'Valor Wallet deposit',
+          successUrl: `${baseUrl}/wallet.html?deposit=${encodeURIComponent(id)}&payment=nowpayments`,
+          cancelUrl: `${baseUrl}/wallet.html?checkout=cancelled`
+        });
+        if (!invoice || typeof invoice.id !== 'string' || typeof invoice.url !== 'string' ||
+            !Number.isFinite(invoice.priceAmountUsd) || invoice.priceAmountUsd <= 0) {
+          throw new Error('NOWPayments did not return a valid invoice.');
+        }
+        db.prepare(`
+          UPDATE wallet_transactions SET nowpayments_invoice_id=?,nowpayments_price_amount_usd=?
+          WHERE id=? AND status='pending'
+        `).run(invoice.id, invoice.priceAmountUsd, id);
+        return res.status(201).json({
+          transactionId: id,
+          status: 'pending',
+          paymentMethod: 'nowpayments',
+          checkoutUrl: invoice.url,
+          cryptoPriceAmountUsd: invoice.priceAmountUsd,
+          message: 'Continue to NOWPayments to complete your crypto deposit.'
+        });
+      } catch (error) {
+        db.prepare("UPDATE wallet_transactions SET status='failed',description=? WHERE id=? AND status='pending'")
+          .run('NOWPayments could not start the wallet deposit.', id);
+        console.error('NOWPayments wallet deposit could not be started:', error.message);
+        return res.status(502).json({ error: 'NOWPayments could not start checkout. Please try again shortly.' });
+      }
+    }
+
     if (paymentsUnavailable(res)) return;
     const id = crypto.randomUUID();
     db.prepare(`
@@ -1852,6 +1921,7 @@ function createApp(options = {}) {
       res.status(201).json({
         transactionId: id,
         status: 'pending',
+        paymentMethod: 'mpesa',
         message: checkout.customerMessage
       });
     } catch (error) {
@@ -3410,14 +3480,13 @@ function createApp(options = {}) {
 
   async function startNowPaymentsCheckout(res, order, amountKes, event) {
     try {
+      const baseUrl = publicSiteUrl.replace(/\/+$/, '');
       const invoice = await nowpaymentsGateway.createInvoice({
         id: order.id,
         amountKes,
-        quantity: order.quantity,
-        ticketType: order.ticketType,
-        eventTitle: event.title,
-        eventSlug: event.slug,
-        publicSiteUrl
+        description: `${event.title} - ${order.ticketType} x ${order.quantity}`,
+        successUrl: `${baseUrl}/order.html?orderId=${encodeURIComponent(order.id)}&payment=nowpayments`,
+        cancelUrl: `${baseUrl}/event.html?slug=${encodeURIComponent(event.slug)}&checkout=cancelled`
       });
       if (!invoice || typeof invoice.id !== 'string' || typeof invoice.url !== 'string' ||
           !Number.isFinite(invoice.priceAmountUsd) || invoice.priceAmountUsd <= 0) {

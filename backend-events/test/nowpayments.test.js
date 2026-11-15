@@ -39,11 +39,9 @@ test('NOWPayments invoices price KES ticket totals in configured USD and return 
     const invoice = await nowpayments.createInvoice({
       id: 'ticket-order-123',
       amountKes: 1600,
-      quantity: 2,
-      ticketType: 'Regular',
-      eventTitle: 'Test Event',
-      eventSlug: 'test-event',
-      publicSiteUrl: 'https://valorafrica.co.ke'
+      description: 'Test Event - Regular x 2',
+      successUrl: 'https://valorafrica.co.ke/order.html?orderId=ticket-order-123&payment=nowpayments',
+      cancelUrl: 'https://valorafrica.co.ke/event.html?slug=test-event&checkout=cancelled'
     });
     assert.equal(invoiceRequest.url, 'https://api.nowpayments.io/v1/invoice');
     assert.equal(invoiceRequest.options.headers['x-api-key'], 'test-api-key');
@@ -51,6 +49,9 @@ test('NOWPayments invoices price KES ticket totals in configured USD and return 
     assert.equal(invoiceRequest.body.price_currency, 'usd');
     assert.equal(invoiceRequest.body.order_id, 'ticket-order-123');
     assert.equal(invoiceRequest.body.ipn_callback_url, 'https://api.example.test/api/nowpayments/ipn');
+    assert.equal(invoiceRequest.body.order_description, 'Test Event - Regular x 2');
+    assert.equal(invoiceRequest.body.success_url, 'https://valorafrica.co.ke/order.html?orderId=ticket-order-123&payment=nowpayments');
+    assert.equal(invoiceRequest.body.cancel_url, 'https://valorafrica.co.ke/event.html?slug=test-event&checkout=cancelled');
     assert.equal(invoice.id, '12345');
     assert.equal(invoice.priceAmountUsd, 12.31);
   } finally {
