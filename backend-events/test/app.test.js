@@ -850,6 +850,46 @@ test('paid event ads do not consume ticket capacity', async () => {
   assert.equal(ticket.status, 201);
 });
 
+test('organizers can see daily page-view and ticket-sale analytics for their events, scoped to ads purchased', async () => {
+  const organizerAuth = createTestAccountAuth('ad-analytics-organizer@example.com');
+  const event = createStoredTestEvent('Ad Analytics Festival', organizerAuth);
+
+  assert.equal((await request(app).post(`/api/events/${event.id}/views`)).status, 204);
+  assert.equal((await request(app).post(`/api/events/${event.id}/views`)).status, 204);
+  assert.equal((await request(app).post(`/api/events/${event.id}/views`)).status, 204);
+  assert.equal((await request(app).post(`/api/events/${crypto.randomUUID()}/views`)).status, 404);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const noAdsYet = await request(app).get(`/api/events/mine/${event.id}/ad-analytics`).set(organizerAuth);
+  assert.equal(noAdsYet.status, 200);
+  assert.equal(noAdsYet.body.adBookings.length, 0);
+  assert.equal(noAdsYet.body.daily.find((day) => day.date === todayStr).views, 3);
+  assert.equal(noAdsYet.body.totals.views, 3);
+
+  const otherOrganizerAuth = createTestAccountAuth('ad-analytics-other@example.com');
+  const wrongOwner = await request(app).get(`/api/events/mine/${event.id}/ad-analytics`).set(otherOrganizerAuth);
+  assert.equal(wrongOwner.status, 404);
+
+  const packageResponse = await request(app).post('/api/ads/admin/packages')
+    .set(admin)
+    .send({ name: 'Analytics package', description: 'For analytics test.', durationDays: 5, priceKes: 2000 });
+  assert.equal(packageResponse.status, 201);
+  const startsAt = new Date(Date.now() - 2 * 86400000).toISOString();
+  const endsAt = new Date(Date.now() + 3 * 86400000).toISOString();
+  db.prepare(`
+    INSERT INTO ad_bookings (id,event_id,package_id,status,starts_at,ends_at) VALUES (?,?,?,'active',?,?)
+  `).run(crypto.randomUUID(), event.id, packageResponse.body.id, startsAt, endsAt);
+
+  const withAd = await request(app).get(`/api/events/mine/${event.id}/ad-analytics`).set(organizerAuth);
+  assert.equal(withAd.status, 200);
+  assert.equal(withAd.body.adBookings.length, 1);
+  assert.equal(withAd.body.adBookings[0].packageName, 'Analytics package');
+  assert.equal(withAd.body.adBookings[0].status, 'active');
+  assert.ok(withAd.body.rangeStart <= startsAt.slice(0, 10));
+  assert.ok(withAd.body.daily.some((day) => day.date === startsAt.slice(0, 10)));
+  assert.equal(withAd.body.daily.find((day) => day.date === todayStr).views, 3);
+});
+
 test('organizers can edit and archive their events but cannot manage another account event', async () => {
   const ownerEmail = 'event-editor@example.com';
   const owner = createTestAccountAuth(ownerEmail);

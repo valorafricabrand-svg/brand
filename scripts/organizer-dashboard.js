@@ -20,6 +20,76 @@
     }).format(new Date(value));
   }
 
+  function formatShortDate(dateStr) {
+    return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' });
+  }
+
+  function buildAdAnalyticsPanel(data) {
+    const wrap = document.createElement('div');
+
+    if (data.adBookings.length) {
+      const bookingsList = document.createElement('ul');
+      bookingsList.className = 'ad-analytics-bookings';
+      data.adBookings.forEach((booking) => {
+        const item = document.createElement('li');
+        const dateRange = booking.startsAt
+          ? `${formatShortDate(booking.startsAt.slice(0, 10))} – ${formatShortDate(booking.endsAt.slice(0, 10))}`
+          : 'Not started yet';
+        item.textContent = `${booking.packageName} · KES ${Number(booking.priceKes).toLocaleString('en-KE')} · ${booking.status} · ${dateRange}`;
+        bookingsList.appendChild(item);
+      });
+      wrap.appendChild(bookingsList);
+    } else {
+      const note = document.createElement('p');
+      note.className = 'ad-analytics-empty';
+      note.textContent = 'No ads purchased yet for this event — showing organic page views for the last 30 days.';
+      wrap.appendChild(note);
+    }
+
+    const maxViews = Math.max(1, ...data.daily.map((day) => day.views));
+    const chart = document.createElement('div');
+    chart.className = 'ad-chart';
+    data.daily.forEach((day) => {
+      const bar = document.createElement('div');
+      bar.className = `ad-chart-bar${day.ticketsSold > 0 ? ' ad-chart-bar-converted' : ''}`;
+      bar.style.height = `${Math.max(3, Math.round((day.views / maxViews) * 100))}%`;
+      bar.title = `${formatShortDate(day.date)}: ${day.views} view${day.views === 1 ? '' : 's'}`
+        + (day.ticketsSold ? `, ${day.ticketsSold} ticket${day.ticketsSold === 1 ? '' : 's'} (KES ${Number(day.grossKes).toLocaleString('en-KE')})` : '');
+      chart.appendChild(bar);
+    });
+    const chartWrap = document.createElement('div');
+    chartWrap.className = 'ad-chart-wrap';
+    const chartLabels = document.createElement('div');
+    chartLabels.className = 'ad-chart-labels';
+    const startLabel = document.createElement('span');
+    startLabel.textContent = formatShortDate(data.rangeStart);
+    const endLabel = document.createElement('span');
+    endLabel.textContent = formatShortDate(data.rangeEnd);
+    chartLabels.append(startLabel, endLabel);
+    chartWrap.append(chart, chartLabels);
+    wrap.appendChild(chartWrap);
+
+    const totals = document.createElement('p');
+    totals.className = 'ad-analytics-totals';
+    totals.textContent = `${data.totals.views.toLocaleString('en-KE')} page views · ${data.totals.ticketsSold.toLocaleString('en-KE')} tickets sold · `
+      + `KES ${Number(data.totals.grossKes).toLocaleString('en-KE')} in sales since ${formatShortDate(data.rangeStart)}`;
+    wrap.appendChild(totals);
+
+    return wrap;
+  }
+
+  async function loadAdAnalytics(eventId, panel) {
+    panel.textContent = 'Loading ad analytics…';
+    panel.classList.remove('error');
+    try {
+      const data = await window.valorEventsApi(`/api/events/mine/${encodeURIComponent(eventId)}/ad-analytics`, { headers });
+      panel.replaceChildren(buildAdAnalyticsPanel(data));
+    } catch (error) {
+      panel.textContent = error.message;
+      panel.classList.add('error');
+    }
+  }
+
   async function loadEvents() {
     if (!token) {
       showSignIn('Sign in to manage events submitted from this account.');
@@ -56,6 +126,23 @@
         const metrics = document.createElement('p');
         metrics.textContent = `Tickets sold: ${event.ticketsSold} · Checked in: ${event.checkedIn} · Gross sales: KES ${Number(event.grossKes).toLocaleString('en-KE')}`;
         card.append(title, status, details, metrics);
+        const adAnalyticsToggle = document.createElement('button');
+        adAnalyticsToggle.type = 'button';
+        adAnalyticsToggle.className = 'button secondary ad-analytics-toggle';
+        adAnalyticsToggle.textContent = 'View ad analytics';
+        const adAnalyticsPanel = document.createElement('div');
+        adAnalyticsPanel.className = 'ad-analytics-panel';
+        adAnalyticsPanel.hidden = true;
+        let adAnalyticsLoaded = false;
+        adAnalyticsToggle.addEventListener('click', async () => {
+          adAnalyticsPanel.hidden = !adAnalyticsPanel.hidden;
+          adAnalyticsToggle.textContent = adAnalyticsPanel.hidden ? 'View ad analytics' : 'Hide ad analytics';
+          if (!adAnalyticsPanel.hidden && !adAnalyticsLoaded) {
+            adAnalyticsLoaded = true;
+            await loadAdAnalytics(event.id, adAnalyticsPanel);
+          }
+        });
+        card.append(adAnalyticsToggle, adAnalyticsPanel);
         if (event.hasActiveOrders || event.hasActivePromotion) {
           const promotionNote = document.createElement('p');
           promotionNote.textContent = event.hasActiveOrders && event.hasActivePromotion

@@ -305,6 +305,13 @@ db.exec(`
     PRIMARY KEY (account_id,event_id)
   );
 
+  CREATE TABLE IF NOT EXISTS event_view_daily (
+    event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    view_date TEXT NOT NULL,
+    view_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (event_id, view_date)
+  );
+
   CREATE TABLE IF NOT EXISTS ticket_reminder_log (
     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,

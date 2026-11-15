@@ -687,6 +687,7 @@ function createApp(options = {}) {
   const submissionLimiter = createSubmissionLimiter();
   const partnerApplicationLimiter = createSubmissionLimiter(10, 'partnership applications');
   const partnerReferralLimiter = createSubmissionLimiter(1000, 'referral visits');
+  const eventViewLimiter = createSubmissionLimiter(1000, 'event views');
   const giftPurchaseLimiter = createSubmissionLimiter(8, 'gift purchases');
   const giftCodeAttemptLimiter = createSubmissionLimiter(10, 'gift-code attempts');
   const merchantApplicationLimiter = createSubmissionLimiter(5, 'gift merchant applications');
@@ -2650,6 +2651,17 @@ function createApp(options = {}) {
     res.json({ event: publicEvent(row) });
   });
 
+  app.post('/api/events/:id/views', eventViewLimiter, (req, res) => {
+    const event = db.prepare("SELECT id FROM events WHERE id=? AND status='approved' AND deleted_at IS NULL").get(req.params.id);
+    if (!event) return res.status(404).json({ error: 'Event not found.' });
+    const today = new Date().toISOString().slice(0, 10);
+    db.prepare(`
+      INSERT INTO event_view_daily (event_id,view_date,view_count) VALUES (?,?,1)
+      ON CONFLICT(event_id,view_date) DO UPDATE SET view_count=view_count+1
+    `).run(event.id, today);
+    res.status(204).end();
+  });
+
   app.get('/api/events/mine', requireAccount, (req, res) => {
     const events = db.prepare(`
       SELECT e.*,
@@ -2685,6 +2697,82 @@ function createApp(options = {}) {
         hasActiveOrders: event.active_orders > 0,
         hasActivePromotion: event.active_promotions > 0
       }))
+    });
+  });
+
+  app.get('/api/events/mine/:id/ad-analytics', requireAccount, (req, res) => {
+    const event = db.prepare(`
+      SELECT id,title FROM events WHERE id=? AND organizer_account_id=? AND deleted_at IS NULL
+    `).get(req.params.id, req.account.id);
+    if (!event) return res.status(404).json({ error: 'Event not found in your organizer account.' });
+
+    const adBookings = db.prepare(`
+      SELECT b.id,b.status,b.starts_at AS startsAt,b.ends_at AS endsAt,b.created_at AS createdAt,
+        p.name AS packageName,p.price_kes AS priceKes
+      FROM ad_bookings b JOIN ad_packages p ON p.id=b.package_id
+      WHERE b.event_id=?
+      ORDER BY b.created_at ASC
+    `).all(event.id);
+
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    const fallbackStart = new Date(today.getTime() - 29 * 86400000).toISOString().slice(0, 10);
+    const earliestBookingStart = adBookings
+      .map((booking) => booking.startsAt || booking.createdAt)
+      .filter(Boolean)
+      .sort()[0];
+    const startDate = earliestBookingStart && earliestBookingStart.slice(0, 10) < fallbackStart
+      ? earliestBookingStart.slice(0, 10)
+      : fallbackStart;
+
+    const viewRows = db.prepare(`
+      SELECT view_date AS date,view_count AS views FROM event_view_daily
+      WHERE event_id=? AND view_date BETWEEN ? AND ?
+    `).all(event.id, startDate, todayStr);
+    const viewsByDate = new Map(viewRows.map((row) => [row.date, row.views]));
+
+    const ticketRows = db.prepare(`
+      SELECT substr(COALESCE(paid_at,created_at),1,10) AS date,
+        COALESCE(SUM(quantity),0) AS ticketsSold, COALESCE(SUM(amount_kes),0) AS grossKes
+      FROM orders
+      WHERE event_id=? AND order_type='ticket' AND status IN ('paid','confirmed')
+        AND substr(COALESCE(paid_at,created_at),1,10) BETWEEN ? AND ?
+      GROUP BY date
+    `).all(event.id, startDate, todayStr);
+    const ticketsByDate = new Map(ticketRows.map((row) => [row.date, row]));
+
+    const daily = [];
+    for (let cursor = new Date(`${startDate}T00:00:00Z`); cursor <= today; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+      const date = cursor.toISOString().slice(0, 10);
+      const ticketRow = ticketsByDate.get(date);
+      daily.push({
+        date,
+        views: viewsByDate.get(date) || 0,
+        ticketsSold: ticketRow ? ticketRow.ticketsSold : 0,
+        grossKes: ticketRow ? ticketRow.grossKes : 0
+      });
+    }
+
+    const totals = daily.reduce((acc, day) => ({
+      views: acc.views + day.views,
+      ticketsSold: acc.ticketsSold + day.ticketsSold,
+      grossKes: acc.grossKes + day.grossKes
+    }), { views: 0, ticketsSold: 0, grossKes: 0 });
+
+    res.json({
+      event: { id: event.id, title: event.title },
+      adBookings: adBookings.map((booking) => ({
+        id: booking.id,
+        status: booking.status,
+        startsAt: booking.startsAt,
+        endsAt: booking.endsAt,
+        packageName: booking.packageName,
+        priceKes: booking.priceKes
+      })),
+      rangeStart: startDate,
+      rangeEnd: todayStr,
+      daily,
+      totals
     });
   });
 

@@ -187,6 +187,8 @@
 
   function recordEventView(event) {
     if (!event.id) return;
+    api('/api/events/' + encodeURIComponent(event.id) + '/views', { method: 'POST' })
+      .catch((error) => { console.error('Could not record this event view:', error.message); });
     const token = window.valorAccountToken();
     if (!token) return;
     api('/api/account/events/' + encodeURIComponent(event.id) + '/view', {
