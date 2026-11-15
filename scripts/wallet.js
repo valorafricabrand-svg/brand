@@ -299,12 +299,25 @@
   const depositSubmit = document.getElementById('walletDepositSubmit');
   const depositHelp = document.getElementById('walletDepositHelp');
 
+  const depositCopy = {
+    mpesa: {
+      help: 'A secure M-Pesa payment prompt will be sent to your verified wallet phone. Funds are added only after M-Pesa confirms the deposit.',
+      submit: 'Deposit with M-Pesa'
+    },
+    nowpayments: {
+      help: "You'll continue to NOWPayments to complete your crypto deposit. Funds are added only after payment is confirmed.",
+      submit: 'Continue to NOWPayments'
+    },
+    paypal: {
+      help: "You'll continue to PayPal to complete your deposit. Funds are added only after PayPal confirms the payment.",
+      submit: 'Continue to PayPal'
+    }
+  };
+
   function updateDepositMethodCopy() {
-    const isCrypto = depositForm.elements.paymentMethod.value === 'nowpayments';
-    depositHelp.textContent = isCrypto
-      ? "You'll continue to NOWPayments to complete your crypto deposit. Funds are added only after payment is confirmed."
-      : 'A secure M-Pesa payment prompt will be sent to your verified wallet phone. Funds are added only after M-Pesa confirms the deposit.';
-    depositSubmit.textContent = isCrypto ? 'Continue to NOWPayments' : 'Deposit with M-Pesa';
+    const copy = depositCopy[depositForm.elements.paymentMethod.value] || depositCopy.mpesa;
+    depositHelp.textContent = copy.help;
+    depositSubmit.textContent = copy.submit;
   }
   depositForm.elements.paymentMethod.addEventListener('change', updateDepositMethodCopy);
   updateDepositMethodCopy();
@@ -313,9 +326,10 @@
     event.preventDefault();
     const form = event.currentTarget;
     const paymentMethod = form.elements.paymentMethod.value;
-    const isCrypto = paymentMethod === 'nowpayments';
+    const redirects = paymentMethod === 'nowpayments' || paymentMethod === 'paypal';
     depositSubmit.disabled = true;
-    setFeedback(depositFeedback, isCrypto ? 'Creating your NOWPayments invoice…' : 'Sending an M-Pesa deposit prompt…');
+    setFeedback(depositFeedback, paymentMethod === 'nowpayments' ? 'Creating your NOWPayments invoice…'
+      : paymentMethod === 'paypal' ? 'Creating your PayPal order…' : 'Sending an M-Pesa deposit prompt…');
     try {
       const result = await window.valorEventsApi('/api/wallet/deposits', {
         method: 'POST',
@@ -325,8 +339,8 @@
           paymentMethod
         })
       });
-      if (isCrypto && result.checkoutUrl) {
-        setFeedback(depositFeedback, 'Redirecting you to NOWPayments…');
+      if (redirects && result.checkoutUrl) {
+        setFeedback(depositFeedback, paymentMethod === 'paypal' ? 'Redirecting you to PayPal…' : 'Redirecting you to NOWPayments…');
         window.location.assign(result.checkoutUrl);
         return;
       }
@@ -337,6 +351,36 @@
     } finally {
       depositSubmit.disabled = false;
     }
+  });
+
+  let paypalReturnHandled = false;
+
+  async function confirmPaypalDepositOnReturn() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') !== 'paypal') return;
+    const depositId = params.get('deposit');
+    if (!depositId || paypalReturnHandled) return;
+    paypalReturnHandled = true;
+    window.history.replaceState(null, '', window.location.pathname);
+    setFeedback(depositFeedback, 'Confirming your PayPal payment…');
+    try {
+      const result = await window.valorEventsApi(`/api/wallet/deposits/${encodeURIComponent(depositId)}/paypal-capture`, {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      if (result.status === 'completed') {
+        setFeedback(depositFeedback, 'Your PayPal deposit was confirmed.');
+        if (await loadWallet()) window.setTimeout(refreshWallet, 5000);
+      } else {
+        setFeedback(depositFeedback, result.message || 'PayPal has not completed this payment yet.');
+      }
+    } catch (error) {
+      setFeedback(depositFeedback, error.message, true);
+    }
+  }
+
+  document.addEventListener('valor:account-session', (event) => {
+    if (event.detail && event.detail.account) confirmPaypalDepositOnReturn();
   });
 
   if (new URLSearchParams(window.location.search).get('payment') === 'nowpayments') {

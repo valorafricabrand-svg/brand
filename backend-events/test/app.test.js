@@ -87,6 +87,42 @@ const nowpaymentsGateway = {
     return signature === 'test-nowpayments-signature';
   }
 };
+let paypalOrderNumber = 0;
+const paypalOrders = new Map();
+const paypalGateway = {
+  enabled: true,
+  isConfigured() {
+    return this.enabled;
+  },
+  environment() {
+    return 'sandbox';
+  },
+  kesPerUsdRate() {
+    return 130;
+  },
+  async createOrder({ id, amountKes }) {
+    paypalOrderNumber += 1;
+    const orderId = `PAYPAL-ORDER-${paypalOrderNumber}`;
+    const amountUsd = Math.round((amountKes / 130) * 100) / 100;
+    paypalOrders.set(orderId, { customId: id, amountUsd });
+    return { orderId, approveUrl: `https://paypal.test/approve/${orderId}`, amountUsd };
+  },
+  async captureOrder(orderId) {
+    const record = paypalOrders.get(orderId);
+    if (!record) throw new Error('PayPal order not found.');
+    return {
+      status: 'COMPLETED',
+      customId: record.customId,
+      captureStatus: 'COMPLETED',
+      amountValue: record.amountUsd,
+      amountCurrency: 'USD'
+    };
+  },
+  async verifyWebhookEvent(headers, event) {
+    if (headers['paypal-transmission-sig'] !== 'test-paypal-signature') return null;
+    return event;
+  }
+};
 const smsCodes = new Map();
 const smsGateway = {
   enabled: true,
@@ -148,6 +184,7 @@ const app = createApp({
   payhero: paymentGateway,
   stripe: stripeGateway,
   nowpayments: nowpaymentsGateway,
+  paypal: paypalGateway,
   sms: smsGateway,
   email: emailGateway,
   ticketEmail: ticketEmailGateway,
@@ -1026,7 +1063,7 @@ test('account sign-in links existing phone wallet and pays verified deposits, ti
   assert.equal(deposit.status, 201);
   const unsupportedDeposit = await request(app).post('/api/wallet/deposits').set(walletAuth).send({
     amountKes: 5000,
-    paymentMethod: 'paypal'
+    paymentMethod: 'applepay'
   });
   assert.equal(unsupportedDeposit.status, 400);
   assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 1200);
@@ -1834,7 +1871,7 @@ test('wallet deposits accept NOWPayments and credit the balance only after a sig
   assert.equal(noWallet.status, 409);
 
   const badMethod = await request(app).post('/api/wallet/deposits').set(auth)
-    .send({ amountKes: 500, paymentMethod: 'paypal' });
+    .send({ amountKes: 500, paymentMethod: 'applepay' });
   assert.equal(badMethod.status, 400);
 
   const deposit = await request(app).post('/api/wallet/deposits').set(auth)
@@ -1882,6 +1919,88 @@ test('wallet deposits accept NOWPayments and credit the balance only after a sig
     .send(payload);
   const balanceAfterReplay = await request(app).get('/api/wallet').set(auth);
   assert.equal(balanceAfterReplay.body.balanceKes, 800);
+});
+
+test('wallet deposits accept PayPal, crediting only on a matched capture or a verified webhook', async () => {
+  const auth = createTestAccountAuth('wallet-paypal@example.com');
+  createTestWallet(auth, 0);
+
+  const deposit = await request(app).post('/api/wallet/deposits').set(auth)
+    .send({ amountKes: 650, paymentMethod: 'paypal' });
+  assert.equal(deposit.status, 201);
+  assert.equal(deposit.body.paymentMethod, 'paypal');
+  assert.match(deposit.body.checkoutUrl, /^https:\/\/paypal\.test\/approve\//);
+  assert.equal(deposit.body.cryptoPriceAmountUsd, 5);
+  const pending = db.prepare('SELECT * FROM wallet_transactions WHERE id=?').get(deposit.body.transactionId);
+  assert.equal(pending.status, 'pending');
+  assert.ok(pending.paypal_order_id);
+  assert.equal(pending.paypal_amount_usd, 5);
+
+  const otherAuth = createTestAccountAuth('wallet-paypal-other@example.com');
+  const wrongOwner = await request(app).post(`/api/wallet/deposits/${pending.id}/paypal-capture`).set(otherAuth);
+  assert.equal(wrongOwner.status, 404);
+
+  const originalCapture = paypalGateway.captureOrder;
+  paypalGateway.captureOrder = async () => ({
+    status: 'COMPLETED', customId: 'someone-elses-deposit', captureStatus: 'COMPLETED', amountValue: 5, amountCurrency: 'USD'
+  });
+  const mismatchedCapture = await request(app).post(`/api/wallet/deposits/${pending.id}/paypal-capture`).set(auth);
+  assert.equal(mismatchedCapture.status, 409);
+  assert.equal(db.prepare('SELECT status FROM wallet_transactions WHERE id=?').get(pending.id).status, 'review');
+  paypalGateway.captureOrder = originalCapture;
+
+  db.prepare("UPDATE wallet_transactions SET status='pending' WHERE id=?").run(pending.id);
+  const captured = await request(app).post(`/api/wallet/deposits/${pending.id}/paypal-capture`).set(auth);
+  assert.equal(captured.status, 200);
+  assert.equal(captured.body.status, 'completed');
+  assert.equal((await request(app).get('/api/wallet').set(auth)).body.balanceKes, 650);
+
+  const replay = await request(app).post(`/api/wallet/deposits/${pending.id}/paypal-capture`).set(auth);
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.status, 'completed');
+  assert.equal((await request(app).get('/api/wallet').set(auth)).body.balanceKes, 650);
+
+  const webhookDeposit = await request(app).post('/api/wallet/deposits').set(auth)
+    .send({ amountKes: 390, paymentMethod: 'paypal' });
+  const webhookPending = db.prepare('SELECT * FROM wallet_transactions WHERE id=?').get(webhookDeposit.body.transactionId);
+  const eventFor = (overrides) => ({
+    event_type: 'PAYMENT.CAPTURE.COMPLETED',
+    resource: { custom_id: webhookPending.id, amount: { value: String(webhookPending.paypal_amount_usd), currency_code: 'USD' } },
+    ...overrides
+  });
+
+  const badSignature = await request(app).post('/api/paypal/webhook')
+    .set('paypal-transmission-sig', 'invalid').send(eventFor());
+  assert.equal(badSignature.status, 400);
+  assert.equal(db.prepare('SELECT status FROM wallet_transactions WHERE id=?').get(webhookPending.id).status, 'pending');
+
+  const mismatchedAmount = await request(app).post('/api/paypal/webhook')
+    .set('paypal-transmission-sig', 'test-paypal-signature')
+    .send(eventFor({ resource: { custom_id: webhookPending.id, amount: { value: '1.00', currency_code: 'USD' } } }));
+  assert.equal(mismatchedAmount.status, 200);
+  assert.equal(db.prepare('SELECT status FROM wallet_transactions WHERE id=?').get(webhookPending.id).status, 'review');
+
+  db.prepare("UPDATE wallet_transactions SET status='pending' WHERE id=?").run(webhookPending.id);
+  const finished = await request(app).post('/api/paypal/webhook')
+    .set('paypal-transmission-sig', 'test-paypal-signature').send(eventFor());
+  assert.equal(finished.status, 200);
+  assert.equal(db.prepare('SELECT status FROM wallet_transactions WHERE id=?').get(webhookPending.id).status, 'completed');
+  assert.equal((await request(app).get('/api/wallet').set(auth)).body.balanceKes, 1040);
+
+  await request(app).post('/api/paypal/webhook')
+    .set('paypal-transmission-sig', 'test-paypal-signature').send(eventFor());
+  assert.equal((await request(app).get('/api/wallet').set(auth)).body.balanceKes, 1040);
+
+  const deniedDeposit = await request(app).post('/api/wallet/deposits').set(auth)
+    .send({ amountKes: 260, paymentMethod: 'paypal' });
+  const deniedPending = db.prepare('SELECT * FROM wallet_transactions WHERE id=?').get(deniedDeposit.body.transactionId);
+  await request(app).post('/api/paypal/webhook')
+    .set('paypal-transmission-sig', 'test-paypal-signature')
+    .send({
+      event_type: 'PAYMENT.CAPTURE.DENIED',
+      resource: { custom_id: deniedPending.id, amount: { value: String(deniedPending.paypal_amount_usd), currency_code: 'USD' } }
+    });
+  assert.equal(db.prepare('SELECT status FROM wallet_transactions WHERE id=?').get(deniedPending.id).status, 'failed');
 });
 
 after(() => {

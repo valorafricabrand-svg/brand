@@ -12,6 +12,7 @@ const { createLoginLimiter, initializeAdmin, login, requireAdmin } = require('./
 const payhero = require('./payhero');
 const stripe = require('./stripe');
 const nowpayments = require('./nowpayments');
+const paypal = require('./paypal');
 const walletSms = require('./wallet-sms');
 const accountEmail = require('./account-email');
 const { normalizeKenyanPhone } = require('./kenyan-phone');
@@ -273,6 +274,7 @@ function createApp(options = {}) {
   const paymentGateway = options.payhero || payhero;
   const stripeGateway = options.stripe || stripe;
   const nowpaymentsGateway = options.nowpayments || nowpayments;
+  const paypalGateway = options.paypal || paypal;
   const smsGateway = options.sms || walletSms;
   const emailGateway = options.email || accountEmail;
   const ticketEmailGateway = options.ticketEmail || require('./ticket-email');
@@ -624,6 +626,45 @@ function createApp(options = {}) {
       return next(error);
     }
   });
+  app.post('/api/paypal/webhook', async (req, res, next) => {
+    if (!paypalGateway.isConfigured()) {
+      return res.status(503).json({ error: 'PayPal notifications are not configured.' });
+    }
+    try {
+      const event = await paypalGateway.verifyWebhookEvent(req.headers, req.body);
+      if (!event) return res.status(400).json({ error: 'Invalid PayPal webhook signature.' });
+      if (!['PAYMENT.CAPTURE.COMPLETED', 'PAYMENT.CAPTURE.DENIED', 'PAYMENT.CAPTURE.DECLINED'].includes(event.event_type)) {
+        return res.json({ received: true });
+      }
+      const resource = event.resource || {};
+      const depositId = resource.custom_id;
+      if (typeof depositId !== 'string' || !depositId) return res.json({ received: true });
+      const deposit = db.prepare(`
+        SELECT * FROM wallet_transactions WHERE id=? AND transaction_type='deposit' AND paypal_order_id IS NOT NULL
+      `).get(depositId);
+      if (!deposit || deposit.status !== 'pending') return res.json({ received: true });
+      if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
+        const amountValue = resource.amount && Number(resource.amount.value);
+        if (!Number.isFinite(amountValue) ||
+            Math.round(amountValue * 100) !== Math.round(deposit.paypal_amount_usd * 100) ||
+            String(resource.amount && resource.amount.currency_code).toUpperCase() !== 'USD') {
+          db.prepare("UPDATE wallet_transactions SET status='review',description=? WHERE id=? AND status='pending'")
+            .run('PayPal webhook amount did not match this deposit; support review is required.', deposit.id);
+          return res.json({ received: true });
+        }
+        db.prepare(`
+          UPDATE wallet_transactions SET status='completed',description=?,completed_at=datetime('now')
+          WHERE id=? AND status='pending'
+        `).run('PayPal deposit confirmed by webhook.', deposit.id);
+      } else {
+        db.prepare("UPDATE wallet_transactions SET status='failed',description=? WHERE id=? AND status='pending'")
+          .run('PayPal payment was not completed.', deposit.id);
+      }
+      return res.json({ received: true });
+    } catch (error) {
+      return next(error);
+    }
+  });
   app.use('/uploads/events', express.static(uploadDirectory, {
     fallthrough: false,
     maxAge: '1d',
@@ -873,6 +914,9 @@ function createApp(options = {}) {
       nowpaymentsKesPerUsd: typeof nowpaymentsGateway.kesPerUsdRate === 'function'
         ? nowpaymentsGateway.kesPerUsdRate()
         : null,
+      paypalConfigured: paypalGateway.isConfigured(),
+      paypalEnvironment: typeof paypalGateway.environment === 'function' ? paypalGateway.environment() : null,
+      paypalKesPerUsd: typeof paypalGateway.kesPerUsdRate === 'function' ? paypalGateway.kesPerUsdRate() : null,
       phoneLinkSmsConfigured: smsGateway.isConfigured(),
       emailAuthConfigured: emailGateway.isConfigured(),
       ticketEmailsConfigured: ticketEmailGateway.isConfigured(),
@@ -1853,8 +1897,8 @@ function createApp(options = {}) {
     const wallet = walletForAccount(req.account.id);
     if (!wallet) return res.status(409).json({ error: 'Verify and link your phone number before adding wallet funds.' });
     const paymentMethod = (req.body && req.body.paymentMethod) || 'mpesa';
-    if (!['mpesa', 'nowpayments'].includes(paymentMethod)) {
-      return res.status(400).json({ error: 'Choose M-Pesa or NOWPayments as the deposit method.' });
+    if (!['mpesa', 'nowpayments', 'paypal'].includes(paymentMethod)) {
+      return res.status(400).json({ error: 'Choose M-Pesa, NOWPayments, or PayPal as the deposit method.' });
     }
     const amountKes = req.body && req.body.amountKes;
     if (!Number.isSafeInteger(amountKes) || amountKes < 100 || amountKes > 150000) {
@@ -1903,6 +1947,44 @@ function createApp(options = {}) {
       }
     }
 
+    if (paymentMethod === 'paypal') {
+      if (!paypalGateway.isConfigured()) {
+        return res.status(503).json({ error: 'PayPal deposits are not enabled yet. Choose M-Pesa.' });
+      }
+      const id = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO wallet_transactions (id,wallet_id,transaction_type,amount_kes,status,description)
+        VALUES (?,?,'deposit',?,'pending','PayPal wallet deposit')
+      `).run(id, wallet.id, amountKes);
+      try {
+        const baseUrl = publicSiteUrl.replace(/\/+$/, '');
+        const order = await paypalGateway.createOrder({
+          id,
+          amountKes,
+          description: 'Valor Wallet deposit',
+          returnUrl: `${baseUrl}/wallet.html?deposit=${encodeURIComponent(id)}&payment=paypal`,
+          cancelUrl: `${baseUrl}/wallet.html?checkout=cancelled`
+        });
+        db.prepare(`
+          UPDATE wallet_transactions SET paypal_order_id=?,paypal_amount_usd=?
+          WHERE id=? AND status='pending'
+        `).run(order.orderId, order.amountUsd, id);
+        return res.status(201).json({
+          transactionId: id,
+          status: 'pending',
+          paymentMethod: 'paypal',
+          checkoutUrl: order.approveUrl,
+          cryptoPriceAmountUsd: order.amountUsd,
+          message: 'Continue to PayPal to complete your deposit.'
+        });
+      } catch (error) {
+        db.prepare("UPDATE wallet_transactions SET status='failed',description=? WHERE id=? AND status='pending'")
+          .run('PayPal could not start the wallet deposit.', id);
+        console.error('PayPal wallet deposit could not be started:', error.message);
+        return res.status(502).json({ error: 'PayPal could not start checkout. Please try again shortly.' });
+      }
+    }
+
     if (paymentsUnavailable(res)) return;
     const id = crypto.randomUUID();
     db.prepare(`
@@ -1929,6 +2011,43 @@ function createApp(options = {}) {
         .run('M-Pesa could not start the wallet deposit.', id);
       console.error('M-Pesa wallet deposit could not be started:', error.message);
       res.status(502).json({ error: 'M-Pesa could not start the deposit prompt. Try again shortly.' });
+    }
+  });
+
+  app.post('/api/wallet/deposits/:id/paypal-capture', requireAccount, async (req, res, next) => {
+    const wallet = walletForAccount(req.account.id);
+    const deposit = wallet && db.prepare(`
+      SELECT * FROM wallet_transactions WHERE id=? AND wallet_id=? AND transaction_type='deposit' AND paypal_order_id IS NOT NULL
+    `).get(req.params.id, wallet.id);
+    if (!deposit) return res.status(404).json({ error: 'Deposit not found.' });
+    if (deposit.status !== 'pending') {
+      return res.json({ status: deposit.status });
+    }
+    try {
+      const capture = await paypalGateway.captureOrder(deposit.paypal_order_id);
+      if (capture.customId !== deposit.id) {
+        db.prepare("UPDATE wallet_transactions SET status='review',description=? WHERE id=? AND status='pending'")
+          .run('PayPal capture did not match this deposit; support review is required.', deposit.id);
+        return res.status(409).json({ error: 'This PayPal payment could not be matched to your deposit.' });
+      }
+      if (capture.status !== 'COMPLETED' && capture.captureStatus !== 'COMPLETED') {
+        return res.status(202).json({ status: 'pending', message: 'PayPal has not completed this payment yet.' });
+      }
+      if (!Number.isFinite(capture.amountValue) ||
+          Math.round(capture.amountValue * 100) !== Math.round(deposit.paypal_amount_usd * 100) ||
+          String(capture.amountCurrency).toUpperCase() !== 'USD') {
+        db.prepare("UPDATE wallet_transactions SET status='review',description=? WHERE id=? AND status='pending'")
+          .run('PayPal payment amount did not match this deposit; support review is required.', deposit.id);
+        return res.status(409).json({ error: 'The PayPal payment amount did not match this deposit.' });
+      }
+      db.prepare(`
+        UPDATE wallet_transactions SET status='completed',description=?,completed_at=datetime('now')
+        WHERE id=? AND status='pending'
+      `).run('PayPal deposit confirmed.', deposit.id);
+      return res.json({ status: 'completed' });
+    } catch (error) {
+      console.error('PayPal capture failed:', error.message);
+      return res.status(502).json({ error: 'Could not confirm your PayPal payment. Please try again shortly.' });
     }
   });
 
