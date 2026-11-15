@@ -73,7 +73,10 @@
     passwordInput.required = !passwordField.hidden;
     passwordInput.minLength = mode === 'login' ? 1 : 8;
     passwordInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
-    passwordField.querySelector('.field-label').textContent = mode === 'reset' ? 'New password' : 'Password';
+    const passwordLabelText = mode === 'reset' ? 'New password' : 'Password';
+    const passwordFieldLabel = passwordField.querySelector('.field-label');
+    if (passwordFieldLabel) passwordFieldLabel.textContent = passwordLabelText;
+    else passwordField.firstChild.textContent = passwordLabelText;
     const requirements = document.getElementById('passwordRequirements');
     if (requirements) {
       requirements.hidden = !['register','reset'].includes(mode);
@@ -106,28 +109,32 @@
     accountSignedIn.hidden = false;
     document.getElementById('accountDisplayName').textContent = result.account.displayName || 'Welcome to Valor Africa';
     document.getElementById('accountEmailAddress').textContent = result.account.email;
-    document.getElementById('marketingEmailsOptOut').checked = Boolean(result.account.marketingEmailsOptOut);
+    const marketingOptOutCheckbox = document.getElementById('marketingEmailsOptOut');
+    if (marketingOptOutCheckbox) marketingOptOutCheckbox.checked = Boolean(result.account.marketingEmailsOptOut);
     setFeedback(signOutFeedback, '');
     notifySession(result.account);
   }
 
-  document.getElementById('marketingEmailsOptOut').addEventListener('change', async (event) => {
-    const checkbox = event.currentTarget;
-    checkbox.disabled = true;
-    try {
-      await window.valorEventsApi('/api/account/preferences', {
-        method: 'POST',
-        headers: accountAuthHeaders(),
-        body: JSON.stringify({ marketingEmailsOptOut: checkbox.checked })
-      });
-      setFeedback(signOutFeedback, 'Preference saved.');
-    } catch (error) {
-      checkbox.checked = !checkbox.checked;
-      setFeedback(signOutFeedback, error.message, true);
-    } finally {
-      checkbox.disabled = false;
-    }
-  });
+  const marketingOptOutToggle = document.getElementById('marketingEmailsOptOut');
+  if (marketingOptOutToggle) {
+    marketingOptOutToggle.addEventListener('change', async (event) => {
+      const checkbox = event.currentTarget;
+      checkbox.disabled = true;
+      try {
+        await window.valorEventsApi('/api/account/preferences', {
+          method: 'POST',
+          headers: accountAuthHeaders(),
+          body: JSON.stringify({ marketingEmailsOptOut: checkbox.checked })
+        });
+        setFeedback(signOutFeedback, 'Preference saved.');
+      } catch (error) {
+        checkbox.checked = !checkbox.checked;
+        setFeedback(signOutFeedback, error.message, true);
+      } finally {
+        checkbox.disabled = false;
+      }
+    });
+  }
 
   async function accountSignInResult(result) {
     window.valorSetAccountToken(result.accessToken);
