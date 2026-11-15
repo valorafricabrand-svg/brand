@@ -182,7 +182,7 @@ function createTestAccountAuth(email) {
   `).run(id, email, email.split('@')[0]);
   db.prepare(`
     INSERT INTO account_sessions (token_hash,account_id,expires_at)
-    VALUES (?,?,datetime('now','+12 hours'))
+    VALUES (?,?,datetime('now','+30 days'))
   `).run(tokenHash, id);
   return { Authorization: `Bearer ${token}` };
 }

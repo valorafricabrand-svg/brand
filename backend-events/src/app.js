@@ -637,7 +637,7 @@ function createApp(options = {}) {
     db.prepare('DELETE FROM account_sessions WHERE expires_at <= datetime(\'now\')').run();
     db.prepare(`
       INSERT INTO account_sessions (token_hash,account_id,expires_at)
-      VALUES (?,?,datetime('now','+12 hours'))
+      VALUES (?,?,datetime('now','+30 days'))
     `).run(sha256(token), accountId);
     const account = db.prepare(`
       SELECT id,email,display_name AS displayName,email_verified_at AS emailVerifiedAt,
@@ -645,7 +645,7 @@ function createApp(options = {}) {
       FROM accounts WHERE id=?
     `).get(accountId);
     account.marketingEmailsOptOut = Boolean(account.marketingEmailsOptOut);
-    return { accessToken: token, expiresIn: '12h', account };
+    return { accessToken: token, expiresIn: '30d', account };
   }
 
   function requireAccount(req, res, next) {
