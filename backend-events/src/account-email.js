@@ -2,13 +2,18 @@ function isConfigured() {
   return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
 }
 
-async function sendCode(email, code, purpose) {
+async function sendCode(email, code, purpose, context = {}) {
   if (!isConfigured()) throw new Error('Resend email delivery is not configured.');
-  const isReset = purpose === 'reset';
-  const subject = isReset ? 'Reset your Valor Africa password' : 'Verify your Valor Africa email';
-  const message = isReset
+  const subject = purpose === 'reset'
+    ? 'Reset your Valor Africa password'
+    : purpose === 'wallet_link'
+      ? 'Confirm your Valor Wallet request'
+      : 'Verify your Valor Africa email';
+  const message = purpose === 'reset'
     ? `Your Valor Africa password reset code is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email.`
-    : `Your Valor Africa verification code is ${code}. It expires in 10 minutes.`;
+    : purpose === 'wallet_link'
+      ? `Your Valor Africa code to link phone ${context.phone} to your wallet is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email and your wallet will remain unchanged.`
+      : `Your Valor Africa verification code is ${code}. It expires in 10 minutes.`;
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {

@@ -625,6 +625,7 @@ function createApp(options = {}) {
   const giftCodeAttemptLimiter = createSubmissionLimiter(10, 'gift-code attempts');
   const merchantApplicationLimiter = createSubmissionLimiter(5, 'gift merchant applications');
   const walletOtpAttempts = new Map();
+  const walletEmailLinkAttempts = new Map();
   const accountCodeAttempts = new Map();
   function normalizedEmail(value) {
     if (typeof value !== 'string') return null;
@@ -754,6 +755,34 @@ function createApp(options = {}) {
     next();
   }
 
+  function walletEmailLinkLimiter(req, res, next) {
+    const phone = normalizePhone(req.body && req.body.phone);
+    if (!phone) return res.status(400).json({ error: 'Enter a valid Kenyan mobile number.' });
+    const now = Date.now();
+    for (const [key, entry] of walletEmailLinkAttempts) {
+      if (now - entry.startedAt >= 15 * 60 * 1000) walletEmailLinkAttempts.delete(key);
+    }
+    const limits = [
+      { key: `phone:${phone}`, maximum: 3 },
+      { key: `account:${req.account.id}`, maximum: 5 },
+      { key: `ip:${req.ip}`, maximum: 20 }
+    ];
+    for (const limit of limits) {
+      const entry = walletEmailLinkAttempts.get(limit.key);
+      if (entry && entry.count >= limit.maximum) {
+        return res.status(429).json({ error: 'Too many wallet verification code requests. Try again in 15 minutes.' });
+      }
+    }
+    for (const limit of limits) {
+      const entry = walletEmailLinkAttempts.get(limit.key);
+      walletEmailLinkAttempts.set(limit.key, entry
+        ? { startedAt: entry.startedAt, count: entry.count + 1 }
+        : { startedAt: now, count: 1 });
+    }
+    req.linkPhone = phone;
+    next();
+  }
+
   function walletForAccount(accountId) {
     return db.prepare('SELECT id,phone,account_type AS accountType,created_at AS createdAt FROM wallets WHERE account_id=?')
       .get(accountId) || null;
@@ -826,6 +855,26 @@ function createApp(options = {}) {
     });
   });
 
+  function linkWalletToAccount(accountId, phone, accountType, deletePendingCode) {
+    return db.transaction(() => {
+      const accountWallet = walletForAccount(accountId);
+      if (accountWallet) throw Object.assign(new Error('A phone wallet is already linked to your account.'), { statusCode: 409 });
+      const currentWallet = db.prepare('SELECT id,account_id FROM wallets WHERE phone=?').get(phone);
+      if (currentWallet && currentWallet.account_id && currentWallet.account_id !== accountId) {
+        throw Object.assign(new Error('This phone wallet is already linked to another account.'), { statusCode: 409 });
+      }
+      deletePendingCode();
+      if (currentWallet) {
+        db.prepare('UPDATE wallets SET account_id=? WHERE id=? AND account_id IS NULL').run(accountId, currentWallet.id);
+        return db.prepare('SELECT id FROM wallets WHERE account_id=?').get(accountId);
+      }
+      const walletId = crypto.randomUUID();
+      db.prepare('INSERT INTO wallets (id,phone,account_type,account_id) VALUES (?,?,?,?)')
+        .run(walletId, phone, accountType, accountId);
+      return { id: walletId };
+    })();
+  }
+
   app.post('/api/account/phone/otp', requireAccount, phoneLinkOtpLimiter, async (req, res) => {
     if (walletForAccount(req.account.id)) {
       return res.status(409).json({ error: 'A phone wallet is already linked to your account.' });
@@ -884,24 +933,82 @@ function createApp(options = {}) {
     }
     let wallet;
     try {
-      wallet = db.transaction(() => {
-        const accountWallet = walletForAccount(req.account.id);
-        if (accountWallet) throw Object.assign(new Error('A phone wallet is already linked to your account.'), { statusCode: 409 });
-        const currentWallet = db.prepare('SELECT id,account_id FROM wallets WHERE phone=?').get(phone);
-        if (currentWallet && currentWallet.account_id && currentWallet.account_id !== req.account.id) {
-          throw Object.assign(new Error('This phone wallet is already linked to another account.'), { statusCode: 409 });
-        }
+      wallet = linkWalletToAccount(req.account.id, phone, accountType, () => {
         db.prepare('DELETE FROM wallet_otps WHERE phone=?').run(phone);
-        if (currentWallet) {
-          db.prepare('UPDATE wallets SET account_id=? WHERE id=? AND account_id IS NULL')
-            .run(req.account.id, currentWallet.id);
-          return db.prepare('SELECT id FROM wallets WHERE account_id=?').get(req.account.id);
-        }
-        const walletId = crypto.randomUUID();
-        db.prepare('INSERT INTO wallets (id,phone,account_type,account_id) VALUES (?,?,?,?)')
-          .run(walletId, phone, accountType, req.account.id);
-        return { id: walletId };
-      })();
+      });
+    } catch (error) {
+      if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
+    return res.json({ linked: true, ...walletSnapshot(wallet.id) });
+  });
+
+  app.post('/api/account/wallet/email-code', requireAccount, walletEmailLinkLimiter, async (req, res) => {
+    if (walletForAccount(req.account.id)) {
+      return res.status(409).json({ error: 'A phone wallet is already linked to your account.' });
+    }
+    if (!emailGateway.isConfigured()) {
+      return res.status(503).json({ error: 'Email verification is unavailable until Resend is configured.' });
+    }
+    const existing = db.prepare('SELECT account_id FROM wallets WHERE phone=?').get(req.linkPhone);
+    if (existing && existing.account_id && existing.account_id !== req.account.id) {
+      return res.status(409).json({ error: 'This phone wallet is already linked to another account.' });
+    }
+    const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+    const codeHash = sha256(`${process.env.JWT_SECRET}:${req.account.id}:${req.linkPhone}:${code}`);
+    db.prepare(`
+      INSERT INTO wallet_email_codes (account_id,phone,code_hash,attempts,expires_at)
+      VALUES (?,?,?,0,datetime('now','+10 minutes'))
+      ON CONFLICT(account_id,phone) DO UPDATE SET code_hash=excluded.code_hash,attempts=0,
+        expires_at=excluded.expires_at,created_at=datetime('now')
+    `).run(req.account.id, req.linkPhone, codeHash);
+    try {
+      await emailGateway.sendCode(req.account.email, code, 'wallet_link', { phone: req.linkPhone });
+    } catch (error) {
+      db.prepare('DELETE FROM wallet_email_codes WHERE account_id=? AND phone=? AND code_hash=?')
+        .run(req.account.id, req.linkPhone, codeHash);
+      console.error('Wallet email verification code could not be sent:', error.message);
+      return res.status(502).json({ error: 'Could not send a verification code. Please try again shortly.' });
+    }
+    return res.status(202).json({ message: `A verification code has been sent to ${req.account.email}.` });
+  });
+
+  app.post('/api/account/wallet/email-verify', requireAccount, async (req, res) => {
+    const phone = normalizePhone(req.body && req.body.phone);
+    const code = req.body && req.body.code;
+    const accountType = req.body && req.body.accountType || 'buyer';
+    if (!phone || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+      return res.status(400).json({ error: 'Enter the Kenyan mobile number and the six-digit code.' });
+    }
+    if (!['buyer','organizer','both'].includes(accountType)) {
+      return res.status(400).json({ error: 'Choose buyer, organizer, or both as your account type.' });
+    }
+    if (walletForAccount(req.account.id)) {
+      return res.status(409).json({ error: 'A phone wallet is already linked to your account.' });
+    }
+    const existing = db.prepare('SELECT id,account_id FROM wallets WHERE phone=?').get(phone);
+    if (existing && existing.account_id && existing.account_id !== req.account.id) {
+      return res.status(409).json({ error: 'This phone wallet is already linked to another account.' });
+    }
+    const emailCode = db.prepare(`
+      SELECT code_hash,attempts FROM wallet_email_codes WHERE account_id=? AND phone=? AND expires_at > datetime('now')
+    `).get(req.account.id, phone);
+    if (!emailCode) return res.status(401).json({ error: 'That verification code has expired. Request a new one.' });
+    const expectedHash = sha256(`${process.env.JWT_SECRET}:${req.account.id}:${phone}:${code}`);
+    const actual = Buffer.from(emailCode.code_hash);
+    const expected = Buffer.from(expectedHash);
+    if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) {
+      db.prepare('UPDATE wallet_email_codes SET attempts=attempts+1 WHERE account_id=? AND phone=?').run(req.account.id, phone);
+      if (emailCode.attempts + 1 >= 5) {
+        db.prepare('DELETE FROM wallet_email_codes WHERE account_id=? AND phone=?').run(req.account.id, phone);
+      }
+      return res.status(401).json({ error: 'That verification code is incorrect or expired.' });
+    }
+    let wallet;
+    try {
+      wallet = linkWalletToAccount(req.account.id, phone, accountType, () => {
+        db.prepare('DELETE FROM wallet_email_codes WHERE account_id=? AND phone=?').run(req.account.id, phone);
+      });
     } catch (error) {
       if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
       throw error;

@@ -146,7 +146,7 @@
       document.getElementById('walletLinkedPhone').textContent = '';
       if (window.sessionStorage.getItem(phoneKey)) {
         document.getElementById('walletPhoneMessage').textContent =
-          `Enter the verification code sent to ${window.sessionStorage.getItem(phoneKey)}.`;
+          `Enter the verification code emailed to you to link ${window.sessionStorage.getItem(phoneKey)}.`;
       }
       return false;
     }
@@ -242,9 +242,9 @@
     event.preventDefault();
     const button = phoneForm.querySelector('[type=submit]');
     button.disabled = true;
-    setFeedback(signInFeedback, 'Sending a phone verification code…');
+    setFeedback(signInFeedback, 'Emailing you a verification code…');
     try {
-      const result = await window.valorEventsApi('/api/account/phone/otp', {
+      const result = await window.valorEventsApi('/api/account/wallet/email-code', {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ phone: phoneForm.elements.phone.value })
@@ -267,7 +267,7 @@
     button.disabled = true;
     setFeedback(signInFeedback, 'Linking your verified phone wallet…');
     try {
-      await window.valorEventsApi('/api/account/phone/verify', {
+      await window.valorEventsApi('/api/account/wallet/email-verify', {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({

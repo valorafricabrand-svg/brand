@@ -1777,6 +1777,53 @@ test('wallet transaction history supports filtering, pagination, and CSV export'
   assert.equal(noWalletExport.status, 409);
 });
 
+test('email verification links a new wallet and can also claim an existing wallet balance', async () => {
+  const newWalletAuth = createTestAccountAuth('wallet-email-new@example.com');
+  const newPhone = `2547${String(crypto.randomInt(0, 100000000)).padStart(8, '0')}`;
+
+  const badPhone = await request(app).post('/api/account/wallet/email-code').set(newWalletAuth).send({ phone: '123' });
+  assert.equal(badPhone.status, 400);
+
+  const codeRequest = await request(app).post('/api/account/wallet/email-code').set(newWalletAuth).send({ phone: newPhone });
+  assert.equal(codeRequest.status, 202);
+  assert.match(codeRequest.body.message, /wallet-email-new@example\.com/);
+  const sentCode = emailCodes.get('wallet-email-new@example.com:wallet_link');
+  assert.match(sentCode, /^\d{6}$/);
+
+  const wrongCode = await request(app).post('/api/account/wallet/email-verify').set(newWalletAuth)
+    .send({ phone: newPhone, code: '000000', accountType: 'buyer' });
+  assert.equal(wrongCode.status, 401);
+
+  const verified = await request(app).post('/api/account/wallet/email-verify').set(newWalletAuth)
+    .send({ phone: newPhone, code: sentCode, accountType: 'buyer' });
+  assert.equal(verified.status, 200);
+  assert.equal(verified.body.linked, true);
+  assert.equal(verified.body.wallet.phone, newPhone);
+  assert.equal(verified.body.balanceKes, 0);
+
+  const alreadyLinked = await request(app).post('/api/account/wallet/email-code').set(newWalletAuth).send({ phone: newPhone });
+  assert.equal(alreadyLinked.status, 409);
+
+  const existingPhone = `2547${String(crypto.randomInt(0, 100000000)).padStart(8, '0')}`;
+  const legacyWalletId = crypto.randomUUID();
+  db.prepare("INSERT INTO wallets (id,phone,account_type) VALUES (?,?,'buyer')").run(legacyWalletId, existingPhone);
+  db.prepare(`
+    INSERT INTO wallet_transactions (id,wallet_id,transaction_type,amount_kes,status,receipt,description,completed_at)
+    VALUES (?,?,'deposit',9000,'completed','LEGACY999','Pre-existing phone-wallet balance',datetime('now'))
+  `).run(crypto.randomUUID(), legacyWalletId);
+
+  const claimantAuth = createTestAccountAuth('wallet-email-claim@example.com');
+  await request(app).post('/api/account/wallet/email-code').set(claimantAuth).send({ phone: existingPhone });
+  const claimCode = emailCodes.get('wallet-email-claim@example.com:wallet_link');
+  const claimed = await request(app).post('/api/account/wallet/email-verify').set(claimantAuth)
+    .send({ phone: existingPhone, code: claimCode, accountType: 'buyer' });
+  assert.equal(claimed.status, 200);
+  assert.equal(claimed.body.balanceKes, 9000);
+  assert.equal(db.prepare('SELECT account_id FROM wallets WHERE id=?').get(legacyWalletId).account_id,
+    db.prepare('SELECT account_id FROM account_sessions WHERE token_hash=?')
+      .get(crypto.createHash('sha256').update(claimantAuth.Authorization.slice('Bearer '.length)).digest('hex')).account_id);
+});
+
 after(() => {
   db.close();
   fs.rmSync(path.join(__dirname, '..', '.test-uploads'), { recursive: true, force: true });

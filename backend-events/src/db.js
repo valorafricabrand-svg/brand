@@ -166,6 +166,16 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS wallet_email_codes (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    phone TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (account_id,phone)
+  );
+
   CREATE TABLE IF NOT EXISTS wallet_transactions (
     id TEXT PRIMARY KEY,
     wallet_id TEXT NOT NULL REFERENCES wallets(id),
