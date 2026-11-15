@@ -534,7 +534,7 @@ if (db.prepare('SELECT COUNT(*) AS count FROM hero_slides').get().count === 0) {
       'images/events/video-ad-poster.svg', 'events.html', 'Get tickets now'],
     ['valor-ticket-buyer-promo', 'Your next great experience starts here.', 'For ticket buyers',
       'Discover concerts, festivals and experiences across Africa.', 'video', 'videos/valor-ticket-buyer.mp4',
-      'images/events/valor-ticket-buyer-cover.png', 'events.html', 'Explore events'],
+      'images/events/valor-ticket-buyer-cover.jpg', 'events.html', 'Explore events'],
     ['valor-organizer-promo', 'Grow your event with Valor Africa', 'For organizers',
       'Turn your next event into a full house. Create your event listing, choose ticket types and prices, and promote your event with Valor Ads.',
       'video', 'videos/valor-ads-organizer-intro.mp4', 'images/events/valor-ads-promo-poster.svg',
@@ -560,6 +560,11 @@ const insertFeaturedClip = db.prepare(`
   const position = db.prepare('SELECT COALESCE(MAX(position),-1)+1 AS position FROM hero_slides').get().position;
   insertFeaturedClip.run(...slide, position);
 });
+
+if (!db.prepare('SELECT 1 FROM hero_slide_migrations WHERE migration=?').get('ticket-buyer-cover-jpg')) {
+  db.prepare("UPDATE hero_slides SET poster_url='images/events/valor-ticket-buyer-cover.jpg' WHERE poster_url='images/events/valor-ticket-buyer-cover.png'").run();
+  db.prepare('INSERT INTO hero_slide_migrations (migration) VALUES (?)').run('ticket-buyer-cover-jpg');
+}
 
 const eventColumns = db.prepare('PRAGMA table_info(events)').all();
 if (!eventColumns.some((column) => column.name === 'organizer_account_id')) {

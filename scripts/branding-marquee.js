@@ -29,8 +29,13 @@
     const exampleNumber = String(index + 1).padStart(3, '0');
     card.className = 'branding-marquee-card';
 
+    const basename = file.replace(/\.[^.]+$/, '');
+    const picture = document.createElement('picture');
+    const source = document.createElement('source');
+    source.type = 'image/webp';
+    source.srcset = `images/optimized/w_640/${encodeURIComponent(basename)}.webp`;
     const image = document.createElement('img');
-    image.src = `images/Branding%20images/${encodeURIComponent(file)}`;
+    image.src = `images/optimized/w_640/${encodeURIComponent(basename)}.jpg`;
     image.alt = `Event branding example ${exampleNumber}`;
     image.width = 200;
     image.height = 250;
@@ -41,12 +46,13 @@
       status.classList.add('error');
       status.textContent = `Unable to load ${failedImages} of ${totalImages} branding examples.`;
     }, { once: true });
+    picture.append(source, image);
 
     const number = document.createElement('span');
     number.className = 'branding-marquee-number';
     number.setAttribute('aria-hidden', 'true');
     number.textContent = exampleNumber;
-    card.append(image, number);
+    card.append(picture, number);
     return card;
   }
 

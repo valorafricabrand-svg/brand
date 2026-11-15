@@ -11,7 +11,7 @@
     location: 'Valor Africa Events',
     startsAt: new Date().toISOString(),
     adVideo: 'videos/valor-ticket-buyer.mp4',
-    adPoster: 'images/events/valor-ticket-buyer-cover.png',
+    adPoster: 'images/events/valor-ticket-buyer-cover.jpg',
     tickets: []
   };
   const featuredVideoPromos = [
@@ -475,7 +475,7 @@
     brandingCard.className = 'sponsored-ticket-card sponsored-merch-card';
     brandingCard.href = 'branding.html';
     brandingCard.setAttribute('aria-label', 'Explore event branding and merchandise ideas');
-    brandingCard.innerHTML = '<span class="sponsored-ticket-label">EVENT BRANDING</span><img src="images/Branding%20images/7b3dbcf1bf8b05bc890e6fb02faccc8f.jpg" alt="Branded event canopy and flags" loading="lazy"><div><small>For events, vendors &amp; sponsors</small><strong>Make your brand part of the event</strong><p>Explore branded displays and merchandise</p><span class="sponsored-ticket-button">See branding ideas <b aria-hidden="true">→</b></span></div>';
+    brandingCard.innerHTML = '<span class="sponsored-ticket-label">EVENT BRANDING</span><picture><source type="image/webp" srcset="images/optimized/w_640/7b3dbcf1bf8b05bc890e6fb02faccc8f.webp"><img src="images/optimized/w_640/7b3dbcf1bf8b05bc890e6fb02faccc8f.jpg" alt="Branded event canopy and flags" loading="lazy"></picture><div><small>For events, vendors &amp; sponsors</small><strong>Make your brand part of the event</strong><p>Explore branded displays and merchandise</p><span class="sponsored-ticket-button">See branding ideas <b aria-hidden="true">→</b></span></div>';
     track.appendChild(brandingCard);
 
     products.forEach((product) => {

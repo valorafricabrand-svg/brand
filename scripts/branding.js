@@ -22,8 +22,13 @@
       const cards = files.map((file, index) => {
         const card = document.createElement('figure');
         card.className = 'branding-gallery-card';
+        const basename = file.replace(/\.[^.]+$/, '');
+        const picture = document.createElement('picture');
+        const source = document.createElement('source');
+        source.type = 'image/webp';
+        source.srcset = `images/optimized/w_640/${encodeURIComponent(basename)}.webp`;
         const image = document.createElement('img');
-        image.src = `images/Branding%20images/${encodeURIComponent(file)}`;
+        image.src = `images/optimized/w_640/${encodeURIComponent(basename)}.jpg`;
         image.alt = `Branding example ${index + 1}`;
         image.loading = 'lazy';
         image.decoding = 'async';
@@ -32,12 +37,13 @@
           status.textContent = `${files.length - failedImages} of ${files.length} branding images loaded.`;
           status.classList.add('error');
         }, { once: true });
+        picture.append(source, image);
 
         const caption = document.createElement('figcaption');
         const label = document.createElement('span');
         label.textContent = `Branding example ${String(index + 1).padStart(3, '0')}`;
         caption.appendChild(label);
-        card.append(image, caption);
+        card.append(picture, caption);
         return card;
       });
 
