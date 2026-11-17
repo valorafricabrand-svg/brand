@@ -16,11 +16,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/events.css?v=nav-fix-1">
+  <link rel="stylesheet" href="styles/events.css?v=event-filters-1">
   <link rel="stylesheet" href="styles/privacy-consent.css">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=local-live-read-fallback-1" defer></script>
-  <script src="scripts/events.js?v=nav-fix-1" defer></script>
+  <script src="scripts/events.js?v=event-filters-1" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/branding-marquee.js?v=branding-perf-1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
@@ -78,6 +78,24 @@
           <button class="category-chip" type="button" data-category="Arts & Culture" aria-pressed="false">Arts &amp; culture</button>
           <button class="category-chip" type="button" data-category="Sports" aria-pressed="false">Sports</button>
           <button class="category-chip" type="button" data-category="Business" aria-pressed="false">Business</button>
+          <button class="category-chip" type="button" data-category="Comedy" aria-pressed="false">Comedy</button>
+          <button class="category-chip" type="button" data-category="Nightlife" aria-pressed="false">Nightlife</button>
+          <button class="category-chip" type="button" data-category="Workshops & Classes" aria-pressed="false">Workshops</button>
+          <button class="category-chip" type="button" data-category="Conferences & Networking" aria-pressed="false">Conferences</button>
+          <button class="category-chip" type="button" data-category="Religious & Faith" aria-pressed="false">Religious</button>
+          <a class="category-chip category-chip-link" href="gifts.html">Gift cards</a>
+        </div>
+        <div class="category-list" id="allCities" aria-label="Filter events by city">
+          <button class="category-chip is-active" type="button" data-city="All" aria-pressed="true">All of Kenya</button>
+          <button class="category-chip" type="button" data-city="Nairobi" aria-pressed="false">Nairobi</button>
+          <button class="category-chip" type="button" data-city="Mombasa" aria-pressed="false">Mombasa</button>
+          <button class="category-chip" type="button" data-city="Kisumu" aria-pressed="false">Kisumu</button>
+          <button class="category-chip" type="button" data-city="Nakuru" aria-pressed="false">Nakuru</button>
+          <button class="category-chip" type="button" data-city="Eldoret" aria-pressed="false">Eldoret</button>
+          <button class="category-chip" type="button" data-city="Naivasha" aria-pressed="false">Naivasha</button>
+          <button class="category-chip" type="button" data-city="Nyeri" aria-pressed="false">Nyeri</button>
+          <button class="category-chip" type="button" data-city="Kitale" aria-pressed="false">Kitale</button>
+          <button class="category-chip" type="button" data-city="Malindi" aria-pressed="false">Malindi</button>
         </div>
       </div>
       <div class="event-grid" id="allEvents" aria-live="polite"></div>

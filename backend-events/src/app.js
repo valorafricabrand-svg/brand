@@ -17,7 +17,7 @@ const walletSms = require('./wallet-sms');
 const accountEmail = require('./account-email');
 const { normalizeKenyanPhone } = require('./kenyan-phone');
 
-const allowedCategories = new Set(['Movies & Cinema','Concerts','Festivals','Community','Food & Drink','Arts & Culture','Sports','Business','Other']);
+const allowedCategories = new Set(['Movies & Cinema','Concerts','Festivals','Community','Food & Drink','Arts & Culture','Sports','Business','Comedy','Nightlife','Workshops & Classes','Conferences & Networking','Religious & Faith','Other']);
 const allowedTimezones = new Set(['Africa/Nairobi','UTC','Africa/Lagos','Africa/Accra']);
 const allowedFormats = new Set(['Physical','Virtual','Hybrid']);
 const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || path.join(__dirname, '..', 'data', 'uploads', 'events'));

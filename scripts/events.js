@@ -241,7 +241,12 @@
         Community: 'community',
         Concerts: 'music',
         Festivals: 'festival',
-        Sports: 'sport'
+        Sports: 'sport',
+        Comedy: 'festival',
+        Nightlife: 'music',
+        'Workshops & Classes': 'business',
+        'Conferences & Networking': 'business',
+        'Religious & Faith': 'culture'
       })[event.category] || 'community';
       artwork.setAttribute('aria-hidden', 'true');
       const label = document.createElement('span');
@@ -1062,19 +1067,23 @@
   }
 
   const allCategories = document.getElementById('allCategories');
+  const allCities = document.getElementById('allCities');
   const allSearch = document.getElementById('eventSearch');
   let refreshAllEvents = () => {};
   if (allCategories && allEvents) {
     const filterAllEvents = () => {
       const active = allCategories.querySelector('.is-active');
       const category = active ? active.dataset.category : 'All';
+      const activeCity = allCities ? allCities.querySelector('.is-active') : null;
+      const city = activeCity ? activeCity.dataset.city : 'All';
       const query = allSearch ? allSearch.value.trim().toLowerCase() : '';
       let visible = 0;
       allEvents.querySelectorAll('.event-card').forEach((card) => {
         const event = events.find((item) => item.id === card.dataset.eventId);
         const matchesCategory = category === 'All' || event.category === category;
+        const matchesCity = city === 'All' || (event.city || '').toLowerCase().includes(city.toLowerCase());
         const matchesQuery = !query || `${event.title} ${event.location} ${event.category}`.toLowerCase().includes(query);
-        const show = matchesCategory && matchesQuery;
+        const show = matchesCategory && matchesCity && matchesQuery;
         card.hidden = !show;
         if (show) visible += 1;
       });
@@ -1082,7 +1091,7 @@
       if (noResults) {
         noResults.hidden = listingAvailable !== true || visible > 0;
         noResults.textContent = events.length
-          ? 'No events match that search. Try another name or category.'
+          ? 'No events match that search. Try another name, category, or city.'
           : 'No approved upcoming events are listed right now. Check back soon.';
       }
       allEvents.querySelectorAll('.sponsored-ticket-rail').forEach((rail) => {
@@ -1100,6 +1109,18 @@
       });
       filterAllEvents();
     });
+    if (allCities) {
+      allCities.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-city]');
+        if (!button) return;
+        allCities.querySelectorAll('button').forEach((chip) => {
+          const isActive = chip === button;
+          chip.classList.toggle('is-active', isActive);
+          chip.setAttribute('aria-pressed', String(isActive));
+        });
+        filterAllEvents();
+      });
+    }
     if (allSearch) allSearch.addEventListener('input', filterAllEvents);
   }
 

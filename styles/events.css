@@ -711,8 +711,9 @@ img { display: block; max-width: 100%; }
 .search-box { display: flex; align-items: center; width: min(100%, 440px); min-height: 46px; gap: 9px; padding: 0 13px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
 .search-box input { width: 100%; border: 0; outline: 0; color: var(--ink); background: transparent; }
 .category-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.category-chip { padding: 7px 12px; border: 1px solid var(--border); border-radius: 999px; color: #4d5d70; background: #fff; font-size: 12px; font-weight: 700; }
+.category-chip { padding: 7px 12px; border: 1px solid var(--border); border-radius: 999px; color: #4d5d70; background: #fff; font-size: 12px; font-weight: 700; text-decoration: none; }
 .category-chip.is-active, .category-chip:hover { border-color: var(--green); color: #fff; background: var(--green); }
+.category-list + .category-list { margin-top: 10px; }
 .events-page .event-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 285px), 1fr)); }
 .events-page .event-card { box-shadow: 0 8px 25px rgba(25, 45, 65, .08); border: 1px solid #edf0f4; }
 .events-page .event-poster { height: auto; aspect-ratio: 4 / 5; }
