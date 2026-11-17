@@ -16,10 +16,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/events.css?v=public-event-reviews-1">
+  <link rel="stylesheet" href="styles/events.css?v=nav-fix-1">
   <link rel="stylesheet" href="styles/privacy-consent.css">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
+  <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
 </head>
 <body>
@@ -27,7 +28,10 @@
   <header class="site-header">
     <nav class="nav wrap" aria-label="Main navigation">
       <a href="index.html" class="brand" aria-label="Valor Africa Events home"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a>
-      <div class="nav-links nav-links-static"><a href="events.html">Events</a><a href="host.html">For organizers</a><a href="account.html">Account</a><a class="nav-host" href="contact.html">Help</a></div>
+      <button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Open navigation">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="nav-links" id="navLinks"><a href="events.html">Events</a><a href="host.html">For organizers</a><a href="account.html">Account</a><a class="nav-host" href="contact.html">Help</a></div>
     </nav>
   </header>
   <main id="main" class="about-page">

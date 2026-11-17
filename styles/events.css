@@ -777,7 +777,7 @@ img { display: block; max-width: 100%; }
 .sidebar-note { margin-top: 15px; padding-top: 13px; border-top: 1px solid #e5ebf0; color: #8290a1; font-size: 11px; }
 
 @media (max-width: 850px) {
-  .nav-links:not(.nav-links-static) { gap: 16px; font-size: 13px; }
+  .nav-links { gap: 16px; font-size: 13px; }
   .nav-host { padding: 10px 12px; }
   .ad-strip { flex-wrap: wrap; gap: 10px 15px; }
   .ad-strip-heading { min-width: 150px; }
@@ -792,11 +792,12 @@ img { display: block; max-width: 100%; }
 }
 @media (max-width: 640px) {
   .wrap { width: min(100% - 32px, 1240px); }
-  .nav { min-height: 66px; }
+  .nav { min-height: 66px; flex-wrap: wrap; row-gap: 6px; }
   .brand-mark { width: 36px; height: 36px; }
   .brand-copy { font-size: 15px; }
-  .service-nav { gap: 8px; font-size: 12px; }
+  .service-nav { flex: 1 1 auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px 10px; font-size: 12px; }
   .service-nav .nav-host { padding: 9px 10px; }
+  .nav-account-status { flex-basis: 100%; text-align: right; }
   .wallet-transaction { grid-template-columns: minmax(0,1fr) auto; gap: 8px 10px; }
   .wallet-status { grid-column: 2; }
   .wallet-filters { flex-direction: column; align-items: stretch; }
@@ -808,9 +809,6 @@ img { display: block; max-width: 100%; }
   .nav-links.is-open { display: flex; flex-direction: column; }
   .nav-links > a, .nav-links > .nav-account-signout { padding: 12px 8px; text-align: left; }
   .nav-links .nav-host { margin-top: 4px; text-align: center; }
-  .nav-links-static { position: static; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 16px; width: 100%; padding: 10px 0 14px; border: 0; background: transparent; box-shadow: none; }
-  .nav-links-static > a, .nav-links-static > .nav-account-signout { padding: 7px 2px; }
-  .nav-links-static .nav-host { margin-top: 0; }
   .explore-nav-inner { width: 100%; padding-inline: 16px; gap: 23px; }
   .explore-link { min-height: 44px; font-size: 12px; }
   .valor-ads { padding-top: 16px; }
