@@ -102,5 +102,21 @@
   .privacy-consent-settings {
     right: 12px;
     bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 50%;
+    font-size: 0;
+    line-height: 0;
+  }
+
+  .privacy-consent-settings::before {
+    content: "🍪";
+    font-size: 19px;
+    line-height: 1;
   }
 }
