@@ -93,13 +93,22 @@
         <div class="record-list" id="productsList"></div>
       </section>
       <section class="card admin-section" id="packagesSection" hidden>
-        <div class="section-heading"><div><h2>Paid ad packages</h2><p>Set the exact KES prices and exposure duration organizers can book.</p></div></div>
+        <div class="section-heading"><div><h2>Advertising tiers</h2><p>Set the per-day KES price and placement organizers unlock at each tier.</p></div></div>
         <form class="package-form" id="packageForm">
-          <label>Package name<input name="name" maxlength="80" placeholder="Homepage spotlight" required></label>
-          <label>Description<input name="description" maxlength="500" placeholder="Featured in the Valor Ads carousel"></label>
-          <label>Duration (days)<input name="durationDays" type="number" min="1" max="90" step="1" required></label>
-          <label>Price (KES)<input name="priceKes" type="number" min="1" step="1" required></label>
-          <button class="button primary" type="submit">Add package</button>
+          <label>Tier name<input name="name" maxlength="80" placeholder="Homepage Carousel" required></label>
+          <label>Description<input name="description" maxlength="500" placeholder="Rotation in the homepage featured video carousel"></label>
+          <label>Placement
+            <select name="placement" required>
+              <option value="listing">Listing — badge in the events grid</option>
+              <option value="category">Category — top of category filters</option>
+              <option value="homepage" selected>Homepage — hero carousel</option>
+              <option value="premium">Premium — guaranteed first slide</option>
+            </select>
+          </label>
+          <label>Price per day (KES)<input name="pricePerDayKes" type="number" min="1" step="1" required></label>
+          <label>Minimum days<input name="minDays" type="number" min="1" step="1" value="1" required></label>
+          <label>Maximum days<input name="maxDays" type="number" min="1" max="365" step="1" value="30" required></label>
+          <button class="button primary" type="submit">Add tier</button>
         </form>
         <div class="record-list" id="packagesList"></div>
       </section>

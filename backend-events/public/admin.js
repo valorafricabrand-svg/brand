@@ -109,11 +109,18 @@
     });
   }
 
+  const adPlacementOptions = [
+    ['listing', 'Listing — badge in the events grid'],
+    ['category', 'Category — top of category filters'],
+    ['homepage', 'Homepage — hero carousel'],
+    ['premium', 'Premium — guaranteed first slide']
+  ];
+
   async function loadPackages() {
     const list = document.getElementById('packagesList');
     list.replaceChildren();
     const { packages } = await api('/api/ads/admin/packages');
-    if (!packages.length) return addText(list, 'p', 'empty', 'Add a package and set its KES price before organizers can book ads.');
+    if (!packages.length) return addText(list, 'p', 'empty', 'Add a tier and set its per-day KES price before organizers can book ads.');
     packages.forEach((item) => {
       const card = document.createElement('article');
       card.className = 'record package-row';
@@ -121,8 +128,9 @@
       const fields = [
         ['Name','name',item.name,'text'],
         ['Description','description',item.description,'text'],
-        ['Duration (days)','durationDays',item.durationDays,'number'],
-        ['Price (KES)','priceKes',item.priceKes,'number']
+        ['Price per day (KES)','pricePerDayKes',item.pricePerDayKes,'number'],
+        ['Minimum days','minDays',item.minDays,'number'],
+        ['Maximum days','maxDays',item.maxDays,'number']
       ];
       fields.forEach(([labelText, name, value, type]) => {
         const label = document.createElement('label');
@@ -131,11 +139,25 @@
         input.name = name;
         input.type = type;
         input.value = value;
-        if (name === 'durationDays') { input.min = '1'; input.max = '90'; }
-        if (name === 'priceKes') input.min = '1';
+        if (name === 'pricePerDayKes') input.min = '1';
+        if (name === 'minDays') input.min = '1';
+        if (name === 'maxDays') { input.min = '1'; input.max = '365'; }
         label.appendChild(input);
         card.appendChild(label);
       });
+      const placementLabel = document.createElement('label');
+      placementLabel.textContent = 'Placement';
+      const placementSelect = document.createElement('select');
+      placementSelect.name = 'placement';
+      adPlacementOptions.forEach(([value, text]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = text;
+        option.selected = value === item.placement;
+        placementSelect.appendChild(option);
+      });
+      placementLabel.appendChild(placementSelect);
+      card.appendChild(placementLabel);
       const actions = document.createElement('div');
       const save = document.createElement('button');
       save.type = 'button';
@@ -962,12 +984,14 @@
         body: JSON.stringify({
           name: data.get('name'),
           description: data.get('description'),
-          durationDays: Number(data.get('durationDays')),
-          priceKes: Number(data.get('priceKes'))
+          placement: data.get('placement'),
+          pricePerDayKes: Number(data.get('pricePerDayKes')),
+          minDays: Number(data.get('minDays')),
+          maxDays: Number(data.get('maxDays'))
         })
       });
       packageForm.reset();
-      setFeedback(feedback, 'Paid advertising package added.');
+      setFeedback(feedback, 'Advertising tier added.');
       await loadPackages();
     } catch (error) {
       setFeedback(feedback, error.message, true);
@@ -1038,8 +1062,10 @@
       ? {
         name: card.querySelector('[name=name]').value,
         description: card.querySelector('[name=description]').value,
-        durationDays: Number(card.querySelector('[name=durationDays]').value),
-        priceKes: Number(card.querySelector('[name=priceKes]').value)
+        placement: card.querySelector('[name=placement]').value,
+        pricePerDayKes: Number(card.querySelector('[name=pricePerDayKes]').value),
+        minDays: Number(card.querySelector('[name=minDays]').value),
+        maxDays: Number(card.querySelector('[name=maxDays]').value)
       }
       : { active: toggle.dataset.active !== 'true' };
     button.disabled = true;

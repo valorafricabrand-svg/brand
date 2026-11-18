@@ -45,7 +45,8 @@ input,select,textarea{width:100%;min-height:42px;padding:9px 11px;border:1px sol
 .package-form,.product-form{display:grid;grid-template-columns:1.3fr 1.5fr .8fr .8fr auto;gap:11px;align-items:end;margin-bottom:18px;padding:15px;border-radius:11px;background:#f7f9fb}
 .package-form label,.product-form label{margin:0}
 .package-form .button,.product-form .button{white-space:nowrap}
-.package-row{display:grid;grid-template-columns:1fr 1.4fr .7fr .8fr auto;gap:10px;align-items:end}
+.package-form{grid-template-columns:1fr 1.2fr 1fr .6fr .6fr .6fr auto}
+.package-row{display:grid;grid-template-columns:1fr 1.2fr 1fr .6fr .6fr .6fr auto;gap:10px;align-items:end}
 .package-row label{margin:0;font-size:11px}
 .package-row .button{width:100%}
 .product-form{grid-template-columns:1fr 1.5fr .7fr 1.2fr .8fr auto}

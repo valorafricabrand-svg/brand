@@ -50,6 +50,7 @@
   let toPublicEvent = (event) => event;
   let promotionDataPromise = Promise.resolve(null);
   let promotedEvents = [];
+  let homepagePromotedEvents = [];
   let listingAvailable = null;
   let listingRequestInProgress = false;
   let listingRetryTimer = null;
@@ -71,12 +72,16 @@
     promotionDataPromise = Promise.allSettled([
       window.valorEventsApi('/api/ads/featured'),
       window.valorEventsApi('/api/health'),
-      window.valorEventsApi('/api/ads/hero')
-    ]).then(([featuredResult, healthResult, heroResult]) => ({
+      window.valorEventsApi('/api/ads/hero'),
+      window.valorEventsApi('/api/ads/featured?placement=homepage')
+    ]).then(([featuredResult, healthResult, heroResult, homepageResult]) => ({
       featuredEvents: featuredResult.status === 'fulfilled' && Array.isArray(featuredResult.value.events)
         ? featuredResult.value.events.map((event) => toPublicEvent(event, featuredResult.value.apiBase))
         : [],
       featuredError: featuredResult.status === 'rejected' ? featuredResult.reason : null,
+      homepageEvents: homepageResult.status === 'fulfilled' && Array.isArray(homepageResult.value.events)
+        ? homepageResult.value.events.map((event) => toPublicEvent(event, homepageResult.value.apiBase))
+        : [],
       health: healthResult.status === 'fulfilled' ? healthResult.value : null,
       healthError: healthResult.status === 'rejected' ? healthResult.reason : null,
       heroSlides: heroResult.status === 'fulfilled' && Array.isArray(heroResult.value.slides)
@@ -277,6 +282,14 @@
       earlyBird.className = 'poster-badge';
       earlyBird.textContent = '⚡ Early bird';
       poster.appendChild(earlyBird);
+    }
+
+    const promotion = promotedEvents.find((promoted) => promoted.id === event.id);
+    if (promotion) {
+      const sponsored = document.createElement('span');
+      sponsored.className = `poster-sponsored-badge poster-sponsored-badge-${promotion.adPlacement || 'listing'}`;
+      sponsored.textContent = promotion.adPlacement === 'premium' ? '★ PREMIUM' : 'SPONSORED';
+      poster.appendChild(sponsored);
     }
 
     const body = document.createElement('div');
@@ -516,7 +529,8 @@
     windowEl.className = 'sponsored-ticket-window';
     const track = document.createElement('div');
     track.className = 'sponsored-ticket-track';
-    const sponsoredEvents = events.filter((event) => Array.isArray(event.tickets) && event.tickets.length);
+    const sponsoredEvents = promotedEvents.filter((event) => Array.isArray(event.tickets) && event.tickets.length);
+    if (!sponsoredEvents.length) { rail.hidden = true; }
 
     sponsoredEvents.slice(0, 5).forEach((event) => {
       const ticket = event.tickets[0];
@@ -1163,7 +1177,7 @@
     adEvents = [
       ...featuredVideoPromos,
       ...remainingManagedSlides,
-      ...(promotedEvents.length ? promotedEvents : events.slice(0, 1))
+      ...(homepagePromotedEvents.length ? homepagePromotedEvents : events.slice(0, 1))
     ];
     renderAdSlides();
     const adNote = document.querySelector('.ad-note');
@@ -1220,9 +1234,14 @@
   promotionDataPromise.then((data) => {
     if (!data) return;
     promotedEvents = data.featuredEvents;
+    homepagePromotedEvents = data.homepageEvents;
     if (data.featuredError) console.warn('Sponsored event listings could not be loaded:', data.featuredError);
     if (data.heroSlides !== null) managedHeroSlides = data.heroSlides;
     else if (data.heroSlidesError) console.warn('Homepage hero slides could not be loaded:', data.heroSlidesError);
+    if (featured) renderEvents(featured, events);
+    if (allEvents) renderEvents(allEvents, events);
+    applyHomeFilters();
+    refreshAllEvents();
     refreshPromotionalCarousel();
     if (data.health) {
       paymentHealthAvailable = true;

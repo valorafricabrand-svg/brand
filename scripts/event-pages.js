@@ -685,15 +685,23 @@
     }
   }
 
+  const adPlacementLabels = {
+    listing: 'Listings', category: 'Category', homepage: 'Homepage', premium: 'Premium'
+  };
+
   function setupAdBooking() {
     const form = document.getElementById('adBookingForm');
     if (!form) return;
     const feedback = document.getElementById('pageFeedback');
     const eventSelect = form.elements.eventId;
-    const packageSelect = form.elements.packageId;
+    const tierGrid = document.getElementById('adTierGrid');
+    const daysInput = form.elements.days;
+    const priceSummary = document.getElementById('adPriceSummary');
     const paymentMethod = form.elements.paymentMethod;
     const phoneInput = form.elements.phone;
     let paymentsConfigured = false;
+    let tiers = [];
+
     const updatePaymentFields = () => {
       const usesWallet = paymentMethod.value === 'wallet';
       phoneInput.required = !usesWallet;
@@ -702,6 +710,59 @@
     };
     paymentMethod.addEventListener('change', updatePaymentFields);
     updatePaymentFields();
+
+    function selectedTier() {
+      const checked = tierGrid.querySelector('input[name=packageId]:checked');
+      return checked && tiers.find((tier) => tier.id === checked.value);
+    }
+
+    function updatePriceSummary() {
+      const tier = selectedTier();
+      if (!tier) {
+        priceSummary.textContent = '';
+        daysInput.min = '1';
+        daysInput.max = '30';
+        return;
+      }
+      daysInput.min = String(tier.minDays);
+      daysInput.max = String(tier.maxDays);
+      const days = Math.min(Math.max(Number(daysInput.value) || tier.minDays, tier.minDays), tier.maxDays);
+      const total = days * tier.pricePerDayKes;
+      priceSummary.textContent = `KES ${tier.pricePerDayKes.toLocaleString('en-KE')}/day × ${days} day${days === 1 ? '' : 's'} = KES ${total.toLocaleString('en-KE')} total`;
+    }
+
+    function renderTiers() {
+      tierGrid.replaceChildren();
+      tiers.forEach((tier, index) => {
+        const card = document.createElement('label');
+        card.className = 'ad-tier-card';
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'packageId';
+        input.value = tier.id;
+        input.required = true;
+        if (index === 0) input.checked = true;
+        input.addEventListener('change', updatePriceSummary);
+        const badge = document.createElement('span');
+        badge.className = `ad-tier-card-badge ad-tier-card-badge-${tier.placement}`;
+        badge.textContent = adPlacementLabels[tier.placement] || tier.placement;
+        const name = document.createElement('strong');
+        name.className = 'ad-tier-card-name';
+        name.textContent = tier.name;
+        const price = document.createElement('span');
+        price.className = 'ad-tier-card-price';
+        price.textContent = `KES ${tier.pricePerDayKes.toLocaleString('en-KE')} / day`;
+        const description = document.createElement('p');
+        description.className = 'ad-tier-card-desc';
+        description.textContent = tier.description;
+        card.append(input, badge, name, price, description);
+        tierGrid.appendChild(card);
+      });
+      updatePriceSummary();
+    }
+
+    daysInput.addEventListener('input', updatePriceSummary);
+
     (async () => {
       const [eventResponse, packageResponse, health] = await Promise.all([
         api('/api/events'),
@@ -711,18 +772,18 @@
       paymentsConfigured = Boolean(health.paymentsConfigured);
       eventSelect.replaceChildren(new Option('Choose your approved event', ''));
       eventResponse.events.forEach((event) => eventSelect.add(new Option(event.title, event.id)));
-      packageSelect.replaceChildren(new Option('Choose an ad package', ''));
-      packageResponse.packages.forEach((item) => packageSelect.add(
-        new Option(`${item.name} · ${item.durationDays} days · KES ${Number(item.priceKes).toLocaleString('en-KE')}`, item.id)
-      ));
+      tiers = packageResponse.packages;
+      renderTiers();
       if (!paymentsConfigured) {
         feedback.textContent = 'M-Pesa is unavailable. You can still pay from an existing funded wallet.';
       }
     })().catch((error) => showError(feedback, error.message));
+
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       feedback.classList.remove('error');
       const values = Object.fromEntries(new FormData(form));
+      values.days = Number(values.days);
       const token = window.valorAccountToken();
       if (values.paymentMethod === 'wallet' && !token) {
         showError(feedback, 'Sign in to your account and link a phone wallet before paying with your balance.');

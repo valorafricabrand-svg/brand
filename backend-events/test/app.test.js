@@ -804,13 +804,14 @@ test('forged success callbacks do not issue tickets without PayHero verification
 test('organizers can pay for an admin-priced package and publish its event ad', async () => {
   const packageResponse = await request(app).post('/api/ads/admin/packages')
     .set(admin)
-    .send({ name: 'Homepage feature', description: 'Featured home carousel.', durationDays: 4, priceKes: 7500 });
+    .send({ name: 'Homepage feature', description: 'Featured home carousel.', placement: 'homepage', pricePerDayKes: 1875, minDays: 1, maxDays: 30 });
   assert.equal(packageResponse.status, 201);
   const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
   const checkout = await request(app).post('/api/orders/ads')
     .send({
       eventId: event.id,
       packageId: packageResponse.body.id,
+      days: 4,
       buyerName: 'Event Organizer',
       phone: '0712345678'
     });
@@ -835,6 +836,7 @@ test('paid event ads do not consume ticket capacity', async () => {
   const ad = await request(app).post('/api/orders/ads').send({
     eventId: submitted.body.id,
     packageId: packageRow.id,
+    days: 4,
     buyerName: 'Event Organizer',
     phone: '0712345678'
   });
@@ -872,12 +874,13 @@ test('organizers can see daily page-view and ticket-sale analytics for their eve
 
   const packageResponse = await request(app).post('/api/ads/admin/packages')
     .set(admin)
-    .send({ name: 'Analytics package', description: 'For analytics test.', durationDays: 5, priceKes: 2000 });
+    .send({ name: 'Analytics package', description: 'For analytics test.', placement: 'homepage', pricePerDayKes: 400, minDays: 1, maxDays: 30 });
   assert.equal(packageResponse.status, 201);
   const startsAt = new Date(Date.now() - 2 * 86400000).toISOString();
   const endsAt = new Date(Date.now() + 3 * 86400000).toISOString();
   db.prepare(`
-    INSERT INTO ad_bookings (id,event_id,package_id,status,starts_at,ends_at) VALUES (?,?,?,'active',?,?)
+    INSERT INTO ad_bookings (id,event_id,package_id,status,starts_at,ends_at,days,placement,total_price_kes)
+    VALUES (?,?,?,'active',?,?,5,'homepage',2000)
   `).run(crypto.randomUUID(), event.id, packageResponse.body.id, startsAt, endsAt);
 
   const withAd = await request(app).get(`/api/events/mine/${event.id}/ad-analytics`).set(organizerAuth);
@@ -1134,6 +1137,7 @@ test('account sign-in links existing phone wallet and pays verified deposits, ti
   const adOrder = await request(app).post('/api/orders/ads').set(walletAuth).send({
     eventId: event.id,
     packageId: packageRow.id,
+    days: 4,
     buyerName: 'Event Organizer',
     paymentMethod: 'wallet'
   });
@@ -2041,6 +2045,85 @@ test('wallet deposits accept PayPal, crediting only on a matched capture or a ve
       resource: { custom_id: deniedPending.id, amount: { value: String(deniedPending.paypal_amount_usd), currency_code: 'USD' } }
     });
   assert.equal(db.prepare('SELECT status FROM wallet_transactions WHERE id=?').get(deniedPending.id).status, 'failed');
+});
+
+test('advertising tiers price by day, enforce day limits, and gate placement by paid tier', async () => {
+  const organizerAuth = createTestAccountAuth('ad-tiers-organizer@example.com');
+  const event = createStoredTestEvent('Ad Tiers Festival', organizerAuth);
+
+  const invalidPlacement = await request(app).post('/api/ads/admin/packages').set(admin)
+    .send({ name: 'Bad tier', description: '', placement: 'not-a-real-placement', pricePerDayKes: 100, minDays: 1, maxDays: 30 });
+  assert.equal(invalidPlacement.status, 400);
+
+  const invalidDayRange = await request(app).post('/api/ads/admin/packages').set(admin)
+    .send({ name: 'Bad days', description: '', placement: 'listing', pricePerDayKes: 100, minDays: 10, maxDays: 5 });
+  assert.equal(invalidDayRange.status, 400);
+
+  const listingTier = db.prepare(`
+    SELECT id,price_per_day_kes AS pricePerDayKes,min_days AS minDays,max_days AS maxDays
+    FROM ad_packages WHERE placement='listing'
+  `).get();
+  const homepageTier = db.prepare(`
+    SELECT id,price_per_day_kes AS pricePerDayKes FROM ad_packages WHERE placement='homepage'
+  `).get();
+  assert.ok(listingTier);
+  assert.ok(homepageTier);
+
+  const packages = await request(app).get('/api/ads/packages');
+  assert.equal(packages.status, 200);
+  assert.ok(packages.body.packages.length >= 4);
+  assert.ok(packages.body.packages.every((tier) => Number.isInteger(tier.pricePerDayKes) && tier.placement));
+  const prices = packages.body.packages.map((tier) => tier.pricePerDayKes);
+  assert.deepEqual(prices, [...prices].sort((left, right) => left - right));
+
+  const tooFewDays = await request(app).post('/api/orders/ads').send({
+    eventId: event.id, packageId: listingTier.id, days: 0, buyerName: 'Organizer', phone: '0712345678'
+  });
+  assert.equal(tooFewDays.status, 400);
+
+  const tooManyDays = await request(app).post('/api/orders/ads').send({
+    eventId: event.id, packageId: listingTier.id, days: listingTier.maxDays + 1, buyerName: 'Organizer', phone: '0712345678'
+  });
+  assert.equal(tooManyDays.status, 400);
+
+  function realCheckoutIds(orderId) {
+    const row = db.prepare('SELECT checkout_request_id AS checkoutRequestId, merchant_request_id AS merchantRequestId FROM orders WHERE id=?').get(orderId);
+    return [row.checkoutRequestId, row.merchantRequestId];
+  }
+
+  const listingOrder = await request(app).post('/api/orders/ads').send({
+    eventId: event.id, packageId: listingTier.id, days: 3, buyerName: 'Organizer', phone: '0712345678'
+  });
+  assert.equal(listingOrder.status, 201);
+  const expectedListingTotal = 3 * listingTier.pricePerDayKes;
+  await completePayment(...realCheckoutIds(listingOrder.body.orderId), expectedListingTotal, 'ADTIER001');
+  const listingBooking = db.prepare("SELECT * FROM ad_bookings WHERE event_id=? AND placement='listing'").get(event.id);
+  assert.equal(listingBooking.days, 3);
+  assert.equal(listingBooking.total_price_kes, expectedListingTotal);
+  assert.equal(listingBooking.status, 'active');
+
+  const homepageOrder = await request(app).post('/api/orders/ads').send({
+    eventId: event.id, packageId: homepageTier.id, days: 2, buyerName: 'Organizer', phone: '0712345678'
+  });
+  assert.equal(homepageOrder.status, 201);
+  await completePayment(...realCheckoutIds(homepageOrder.body.orderId), 2 * homepageTier.pricePerDayKes, 'ADTIER002');
+
+  const allFeatured = await request(app).get('/api/ads/featured');
+  assert.ok(allFeatured.body.events.some((item) => item.id === event.id));
+  const homepageFeatured = await request(app).get('/api/ads/featured?placement=homepage');
+  assert.ok(homepageFeatured.body.events.some((item) => item.id === event.id));
+
+  const listingOnlyEvent = createStoredTestEvent('Listing Only Festival', organizerAuth);
+  const listingOnlyOrder = await request(app).post('/api/orders/ads').send({
+    eventId: listingOnlyEvent.id, packageId: listingTier.id, days: 1, buyerName: 'Organizer', phone: '0712345678'
+  });
+  assert.equal(listingOnlyOrder.status, 201);
+  await completePayment(...realCheckoutIds(listingOnlyOrder.body.orderId), listingTier.pricePerDayKes, 'ADTIER003');
+
+  const allFeaturedAfter = await request(app).get('/api/ads/featured');
+  assert.ok(allFeaturedAfter.body.events.some((item) => item.id === listingOnlyEvent.id));
+  const homepageFeaturedAfter = await request(app).get('/api/ads/featured?placement=homepage');
+  assert.ok(!homepageFeaturedAfter.body.events.some((item) => item.id === listingOnlyEvent.id));
 });
 
 after(() => {

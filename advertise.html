@@ -13,11 +13,11 @@
   <meta property="og:url" content="https://valorafrica.co.ke/advertise.html">
   <meta property="og:image" content="https://valorafrica.co.ke/images/og-image.svg">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles/events.css?v=history-nav-1">
+  <link rel="stylesheet" href="styles/events.css?v=ad-tiers-1">
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
-  <script src="scripts/event-pages.js?v=event-view-tracking-1" defer></script>
+  <script src="scripts/event-pages.js?v=ad-tiers-1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
   <script src="scripts/nav-history.js?v=1" defer></script>
 </head>
@@ -26,9 +26,14 @@
   <main class="wrap service-page">
     <p class="eyebrow">VALOR ADS</p><h1>Promote your event</h1>
     <p>Choose an approved event and a paid advertising package. The ad goes live after M-Pesa confirms your payment or your Valor Wallet payment completes.</p>
-    <form class="service-card service-form" id="adBookingForm">
+    <form class="service-card service-form ad-booking-form" id="adBookingForm">
       <label>Approved event<select name="eventId" required><option value="">Loading approved events…</option></select></label>
-      <label>Advertising package<select name="packageId" required><option value="">Loading available packages…</option></select></label>
+      <fieldset class="ad-tier-fieldset">
+        <legend>Advertising tier</legend>
+        <div class="ad-tier-grid" id="adTierGrid" role="radiogroup" aria-label="Advertising tier"><p>Loading tiers…</p></div>
+      </fieldset>
+      <label>Number of days<input name="days" type="number" min="1" max="30" value="7" required></label>
+      <p class="ad-price-summary" id="adPriceSummary" aria-live="polite"></p>
       <label>Your name<input name="buyerName" maxlength="120" autocomplete="name" required></label>
       <label>Payment method<select name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="paypal" disabled>PayPal (coming soon)</option><option value="crypto" disabled>Crypto (coming soon)</option></select></label>
       <p class="checkout-note">PayPal and crypto payments are coming soon; provider APIs are not connected yet.</p>

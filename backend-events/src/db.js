@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
@@ -648,6 +649,72 @@ if (!accountColumns.some((column) => column.name === 'marketing_emails_opt_out')
 }
 db.exec('CREATE INDEX IF NOT EXISTS event_views_reminder ON event_views(view_reminder_status,last_viewed_at)');
 db.exec('DROP TABLE IF EXISTS wallet_sessions');
+
+const adPackageColumns = db.prepare('PRAGMA table_info(ad_packages)').all();
+if (!adPackageColumns.some((column) => column.name === 'price_per_day_kes')) {
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    db.exec(`
+      BEGIN IMMEDIATE;
+      CREATE TABLE ad_packages_new (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        placement TEXT NOT NULL DEFAULT 'homepage' CHECK (placement IN ('listing','category','homepage','premium')),
+        price_per_day_kes INTEGER NOT NULL CHECK (price_per_day_kes > 0),
+        min_days INTEGER NOT NULL DEFAULT 1 CHECK (min_days >= 1),
+        max_days INTEGER NOT NULL DEFAULT 30 CHECK (max_days >= min_days),
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT INTO ad_packages_new (id,name,description,placement,price_per_day_kes,min_days,max_days,active,created_at)
+      SELECT id,name,description,'homepage',
+        MAX(1, CAST(ROUND(CAST(price_kes AS REAL) / duration_days) AS INTEGER)),
+        duration_days, duration_days, active, created_at
+      FROM ad_packages;
+      DROP TABLE ad_packages;
+      ALTER TABLE ad_packages_new RENAME TO ad_packages;
+      COMMIT;
+    `);
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
+if (db.prepare('SELECT COUNT(*) AS count FROM ad_packages').get().count === 0) {
+  const insertTier = db.prepare(`
+    INSERT INTO ad_packages (id,name,description,placement,price_per_day_kes,min_days,max_days)
+    VALUES (?,?,?,?,?,?,?)
+  `);
+  [
+    ['listing', 'Listing Spotlight', 'A SPONSORED badge on your event card in the main events grid and the sponsored-events rail.', 100],
+    ['category', 'Category Boost', 'Everything in Listing Spotlight, plus top placement whenever your event’s category is filtered.', 350],
+    ['homepage', 'Homepage Carousel', 'Everything in Category Boost, plus rotation in the homepage featured video carousel — the site’s highest-traffic spot.', 900],
+    ['premium', 'Premium Placement', 'Everything in Homepage Carousel, plus guaranteed first position in the carousel and a PREMIUM badge.', 1500]
+  ].forEach(([placement, name, description, pricePerDayKes]) => {
+    insertTier.run(crypto.randomUUID(), name, description, placement, pricePerDayKes, 1, 30);
+  });
+}
+
+const adBookingColumns = db.prepare('PRAGMA table_info(ad_bookings)').all();
+if (!adBookingColumns.some((column) => column.name === 'days')) {
+  db.exec('ALTER TABLE ad_bookings ADD COLUMN days INTEGER');
+}
+if (!adBookingColumns.some((column) => column.name === 'placement')) {
+  db.exec('ALTER TABLE ad_bookings ADD COLUMN placement TEXT');
+}
+if (!adBookingColumns.some((column) => column.name === 'total_price_kes')) {
+  db.exec('ALTER TABLE ad_bookings ADD COLUMN total_price_kes INTEGER');
+}
+db.exec(`
+  UPDATE ad_bookings SET
+    days = (SELECT max_days FROM ad_packages WHERE ad_packages.id = ad_bookings.package_id),
+    placement = (SELECT placement FROM ad_packages WHERE ad_packages.id = ad_bookings.package_id),
+    total_price_kes = (SELECT price_per_day_kes * max_days FROM ad_packages WHERE ad_packages.id = ad_bookings.package_id)
+  WHERE days IS NULL
+`);
 
 const walletTransactionSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='wallet_transactions'").get().sql;
 const walletTransactionColumns = db.prepare('PRAGMA table_info(wallet_transactions)').all();

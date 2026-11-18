@@ -2708,7 +2708,7 @@ function createApp(options = {}) {
 
     const adBookings = db.prepare(`
       SELECT b.id,b.status,b.starts_at AS startsAt,b.ends_at AS endsAt,b.created_at AS createdAt,
-        p.name AS packageName,p.price_kes AS priceKes
+        b.days,b.placement,b.total_price_kes AS priceKes,p.name AS packageName
       FROM ad_bookings b JOIN ad_packages p ON p.id=b.package_id
       WHERE b.event_id=?
       ORDER BY b.created_at ASC
@@ -2767,6 +2767,8 @@ function createApp(options = {}) {
         startsAt: booking.startsAt,
         endsAt: booking.endsAt,
         packageName: booking.packageName,
+        placement: booking.placement,
+        days: booking.days,
         priceKes: booking.priceKes
       })),
       rangeStart: startDate,
@@ -3369,25 +3371,30 @@ function createApp(options = {}) {
     res.json({ id: req.params.id, status });
   });
 
+  const adPlacementRank = { listing: 1, category: 2, homepage: 3, premium: 4 };
+
   app.get('/api/ads/packages', (req, res) => {
     const packages = db.prepare(`
-      SELECT id,name,description,duration_days AS durationDays,price_kes AS priceKes
-      FROM ad_packages WHERE active = 1 ORDER BY price_kes ASC
+      SELECT id,name,description,placement,price_per_day_kes AS pricePerDayKes,min_days AS minDays,max_days AS maxDays
+      FROM ad_packages WHERE active = 1 ORDER BY price_per_day_kes ASC
     `).all();
     res.json({ packages });
   });
 
   app.get('/api/ads/featured', (req, res) => {
+    const minRank = adPlacementRank[req.query.placement] || 1;
     const rows = db.prepare(`
-      SELECT DISTINCT e.* FROM events e
+      SELECT DISTINCT e.*, b.placement AS adPlacement FROM events e
       INNER JOIN ad_bookings b ON b.event_id = e.id
       WHERE e.status = 'approved' AND e.deleted_at IS NULL AND b.status = 'active'
         AND julianday(b.starts_at) <= julianday('now')
         AND julianday(b.ends_at) > julianday('now')
         AND julianday(e.ends_at) > julianday('now')
-      ORDER BY b.starts_at DESC LIMIT 10
-    `).all();
-    res.json({ events: rows.map(publicEvent) });
+      ORDER BY (b.placement = 'premium') DESC, b.starts_at DESC LIMIT 20
+    `).all().filter((row) => (adPlacementRank[row.adPlacement] || 0) >= minRank).slice(0, 10);
+    res.json({
+      events: rows.map((row) => ({ ...publicEvent(row), adPlacement: row.adPlacement }))
+    });
   });
 
   app.get('/api/ads/hero', (req, res) => {
@@ -3556,38 +3563,68 @@ function createApp(options = {}) {
     }
   });
 
+  const adPlacements = ['listing', 'category', 'homepage', 'premium'];
+
   app.get('/api/ads/admin/packages', requireAdmin, (req, res) => {
     res.json({
       packages: db.prepare(`
-        SELECT id,name,description,duration_days AS durationDays,price_kes AS priceKes,active,created_at AS createdAt
-        FROM ad_packages ORDER BY created_at DESC
+        SELECT id,name,description,placement,price_per_day_kes AS pricePerDayKes,
+          min_days AS minDays,max_days AS maxDays,active,created_at AS createdAt
+        FROM ad_packages ORDER BY price_per_day_kes ASC
       `).all()
     });
   });
 
+  function validateAdTierFields(body) {
+    const { name, description = '', placement, pricePerDayKes, minDays, maxDays } = body || {};
+    if (typeof name !== 'string' || !name.trim() || name.length > 80) return 'Tier name is required (80 characters maximum).';
+    if (typeof description !== 'string' || description.length > 500) return 'Tier description must be 500 characters or fewer.';
+    if (!adPlacements.includes(placement)) return 'Choose a valid placement: listing, category, homepage, or premium.';
+    if (!Number.isSafeInteger(pricePerDayKes) || pricePerDayKes < 1) return 'Set a positive whole-number KES price per day.';
+    if (!Number.isSafeInteger(minDays) || minDays < 1) return 'Minimum days must be a whole number of at least 1.';
+    if (!Number.isSafeInteger(maxDays) || maxDays < minDays || maxDays > 365) return 'Maximum days must be at least the minimum and no more than 365.';
+    return null;
+  }
+
   app.post('/api/ads/admin/packages', requireAdmin, (req, res) => {
-    const { name, description = '', durationDays, priceKes } = req.body || {};
-    if (typeof name !== 'string' || !name.trim() || name.length > 80) return res.status(400).json({ error: 'Package name is required (80 characters maximum).' });
-    if (typeof description !== 'string' || description.length > 500) return res.status(400).json({ error: 'Package description must be 500 characters or fewer.' });
-    if (!Number.isSafeInteger(durationDays) || durationDays < 1 || durationDays > 90) return res.status(400).json({ error: 'Package duration must be 1–90 days.' });
-    if (!Number.isSafeInteger(priceKes) || priceKes < 1) return res.status(400).json({ error: 'Set a positive whole-number KES price.' });
+    const error = validateAdTierFields(req.body);
+    if (error) return res.status(400).json({ error });
+    const { name, description = '', placement, pricePerDayKes, minDays, maxDays } = req.body;
     const id = crypto.randomUUID();
-    db.prepare('INSERT INTO ad_packages (id,name,description,duration_days,price_kes) VALUES (?,?,?,?,?)')
-      .run(id, name.trim(), description.trim(), durationDays, priceKes);
-    res.status(201).json({ id, name: name.trim(), description: description.trim(), durationDays, priceKes, active: 1 });
+    db.prepare(`
+      INSERT INTO ad_packages (id,name,description,placement,price_per_day_kes,min_days,max_days)
+      VALUES (?,?,?,?,?,?,?)
+    `).run(id, name.trim(), description.trim(), placement, pricePerDayKes, minDays, maxDays);
+    res.status(201).json({
+      id, name: name.trim(), description: description.trim(), placement,
+      pricePerDayKes, minDays, maxDays, active: 1
+    });
   });
 
   app.patch('/api/ads/admin/packages/:id', requireAdmin, (req, res) => {
     const existing = db.prepare('SELECT * FROM ad_packages WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Ad package not found.' });
-    const { name = existing.name, description = existing.description, durationDays = existing.duration_days, priceKes = existing.price_kes, active = existing.active } = req.body || {};
-    if (typeof name !== 'string' || !name.trim() || name.length > 80) return res.status(400).json({ error: 'Package name is required (80 characters maximum).' });
-    if (typeof description !== 'string' || description.length > 500) return res.status(400).json({ error: 'Package description must be 500 characters or fewer.' });
-    if (!Number.isSafeInteger(durationDays) || durationDays < 1 || durationDays > 90) return res.status(400).json({ error: 'Package duration must be 1–90 days.' });
-    if (!Number.isSafeInteger(priceKes) || priceKes < 1 || ![0,1,false,true].includes(active)) return res.status(400).json({ error: 'Choose a positive whole-number KES price and a valid availability setting.' });
-    db.prepare('UPDATE ad_packages SET name=?,description=?,duration_days=?,price_kes=?,active=? WHERE id=?')
-      .run(name.trim(), description.trim(), durationDays, priceKes, active ? 1 : 0, req.params.id);
-    res.json({ id: req.params.id, name: name.trim(), description: description.trim(), durationDays, priceKes, active: active ? 1 : 0 });
+    const merged = {
+      name: existing.name, description: existing.description, placement: existing.placement,
+      pricePerDayKes: existing.price_per_day_kes, minDays: existing.min_days, maxDays: existing.max_days,
+      ...req.body
+    };
+    const error = validateAdTierFields(merged);
+    if (error) return res.status(400).json({ error });
+    const active = req.body && 'active' in req.body ? req.body.active : existing.active;
+    if (![0, 1, false, true].includes(active)) return res.status(400).json({ error: 'Choose a valid availability setting.' });
+    db.prepare(`
+      UPDATE ad_packages SET name=?,description=?,placement=?,price_per_day_kes=?,min_days=?,max_days=?,active=?
+      WHERE id=?
+    `).run(
+      merged.name.trim(), merged.description.trim(), merged.placement,
+      merged.pricePerDayKes, merged.minDays, merged.maxDays, active ? 1 : 0, req.params.id
+    );
+    res.json({
+      id: req.params.id, name: merged.name.trim(), description: merged.description.trim(),
+      placement: merged.placement, pricePerDayKes: merged.pricePerDayKes,
+      minDays: merged.minDays, maxDays: merged.maxDays, active: active ? 1 : 0
+    });
   });
 
   function paymentsUnavailable(res) {
@@ -3949,33 +3986,41 @@ function createApp(options = {}) {
       if (!['mpesa','wallet'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa or Valor Wallet as the payment method.' });
       if (paymentMethod === 'mpesa' && paymentsUnavailable(res)) return;
       const { eventId, packageId, buyerName, phone: inputPhone } = req.body || {};
+      const days = Number(req.body && req.body.days);
       req.wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
       if (paymentMethod === 'wallet' && !req.wallet) return res.status(409).json({ error: 'Verify and link your phone number before paying from your wallet.' });
       const phone = paymentMethod === 'wallet' ? req.wallet.phone : normalizePhone(inputPhone);
-      if (typeof eventId !== 'string' || !eventId || typeof packageId !== 'string' || !packageId) return res.status(400).json({ error: 'Choose an approved event and advertising package.' });
+      if (typeof eventId !== 'string' || !eventId || typeof packageId !== 'string' || !packageId) return res.status(400).json({ error: 'Choose an approved event and advertising tier.' });
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the advertiser’s name.' });
       if (!phone) return res.status(400).json({ error: 'Enter a Kenyan Safaricom M-Pesa number: 0712345678, 0112345678, or +254712345678.' });
       const event = db.prepare("SELECT id FROM events WHERE id = ? AND status = 'approved' AND deleted_at IS NULL AND julianday(starts_at) > julianday('now')").get(eventId);
       if (!event) return res.status(404).json({ error: 'Only approved events can be advertised.' });
       const packageRow = db.prepare('SELECT * FROM ad_packages WHERE id = ? AND active = 1').get(packageId);
-      if (!packageRow) return res.status(404).json({ error: 'This advertising package is not available.' });
+      if (!packageRow) return res.status(404).json({ error: 'This advertising tier is not available.' });
+      if (!Number.isSafeInteger(days) || days < packageRow.min_days || days > packageRow.max_days) {
+        return res.status(400).json({ error: `Choose a whole number of days between ${packageRow.min_days} and ${packageRow.max_days}.` });
+      }
+      const totalPriceKes = days * packageRow.price_per_day_kes;
       const bookingId = crypto.randomUUID();
       let order;
       try {
         order = db.transaction(() => {
-          db.prepare('INSERT INTO ad_bookings (id,event_id,package_id) VALUES (?,?,?)').run(bookingId, eventId, packageId);
+          db.prepare(`
+            INSERT INTO ad_bookings (id,event_id,package_id,days,placement,total_price_kes)
+            VALUES (?,?,?,?,?,?)
+          `).run(bookingId, eventId, packageId, days, packageRow.placement, totalPriceKes);
           const created = createPendingOrder({
             orderType: 'ad', eventId, adBookingId: bookingId, buyerName, phone,
-            amountKes: packageRow.price_kes
+            amountKes: totalPriceKes
           });
           if (paymentMethod === 'wallet') {
             const balance = db.prepare("SELECT COALESCE(SUM(amount_kes),0) AS balance FROM wallet_transactions WHERE wallet_id=? AND status='completed'")
               .get(req.wallet.id).balance;
-            if (balance < packageRow.price_kes) {
+            if (balance < totalPriceKes) {
               throw Object.assign(new Error('Your wallet balance is too low. Add funds and try again.'), { statusCode: 402 });
             }
             const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
-            const endsAt = new Date(beginsAt.getTime() + packageRow.duration_days * 86400000);
+            const endsAt = new Date(beginsAt.getTime() + days * 86400000);
             db.prepare("UPDATE orders SET status='paid',result_description=?,paid_at=datetime('now') WHERE id=?")
               .run('Advertising order paid from Valor Wallet.', created.id);
             db.prepare("UPDATE ad_bookings SET status='active',starts_at=?,ends_at=? WHERE id=?")
@@ -3983,7 +4028,7 @@ function createApp(options = {}) {
             db.prepare(`
               INSERT INTO wallet_transactions (id,wallet_id,order_id,transaction_type,amount_kes,status,description,completed_at)
               VALUES (?,?,?,'ad_purchase',?,'completed',?,datetime('now'))
-            `).run(crypto.randomUUID(), req.wallet.id, created.id, -packageRow.price_kes, `${packageRow.name} event promotion`);
+            `).run(crypto.randomUUID(), req.wallet.id, created.id, -totalPriceKes, `${packageRow.name} event promotion (${days} day${days === 1 ? '' : 's'})`);
           }
           return created;
         })();
@@ -3999,7 +4044,7 @@ function createApp(options = {}) {
           message: 'Your event promotion was paid using Valor Wallet.'
         });
       }
-      return startCheckout(res, order, packageRow.price_kes, phone);
+      return startCheckout(res, order, totalPriceKes, phone);
     } catch (error) {
       return next(error);
     }
@@ -4131,7 +4176,7 @@ function createApp(options = {}) {
       if (order.order_type === 'ad' && order.ad_booking_id) {
         const booking = db.prepare(`
           SELECT b.status AS campaignStatus,b.starts_at AS startsAt,b.ends_at AS endsAt,
-            e.title AS eventTitle,p.name AS packageName
+            b.days,b.placement,e.title AS eventTitle,p.name AS packageName
           FROM ad_bookings b JOIN events e ON e.id=b.event_id JOIN ad_packages p ON p.id=b.package_id
           WHERE b.id=?
         `).get(order.ad_booking_id);
@@ -4326,11 +4371,9 @@ function createApp(options = {}) {
             insertTicket.run(crypto.randomUUID(), current.id, current.event_id, current.ticket_type);
           }
         } else if (current.order_type === 'ad' && current.ad_booking_id) {
-          const booking = db.prepare(`
-            SELECT b.id,p.duration_days FROM ad_bookings b JOIN ad_packages p ON p.id=b.package_id WHERE b.id=?
-          `).get(current.ad_booking_id);
+          const booking = db.prepare('SELECT id,days FROM ad_bookings WHERE id=?').get(current.ad_booking_id);
           const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
-          const endsAt = new Date(beginsAt.getTime() + booking.duration_days * 86400000);
+          const endsAt = new Date(beginsAt.getTime() + booking.days * 86400000);
           db.prepare("UPDATE orders SET status='paid',mpesa_receipt=?,result_description=?,paid_at=datetime('now') WHERE id=?")
             .run(values.MpesaReceiptNumber, 'Payment confirmed by M-Pesa.', current.id);
           db.prepare("UPDATE ad_bookings SET status='active',starts_at=?,ends_at=? WHERE id=?")
