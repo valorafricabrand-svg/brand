@@ -657,6 +657,11 @@ if (!accountColumns.some((column) => column.name === 'marketing_emails_opt_out')
 db.exec('CREATE INDEX IF NOT EXISTS event_views_reminder ON event_views(view_reminder_status,last_viewed_at)');
 db.exec('DROP TABLE IF EXISTS wallet_sessions');
 
+const partnershipApplicationColumns = db.prepare('PRAGMA table_info(partnership_applications)').all();
+if (!partnershipApplicationColumns.some((column) => column.name === 'sponsorship_tier')) {
+  db.exec("ALTER TABLE partnership_applications ADD COLUMN sponsorship_tier TEXT NOT NULL DEFAULT ''");
+}
+
 const adPackageColumns = db.prepare('PRAGMA table_info(ad_packages)').all();
 if (!adPackageColumns.some((column) => column.name === 'price_per_day_kes')) {
   db.exec('PRAGMA foreign_keys = OFF');

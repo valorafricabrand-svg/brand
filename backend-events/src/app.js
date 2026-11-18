@@ -2442,11 +2442,23 @@ function createApp(options = {}) {
     res.status(201).json({ message: 'Your creator partnership application was received. We will review it and agree any commission terms before activation.' });
   });
 
+  const sponsorshipTiers = {
+    community: { label: 'Community Sponsor', priceKes: 25000 },
+    city: { label: 'City Sponsor', priceKes: 75000 },
+    premium: { label: 'Premium Partner', priceKes: 200000 }
+  };
+
+  app.get('/api/partnership-applications/sponsorship-tiers', (req, res) => {
+    res.json({
+      tiers: Object.entries(sponsorshipTiers).map(([id, tier]) => ({ id, label: tier.label, priceKes: tier.priceKes }))
+    });
+  });
+
   app.get('/api/partnership-applications/me', requireAccount, (req, res) => {
     const applications = db.prepare(`
       SELECT id,application_type AS type,organization_name AS organizationName,
         website_url AS websiteUrl,application_details AS applicationDetails,
-        requested_support AS requestedSupport,status,admin_note AS adminNote,
+        requested_support AS requestedSupport,sponsorship_tier AS sponsorshipTier,status,admin_note AS adminNote,
         created_at AS createdAt,updated_at AS updatedAt,reviewed_at AS reviewedAt
       FROM partnership_applications WHERE account_id=? ORDER BY application_type
     `).all(req.account.id);
@@ -2459,9 +2471,13 @@ function createApp(options = {}) {
     const websiteUrl = typeof req.body?.websiteUrl === 'string' ? req.body.websiteUrl.trim() : '';
     const applicationDetails = typeof req.body?.applicationDetails === 'string' ? req.body.applicationDetails.trim() : '';
     const requestedSupport = typeof req.body?.requestedSupport === 'string' ? req.body.requestedSupport.trim() : '';
+    const sponsorshipTier = typeof req.body?.sponsorshipTier === 'string' ? req.body.sponsorshipTier.trim() : '';
     if (!['organizer','sponsor'].includes(type)) return res.status(400).json({ error: 'Choose organizer partner or event sponsor.' });
     if (!organizationName || organizationName.length > 160) {
       return res.status(400).json({ error: 'Organization name is required and must be 160 characters or fewer.' });
+    }
+    if (type === 'sponsor' && !Object.keys(sponsorshipTiers).includes(sponsorshipTier)) {
+      return res.status(400).json({ error: 'Choose a sponsorship package.' });
     }
     if (websiteUrl) {
       if (websiteUrl.length > 2048) return res.status(400).json({ error: 'Website link must be 2,048 characters or fewer.' });
@@ -2482,18 +2498,19 @@ function createApp(options = {}) {
       return res.status(409).json({ error: `You already have a ${type} partnership inquiry in progress.` });
     }
     const id = existing ? existing.id : crypto.randomUUID();
+    const tierToStore = type === 'sponsor' ? sponsorshipTier : '';
     if (existing) {
       db.prepare(`
         UPDATE partnership_applications SET organization_name=?,website_url=?,application_details=?,
-          requested_support=?,status='pending',admin_note='',updated_at=datetime('now'),
+          requested_support=?,sponsorship_tier=?,status='pending',admin_note='',updated_at=datetime('now'),
           reviewed_at=NULL WHERE id=?
-      `).run(organizationName, websiteUrl, applicationDetails, requestedSupport, id);
+      `).run(organizationName, websiteUrl, applicationDetails, requestedSupport, tierToStore, id);
     } else {
       db.prepare(`
         INSERT INTO partnership_applications
-          (id,account_id,application_type,organization_name,website_url,application_details,requested_support)
-        VALUES (?,?,?,?,?,?,?)
-      `).run(id, req.account.id, type, organizationName, websiteUrl, applicationDetails, requestedSupport);
+          (id,account_id,application_type,organization_name,website_url,application_details,requested_support,sponsorship_tier)
+        VALUES (?,?,?,?,?,?,?,?)
+      `).run(id, req.account.id, type, organizationName, websiteUrl, applicationDetails, requestedSupport, tierToStore);
     }
     res.status(201).json({
       id,
@@ -2509,7 +2526,7 @@ function createApp(options = {}) {
           SELECT p.id,p.account_id AS accountId,a.email,a.display_name AS displayName,
             p.application_type AS type,p.organization_name AS organizationName,
             p.website_url AS websiteUrl,p.application_details AS applicationDetails,
-            p.requested_support AS requestedSupport,p.status,p.admin_note AS adminNote,
+            p.requested_support AS requestedSupport,p.sponsorship_tier AS sponsorshipTier,p.status,p.admin_note AS adminNote,
             p.created_at AS createdAt,p.updated_at AS updatedAt
           FROM partnership_applications p JOIN accounts a ON a.id=p.account_id
           WHERE p.application_type=? ORDER BY p.created_at DESC LIMIT 500
@@ -2518,7 +2535,7 @@ function createApp(options = {}) {
           SELECT p.id,p.account_id AS accountId,a.email,a.display_name AS displayName,
             p.application_type AS type,p.organization_name AS organizationName,
             p.website_url AS websiteUrl,p.application_details AS applicationDetails,
-            p.requested_support AS requestedSupport,p.status,p.admin_note AS adminNote,
+            p.requested_support AS requestedSupport,p.sponsorship_tier AS sponsorshipTier,p.status,p.admin_note AS adminNote,
             p.created_at AS createdAt,p.updated_at AS updatedAt
           FROM partnership_applications p JOIN accounts a ON a.id=p.account_id
           ORDER BY CASE p.status WHEN 'pending' THEN 0 WHEN 'contacted' THEN 1 ELSE 2 END,p.created_at DESC

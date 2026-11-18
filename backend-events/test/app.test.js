@@ -1399,9 +1399,31 @@ test('organizer and sponsor partnership applications support secure follow-up an
       type: 'sponsor',
       organizationName: 'Sample Brand',
       websiteUrl: 'http://brand.example',
+      sponsorshipTier: 'city',
       applicationDetails: 'We want to reach local event communities with a campaign.'
     });
   assert.equal(invalidWebsite.status, 400);
+
+  const missingTier = await request(app).post('/api/partnership-applications')
+    .set(applicantAuth)
+    .set('X-Forwarded-For', '198.51.100.50')
+    .send({
+      type: 'sponsor',
+      organizationName: 'Sample Brand',
+      applicationDetails: 'We want to reach local event communities with a brand campaign and discuss possible activations.'
+    });
+  assert.equal(missingTier.status, 400);
+
+  const invalidTier = await request(app).post('/api/partnership-applications')
+    .set(applicantAuth)
+    .set('X-Forwarded-For', '198.51.100.50')
+    .send({
+      type: 'sponsor',
+      organizationName: 'Sample Brand',
+      sponsorshipTier: 'platinum',
+      applicationDetails: 'We want to reach local event communities with a brand campaign and discuss possible activations.'
+    });
+  assert.equal(invalidTier.status, 400);
 
   const organizer = await request(app).post('/api/partnership-applications')
     .set(applicantAuth)
@@ -1432,6 +1454,7 @@ test('organizer and sponsor partnership applications support secure follow-up an
     .send({
       type: 'sponsor',
       organizationName: 'Sample Brand',
+      sponsorshipTier: 'premium',
       applicationDetails: 'We want to reach local event communities with a brand campaign and discuss possible activations.',
       requestedSupport: 'Nairobi event sponsorship and brand activations.'
     });
@@ -1439,12 +1462,21 @@ test('organizer and sponsor partnership applications support secure follow-up an
   const mine = await request(app).get('/api/partnership-applications/me').set(applicantAuth);
   assert.equal(mine.status, 200);
   assert.deepEqual(mine.body.applications.map((application) => application.type), ['organizer','sponsor']);
+  const mineSponsor = mine.body.applications.find((application) => application.type === 'sponsor');
+  assert.equal(mineSponsor.sponsorshipTier, 'premium');
+  const mineOrganizer = mine.body.applications.find((application) => application.type === 'organizer');
+  assert.equal(mineOrganizer.sponsorshipTier, '');
 
   assert.equal((await request(app).get('/api/partnership-applications/admin')).status, 401);
   const adminList = await request(app).get('/api/partnership-applications/admin').set(admin);
   assert.equal(adminList.status, 200);
   assert.equal(adminList.body.applications.length, 2);
+  assert.equal(adminList.body.applications.find((application) => application.type === 'sponsor').sponsorshipTier, 'premium');
   assert.equal((await request(app).get('/api/partnership-applications/admin?type=sponsor').set(admin)).body.applications.length, 1);
+
+  const tiers = await request(app).get('/api/partnership-applications/sponsorship-tiers');
+  assert.equal(tiers.status, 200);
+  assert.deepEqual(tiers.body.tiers.map((tier) => tier.priceKes), [25000, 75000, 200000]);
   const invalidStatus = await request(app)
     .patch(`/api/partnership-applications/admin/${organizer.body.id}`)
     .set(admin).send({ status: 'paid' });
@@ -1468,6 +1500,7 @@ test('organizer and sponsor partnership applications support secure follow-up an
     .send({
       type: 'sponsor',
       organizationName: 'Sample Brand',
+      sponsorshipTier: 'community',
       applicationDetails: 'We want to reach local event communities with a brand campaign and discuss possible activations.',
       requestedSupport: 'Nairobi event sponsorship and brand activations.'
     });
@@ -1476,6 +1509,7 @@ test('organizer and sponsor partnership applications support secure follow-up an
     .set(applicantAuth)).body.applications.find((application) => application.type === 'sponsor');
   assert.equal(updatedSponsor.status, 'pending');
   assert.equal(updatedSponsor.adminNote, '');
+  assert.equal(updatedSponsor.sponsorshipTier, 'community');
 });
 
 test('Valor gift cards charge, retry, redeem once, and support reviewed wallet refunds', async () => {

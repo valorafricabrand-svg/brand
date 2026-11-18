@@ -180,6 +180,10 @@
       entry.form.elements.websiteUrl.value = application.websiteUrl;
       entry.form.elements.applicationDetails.value = application.applicationDetails;
       entry.form.elements.requestedSupport.value = application.requestedSupport;
+      if (entry.form.elements.sponsorshipTier && application.sponsorshipTier) {
+        const tierInput = entry.form.querySelector(`[name="sponsorshipTier"][value="${application.sponsorshipTier}"]`);
+        if (tierInput) tierInput.checked = true;
+      }
       entry.form.querySelector('[type="submit"]').textContent = 'Update and resubmit inquiry';
     } else {
       entry.form.querySelector('[type="submit"]').textContent =

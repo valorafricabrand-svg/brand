@@ -619,8 +619,15 @@
       const card = document.createElement('article');
       card.className = 'record';
       card.dataset.partnershipApplicationId = application.id;
+      const sponsorshipTierLabels = {
+        community: 'Community Sponsor · KES 25,000',
+        city: 'City Sponsor · KES 75,000',
+        premium: 'Premium Partner · KES 200,000'
+      };
       addText(card, 'h3', '', `${application.type === 'organizer' ? 'Organizer partner' : 'Event sponsor'} · ${application.organizationName}`);
       addText(card, 'p', 'record-meta', `${application.status.toUpperCase()} · ${application.displayName || 'Account'} · ${application.email} · Submitted ${new Date(application.createdAt).toLocaleString()}`);
+      if (application.sponsorshipTier) addText(card, 'p', 'record-contact',
+        `Package: ${sponsorshipTierLabels[application.sponsorshipTier] || application.sponsorshipTier}`);
       if (application.websiteUrl) addText(card, 'p', 'record-contact', application.websiteUrl);
       addText(card, 'p', 'record-description', application.applicationDetails);
       if (application.requestedSupport) addText(card, 'p', 'record-contact',

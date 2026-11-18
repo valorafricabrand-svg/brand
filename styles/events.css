@@ -610,6 +610,15 @@ img { display: block; max-width: 100%; }
 .partnership-benefits { display: grid; align-content: start; gap: 12px; margin: 0; padding: 24px 28px 20px; list-style: none; color: #596a82; font-size: 14px; }
 .partnership-benefits li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; }
 .partnership-benefits li::before { color: var(--partnership-accent); content: "✓"; font-weight: 700; }
+.partnership-tier-prices { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0 28px 20px; list-style: none; }
+.partnership-tier-prices li { display: grid; gap: 2px; padding: 8px 12px; border: 1px solid #e3eaf0; border-radius: 9px; background: #f8fafc; font-size: 12px; }
+.partnership-tier-prices strong { color: #30394b; font-size: 11px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+.partnership-tier-prices span { color: var(--partnership-accent); font-weight: 800; }
+.sponsorship-tier-heading { margin: 4px 0 0; color: #33445b; font-size: 13px; font-weight: 700; }
+.sponsorship-tier-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 760px) {
+  .sponsorship-tier-grid { grid-template-columns: 1fr; }
+}
 .partnership-apply { display: block; margin: 0 28px 24px; padding: 14px 18px; border-radius: 7px; color: #fff; background: var(--partnership-accent); font-size: 16px; font-weight: 800; text-align: center; transition: filter .18s ease; }
 .partnership-apply:hover { filter: brightness(.92); }
 .partnership-apply:focus-visible { outline: 3px solid #111b2e; outline-offset: 3px; }
