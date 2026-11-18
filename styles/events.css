@@ -248,6 +248,16 @@ img { display: block; max-width: 100%; }
 .menu-toggle { display: none; width: 42px; height: 42px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: white; }
 .menu-toggle span { display: block; height: 2px; margin: 4px 0; background: var(--ink); }
 
+.site-history-nav { position: fixed; z-index: 900; left: 14px; bottom: 14px; display: flex; overflow: hidden; border-radius: 999px; background: rgba(6, 20, 16, .88); backdrop-filter: blur(10px); box-shadow: 0 10px 26px rgba(0,0,0,.25); }
+.site-history-button { display: flex; width: 46px; height: 46px; align-items: center; justify-content: center; padding: 0; border: 0; color: #fff; background: transparent; cursor: pointer; transition: background .15s ease; }
+.site-history-button svg { width: 19px; height: 19px; }
+.site-history-button:hover, .site-history-button:focus-visible { background: rgba(255,255,255,.16); }
+.site-history-back { border-right: 1px solid rgba(255,255,255,.18); }
+@media (max-width: 640px) {
+  .site-history-nav { left: 12px; bottom: 12px; }
+  .site-history-button { width: 42px; height: 42px; }
+}
+
 .eyebrow { display: inline-flex; align-items: center; gap: 9px; color: var(--green); font-size: 11px; font-weight: 800; letter-spacing: .13em; }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #17a878; box-shadow: 0 0 0 4px #ddf5e9; }
 .explore-nav { border-bottom: 1px solid #e7eaf0; background: #fff7f6; }
