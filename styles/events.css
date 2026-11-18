@@ -818,8 +818,12 @@ img { display: block; max-width: 100%; }
   .ad-strip-cta { min-height: 38px; padding-inline: 10px; font-size: 11px; }
   .ad-topic { min-height: 37px; padding-inline: 10px; font-size: 11px; }
   .ad-stage { height: clamp(285px, 83vw, 360px); border-radius: 15px; }
+  .ad-stage.is-sponsored-video-stage { height: clamp(300px, 100vw, 380px); aspect-ratio: auto; }
+  .is-sponsored-video-promo .ad-video { object-position: center top; }
+  .is-sponsored-video-promo .ad-visual::after { background: linear-gradient(0deg, rgba(5,10,21,.92) 32%, transparent 56%); }
   .is-sponsored-video-promo .ad-content { right: 14px; bottom: 14px; left: 16px; }
-  .is-sponsored-video-promo .ad-content h2 { font-size: clamp(21px, 6vw, 28px); }
+  .is-sponsored-video-promo .ad-category { display: none; }
+  .is-sponsored-video-promo .ad-content h2 { margin-bottom: 4px; font-size: clamp(19px, 5.5vw, 26px); }
   .is-sponsored-video-promo .ad-description { margin-bottom: 8px; font-size: 11px; }
   .is-sponsored-video-promo .ad-ticket-cta { min-height: 38px; padding-inline: 13px; font-size: 12px; }
   .is-organizer-promo .ad-video { object-position: left center; transform: none; animation: none; }
