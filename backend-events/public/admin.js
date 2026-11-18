@@ -663,6 +663,58 @@
     });
   }
 
+  const sponsorshipTierLabelsAdmin = {
+    community: 'Community Sponsor', city: 'City Sponsor', premium: 'Premium Partner'
+  };
+
+  async function loadSponsorships() {
+    const list = document.getElementById('sponsorshipsList');
+    list.replaceChildren();
+    const { purchases } = await api('/api/sponsorships/admin');
+    if (!purchases.length) return addText(list, 'p', 'empty', 'No one has paid for a sponsorship package yet.');
+    purchases.forEach((purchase) => {
+      const card = document.createElement('article');
+      card.className = 'record';
+      card.dataset.sponsorshipId = purchase.id;
+      addText(card, 'h3', '', `${sponsorshipTierLabelsAdmin[purchase.tier] || purchase.tier} · ${purchase.brandName}`);
+      addText(card, 'p', 'record-meta',
+        `${purchase.status.toUpperCase()} · KES ${Number(purchase.amountKes).toLocaleString('en-KE')} · ${purchase.paymentMethod} · ${purchase.buyerName} · Submitted ${new Date(purchase.createdAt).toLocaleString()}`);
+      if (purchase.websiteUrl) addText(card, 'p', 'record-contact', purchase.websiteUrl);
+      if (purchase.startsAt && purchase.endsAt) addText(card, 'p', 'record-contact',
+        `Active ${new Date(purchase.startsAt).toLocaleString()} → ${new Date(purchase.endsAt).toLocaleString()}`);
+      if (purchase.resultDescription) addText(card, 'p', 'record-description', purchase.resultDescription);
+      if (['active','pending','review'].includes(purchase.status)) {
+        const actions = document.createElement('div');
+        actions.className = 'record-actions';
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'button secondary';
+        cancel.dataset.cancelSponsorship = purchase.id;
+        cancel.textContent = 'Cancel sponsorship';
+        actions.appendChild(cancel);
+        card.appendChild(actions);
+      }
+      list.appendChild(card);
+    });
+  }
+
+  document.getElementById('sponsorshipsList').addEventListener('click', async (event) => {
+    const cancel = event.target.closest('[data-cancel-sponsorship]');
+    if (!cancel) return;
+    if (!window.confirm('Cancel this sponsorship and remove the brand from the site?')) return;
+    cancel.disabled = true;
+    try {
+      await api(`/api/sponsorships/admin/${encodeURIComponent(cancel.dataset.cancelSponsorship)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'cancelled' })
+      });
+      await loadSponsorships();
+    } catch (error) {
+      cancel.disabled = false;
+      setFeedback(feedback, error.message, true);
+    }
+  });
+
   document.getElementById('loginForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const loginForm = event.currentTarget;
@@ -718,6 +770,7 @@
     document.getElementById('ordersSection').hidden = button.dataset.adminTab !== 'orders';
     document.getElementById('partnersSection').hidden = button.dataset.adminTab !== 'partners';
     document.getElementById('partnershipApplicationsSection').hidden = button.dataset.adminTab !== 'partnership-applications';
+    document.getElementById('sponsorshipsSection').hidden = button.dataset.adminTab !== 'sponsorships';
     document.getElementById('giftsSection').hidden = button.dataset.adminTab !== 'gifts';
     document.getElementById('remindersSection').hidden = button.dataset.adminTab !== 'reminders';
     if (button.dataset.adminTab === 'partners') {
@@ -725,6 +778,9 @@
     }
     if (button.dataset.adminTab === 'partnership-applications') {
       loadPartnershipApplications().catch((error) => setFeedback(feedback, error.message, true));
+    }
+    if (button.dataset.adminTab === 'sponsorships') {
+      loadSponsorships().catch((error) => setFeedback(feedback, error.message, true));
     }
     if (button.dataset.adminTab === 'gifts') {
       loadGiftMarketplace().catch((error) => setFeedback(feedback, error.message, true));

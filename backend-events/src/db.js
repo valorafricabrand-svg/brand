@@ -521,6 +521,37 @@ db.exec(`
     UNIQUE (account_id,instrument_type,instrument_id)
   );
   CREATE INDEX IF NOT EXISTS gift_refund_requests_review ON gift_refund_requests(status,created_at);
+
+  CREATE TABLE IF NOT EXISTS sponsorship_purchases (
+    id TEXT PRIMARY KEY,
+    access_token_hash TEXT NOT NULL,
+    account_id TEXT REFERENCES accounts(id),
+    tier TEXT NOT NULL CHECK (tier IN ('community','city','premium')),
+    brand_name TEXT NOT NULL,
+    website_url TEXT NOT NULL DEFAULT '',
+    logo_url TEXT NOT NULL DEFAULT '',
+    buyer_name TEXT NOT NULL,
+    phone TEXT NOT NULL DEFAULT '',
+    amount_kes INTEGER NOT NULL CHECK (amount_kes > 0),
+    payment_method TEXT NOT NULL DEFAULT 'mpesa',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','expired','failed','review','cancelled')),
+    checkout_request_id TEXT UNIQUE,
+    merchant_request_id TEXT,
+    nowpayments_invoice_id TEXT,
+    nowpayments_price_amount_usd REAL,
+    paypal_order_id TEXT,
+    paypal_amount_usd REAL,
+    result_description TEXT NOT NULL DEFAULT '',
+    starts_at TEXT,
+    ends_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    paid_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS sponsorship_purchases_active ON sponsorship_purchases(status,ends_at);
+  CREATE UNIQUE INDEX IF NOT EXISTS sponsorship_purchases_nowpayments_invoice
+    ON sponsorship_purchases(nowpayments_invoice_id) WHERE nowpayments_invoice_id IS NOT NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS sponsorship_purchases_paypal_order
+    ON sponsorship_purchases(paypal_order_id) WHERE paypal_order_id IS NOT NULL;
 `);
 
 if (db.prepare('SELECT COUNT(*) AS count FROM hero_slides').get().count === 0) {
@@ -731,7 +762,7 @@ db.exec(`
 const walletTransactionSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='wallet_transactions'").get().sql;
 const walletTransactionColumns = db.prepare('PRAGMA table_info(wallet_transactions)').all();
 const walletTransactionColumnNames = new Set(walletTransactionColumns.map((column) => column.name));
-if (!walletTransactionSchema.includes("'merchant_voucher_purchase'")) {
+if (!walletTransactionSchema.includes("'sponsorship_purchase'")) {
   db.exec('PRAGMA foreign_keys = OFF');
   try {
     const oldMerchandiseOrderId = walletTransactionColumnNames.has('merchandise_order_id')
@@ -754,7 +785,8 @@ if (!walletTransactionSchema.includes("'merchant_voucher_purchase'")) {
         reference_id TEXT NOT NULL DEFAULT '',
         transaction_type TEXT NOT NULL CHECK (transaction_type IN (
           'deposit','ticket_purchase','ad_purchase','merchandise_purchase',
-          'gift_card_purchase','gift_card_redemption','gift_card_refund','merchant_voucher_purchase'
+          'gift_card_purchase','gift_card_redemption','gift_card_refund','merchant_voucher_purchase',
+          'sponsorship_purchase'
         )),
         amount_kes INTEGER NOT NULL CHECK (amount_kes != 0),
         status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','completed','failed','review')),

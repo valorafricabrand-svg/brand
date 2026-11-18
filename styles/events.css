@@ -356,6 +356,13 @@ img { display: block; max-width: 100%; }
 .partner-logo-bitcoin img { width: 44px; }
 .partner-chip-media { border-color: #ffe6a3; background: #fffaf0; }
 .partner-chip-media strong { color: #92510d; }
+.sponsor-strip { padding: 10px 0; }
+.sponsor-strip-track { display: flex; flex-wrap: wrap; gap: 8px; }
+.sponsor-strip-chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border: 1px solid #e8edf3; border-radius: 999px; color: #30394b; background: #fff; font-size: 12px; font-weight: 700; text-decoration: none; }
+.sponsor-strip-chip img { max-width: 24px; max-height: 24px; object-fit: contain; }
+.sponsor-strip-chip-city { border-color: #cfe0f5; }
+.sponsor-strip-chip-premium { padding: 9px 16px; border-color: var(--yellow); background: #fffaf0; font-size: 13px; font-weight: 800; }
+.sponsor-strip-chip-premium img { max-width: 30px; max-height: 30px; }
 .partner-marquee-window:hover .partner-marquee-track { animation-play-state: paused; }
 @keyframes partner-marquee-scroll { to { transform: translateX(-50%); } }
 .branding-marquee { margin: 0 auto 22px; padding: 18px; overflow: hidden; border: 1px solid #e4ebe8; border-radius: 17px; background: #fff; box-shadow: 0 6px 24px rgba(20,39,58,.05); }

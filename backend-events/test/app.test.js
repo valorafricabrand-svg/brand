@@ -1404,15 +1404,15 @@ test('organizer and sponsor partnership applications support secure follow-up an
     });
   assert.equal(invalidWebsite.status, 400);
 
-  const missingTier = await request(app).post('/api/partnership-applications')
-    .set(applicantAuth)
+  const customProposal = await request(app).post('/api/partnership-applications')
+    .set(createTestAccountAuth('custom-sponsor-proposal@example.com'))
     .set('X-Forwarded-For', '198.51.100.50')
     .send({
       type: 'sponsor',
-      organizationName: 'Sample Brand',
-      applicationDetails: 'We want to reach local event communities with a brand campaign and discuss possible activations.'
+      organizationName: 'Custom Proposal Brand',
+      applicationDetails: 'We want to discuss a bespoke sponsorship outside the standard packages.'
     });
-  assert.equal(missingTier.status, 400);
+  assert.equal(customProposal.status, 201);
 
   const invalidTier = await request(app).post('/api/partnership-applications')
     .set(applicantAuth)
@@ -1470,9 +1470,9 @@ test('organizer and sponsor partnership applications support secure follow-up an
   assert.equal((await request(app).get('/api/partnership-applications/admin')).status, 401);
   const adminList = await request(app).get('/api/partnership-applications/admin').set(admin);
   assert.equal(adminList.status, 200);
-  assert.equal(adminList.body.applications.length, 2);
-  assert.equal(adminList.body.applications.find((application) => application.type === 'sponsor').sponsorshipTier, 'premium');
-  assert.equal((await request(app).get('/api/partnership-applications/admin?type=sponsor').set(admin)).body.applications.length, 1);
+  assert.equal(adminList.body.applications.length, 3);
+  assert.equal(adminList.body.applications.find((application) => application.organizationName === 'Sample Brand').sponsorshipTier, 'premium');
+  assert.equal((await request(app).get('/api/partnership-applications/admin?type=sponsor').set(admin)).body.applications.length, 2);
 
   const tiers = await request(app).get('/api/partnership-applications/sponsorship-tiers');
   assert.equal(tiers.status, 200);
@@ -2213,6 +2213,104 @@ test('advertising orders also accept NOWPayments and PayPal, activating the book
     .set('X-Order-Access', paypalOrder.body.accessToken);
   assert.equal(replay.status, 200);
   assert.equal(replay.body.status, 'paid');
+});
+
+test('sponsors can pay directly for a package, activating site-wide visibility without an inquiry', async () => {
+  function realSponsorshipCheckoutIds(id) {
+    const row = db.prepare(`
+      SELECT checkout_request_id AS checkoutRequestId, merchant_request_id AS merchantRequestId
+      FROM sponsorship_purchases WHERE id=?
+    `).get(id);
+    return [row.checkoutRequestId, row.merchantRequestId];
+  }
+
+  const tiers = await request(app).get('/api/sponsorships/tiers');
+  assert.equal(tiers.status, 200);
+  assert.deepEqual(tiers.body.tiers.map((tier) => tier.priceKes), [25000, 75000, 200000]);
+  assert.deepEqual(tiers.body.tiers.map((tier) => tier.days), [14, 30, 60]);
+
+  const invalidTier = await request(app).post('/api/sponsorships').send({
+    tier: 'platinum', brandName: 'Acme', buyerName: 'Jane', paymentMethod: 'mpesa', phone: '0712345678'
+  });
+  assert.equal(invalidTier.status, 400);
+
+  const badLogo = await request(app).post('/api/sponsorships').send({
+    tier: 'community', brandName: 'Acme', logoUrl: 'not-a-url', buyerName: 'Jane', paymentMethod: 'mpesa', phone: '0712345678'
+  });
+  assert.equal(badLogo.status, 400);
+
+  const mpesaPurchase = await request(app).post('/api/sponsorships').send({
+    tier: 'community', brandName: 'Acme Coffee', websiteUrl: 'https://acme.example',
+    logoUrl: 'https://acme.example/logo.png', buyerName: 'Jane Doe', paymentMethod: 'mpesa', phone: '0712345678'
+  });
+  assert.equal(mpesaPurchase.status, 201);
+  assert.equal(mpesaPurchase.body.status, 'pending');
+  const beforeActive = await request(app).get('/api/sponsorships/active');
+  assert.ok(!beforeActive.body.sponsors.some((sponsor) => sponsor.brandName === 'Acme Coffee'));
+
+  await completePayment(...realSponsorshipCheckoutIds(mpesaPurchase.body.purchaseId), 25000, 'SPONSOR001');
+  const purchaseStatus = await request(app).get(`/api/sponsorships/${mpesaPurchase.body.purchaseId}`)
+    .set('X-Order-Access', mpesaPurchase.body.accessToken);
+  assert.equal(purchaseStatus.status, 200);
+  assert.equal(purchaseStatus.body.status, 'active');
+  const afterActive = await request(app).get('/api/sponsorships/active');
+  assert.ok(afterActive.body.sponsors.some((sponsor) => sponsor.brandName === 'Acme Coffee' && sponsor.tier === 'community'));
+
+  const walletAuth = createTestAccountAuth('sponsor-wallet-buyer@example.com');
+  createTestWallet(walletAuth, 100000);
+  const walletPurchase = await request(app).post('/api/sponsorships').set(walletAuth).send({
+    tier: 'city', brandName: 'Wallet Wear', buyerName: 'Wallet Buyer', paymentMethod: 'wallet'
+  });
+  assert.equal(walletPurchase.status, 201);
+  assert.equal(walletPurchase.body.status, 'active');
+  assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 25000);
+
+  const cryptoPurchase = await request(app).post('/api/sponsorships').send({
+    tier: 'city', brandName: 'City Threads', buyerName: 'John Doe', paymentMethod: 'nowpayments'
+  });
+  assert.equal(cryptoPurchase.status, 201);
+  assert.equal(cryptoPurchase.body.paymentMethod, 'nowpayments');
+  assert.ok(cryptoPurchase.body.checkoutUrl);
+  const cryptoRow = db.prepare('SELECT nowpayments_invoice_id,amount_kes FROM sponsorship_purchases WHERE id=?').get(cryptoPurchase.body.purchaseId);
+  const cryptoPriceUsd = Math.round((cryptoRow.amount_kes / 130) * 100) / 100;
+  const ipn = await request(app).post('/api/nowpayments/ipn')
+    .set('x-nowpayments-sig', 'test-nowpayments-signature')
+    .send({
+      order_id: cryptoPurchase.body.purchaseId,
+      invoice_id: cryptoRow.nowpayments_invoice_id,
+      payment_status: 'finished',
+      price_amount: String(cryptoPriceUsd),
+      price_currency: 'usd'
+    });
+  assert.equal(ipn.status, 200);
+  assert.equal(db.prepare('SELECT status FROM sponsorship_purchases WHERE id=?').get(cryptoPurchase.body.purchaseId).status, 'active');
+
+  const paypalPurchase = await request(app).post('/api/sponsorships').send({
+    tier: 'premium', brandName: 'Premium Motors', buyerName: 'Amina', paymentMethod: 'paypal'
+  });
+  assert.equal(paypalPurchase.status, 201);
+  assert.equal(paypalPurchase.body.paymentMethod, 'paypal');
+  const captured = await request(app).post(`/api/sponsorships/${paypalPurchase.body.purchaseId}/paypal-capture`)
+    .set('X-Order-Access', paypalPurchase.body.accessToken);
+  assert.equal(captured.status, 200);
+  assert.equal(captured.body.status, 'active');
+
+  const finalActive = await request(app).get('/api/sponsorships/active');
+  assert.equal(finalActive.body.sponsors[0].tier, 'premium');
+
+  assert.equal((await request(app).get('/api/sponsorships/admin')).status, 401);
+  const adminList = await request(app).get('/api/sponsorships/admin').set(admin);
+  assert.equal(adminList.status, 200);
+  assert.ok(adminList.body.purchases.length >= 4);
+
+  const cancel = await request(app).patch(`/api/sponsorships/admin/${mpesaPurchase.body.purchaseId}`)
+    .set(admin).send({ status: 'cancelled' });
+  assert.equal(cancel.status, 200);
+  const afterCancel = await request(app).get('/api/sponsorships/active');
+  assert.ok(!afterCancel.body.sponsors.some((sponsor) => sponsor.brandName === 'Acme Coffee'));
+  const doubleCancel = await request(app).patch(`/api/sponsorships/admin/${mpesaPurchase.body.purchaseId}`)
+    .set(admin).send({ status: 'cancelled' });
+  assert.equal(doubleCancel.status, 409);
 });
 
 after(() => {

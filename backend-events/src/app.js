@@ -558,6 +558,34 @@ function createApp(options = {}) {
         `).run('Crypto deposit confirmed by NOWPayments.', walletDeposit.id);
         return res.json({ received: true });
       }
+      const sponsorshipPurchase = db.prepare(`
+        SELECT * FROM sponsorship_purchases WHERE id=?
+      `).get(payload.order_id);
+      if (sponsorshipPurchase && sponsorshipPurchase.nowpayments_invoice_id === String(payload.invoice_id)) {
+        if (sponsorshipPurchase.status !== 'pending') return res.json({ received: true });
+        const receivedPriceKes = Number(payload.price_amount);
+        if (!Number.isFinite(receivedPriceKes) ||
+            Math.round(receivedPriceKes * 100) !== Math.round(sponsorshipPurchase.nowpayments_price_amount_usd * 100) ||
+            String(payload.price_currency).toLowerCase() !== 'usd') {
+          db.prepare("UPDATE sponsorship_purchases SET status='review',result_description=? WHERE id=? AND status='pending'")
+            .run('NOWPayments invoice total did not match this sponsorship; support review is required.', sponsorshipPurchase.id);
+          return res.json({ received: true });
+        }
+        if (['failed','expired'].includes(payload.payment_status)) {
+          db.prepare("UPDATE sponsorship_purchases SET status='failed',result_description=? WHERE id=? AND status='pending'")
+            .run('NOWPayments crypto payment was not completed.', sponsorshipPurchase.id);
+          return res.json({ received: true });
+        }
+        if (payload.payment_status !== 'finished') return res.json({ received: true });
+        const tierInfo = sponsorshipTiers[sponsorshipPurchase.tier];
+        const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+        const endsAt = new Date(beginsAt.getTime() + tierInfo.days * 86400000);
+        db.prepare(`
+          UPDATE sponsorship_purchases SET status='active',starts_at=?,ends_at=?,result_description=?,paid_at=datetime('now')
+          WHERE id=? AND status='pending'
+        `).run(beginsAt.toISOString(), endsAt.toISOString(), 'Crypto sponsorship payment confirmed by NOWPayments.', sponsorshipPurchase.id);
+        return res.json({ received: true });
+      }
       const order = db.prepare(`
         SELECT * FROM orders
         WHERE id=? AND order_type IN ('ticket','ad') AND payment_method='nowpayments'
@@ -670,6 +698,33 @@ function createApp(options = {}) {
         } else {
           db.prepare("UPDATE wallet_transactions SET status='failed',description=? WHERE id=? AND status='pending'")
             .run('PayPal payment was not completed.', deposit.id);
+        }
+        return res.json({ received: true });
+      }
+      const sponsorshipPurchase = db.prepare(`
+        SELECT * FROM sponsorship_purchases WHERE id=? AND paypal_order_id IS NOT NULL
+      `).get(depositId);
+      if (sponsorshipPurchase) {
+        if (sponsorshipPurchase.status !== 'pending') return res.json({ received: true });
+        if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
+          const amountValue = resource.amount && Number(resource.amount.value);
+          if (!Number.isFinite(amountValue) ||
+              Math.round(amountValue * 100) !== Math.round(sponsorshipPurchase.paypal_amount_usd * 100) ||
+              String(resource.amount && resource.amount.currency_code).toUpperCase() !== 'USD') {
+            db.prepare("UPDATE sponsorship_purchases SET status='review',result_description=? WHERE id=? AND status='pending'")
+              .run('PayPal webhook amount did not match this sponsorship; support review is required.', sponsorshipPurchase.id);
+            return res.json({ received: true });
+          }
+          const tierInfo = sponsorshipTiers[sponsorshipPurchase.tier];
+          const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+          const endsAt = new Date(beginsAt.getTime() + tierInfo.days * 86400000);
+          db.prepare(`
+            UPDATE sponsorship_purchases SET status='active',starts_at=?,ends_at=?,result_description=?,paid_at=datetime('now')
+            WHERE id=? AND status='pending'
+          `).run(beginsAt.toISOString(), endsAt.toISOString(), 'PayPal sponsorship payment confirmed by webhook.', sponsorshipPurchase.id);
+        } else {
+          db.prepare("UPDATE sponsorship_purchases SET status='failed',result_description=? WHERE id=? AND status='pending'")
+            .run('PayPal payment was not completed.', sponsorshipPurchase.id);
         }
         return res.json({ received: true });
       }
@@ -2443,15 +2498,34 @@ function createApp(options = {}) {
   });
 
   const sponsorshipTiers = {
-    community: { label: 'Community Sponsor', priceKes: 25000 },
-    city: { label: 'City Sponsor', priceKes: 75000 },
-    premium: { label: 'Premium Partner', priceKes: 200000 }
+    community: { label: 'Community Sponsor', priceKes: 25000, days: 14, rank: 1 },
+    city: { label: 'City Sponsor', priceKes: 75000, days: 30, rank: 2 },
+    premium: { label: 'Premium Partner', priceKes: 200000, days: 60, rank: 3 }
   };
 
   app.get('/api/partnership-applications/sponsorship-tiers', (req, res) => {
     res.json({
       tiers: Object.entries(sponsorshipTiers).map(([id, tier]) => ({ id, label: tier.label, priceKes: tier.priceKes }))
     });
+  });
+
+  app.get('/api/sponsorships/tiers', (req, res) => {
+    res.json({
+      tiers: Object.entries(sponsorshipTiers).map(([id, tier]) => ({
+        id, label: tier.label, priceKes: tier.priceKes, days: tier.days
+      }))
+    });
+  });
+
+  app.get('/api/sponsorships/active', (req, res) => {
+    const rows = db.prepare(`
+      SELECT tier,brand_name AS brandName,website_url AS websiteUrl,logo_url AS logoUrl,ends_at AS endsAt
+      FROM sponsorship_purchases
+      WHERE status='active' AND julianday(ends_at) > julianday('now')
+      ORDER BY CASE tier WHEN 'premium' THEN 0 WHEN 'city' THEN 1 ELSE 2 END, paid_at DESC
+      LIMIT 30
+    `).all();
+    res.json({ sponsors: rows });
   });
 
   app.get('/api/partnership-applications/me', requireAccount, (req, res) => {
@@ -2476,8 +2550,8 @@ function createApp(options = {}) {
     if (!organizationName || organizationName.length > 160) {
       return res.status(400).json({ error: 'Organization name is required and must be 160 characters or fewer.' });
     }
-    if (type === 'sponsor' && !Object.keys(sponsorshipTiers).includes(sponsorshipTier)) {
-      return res.status(400).json({ error: 'Choose a sponsorship package.' });
+    if (sponsorshipTier && !Object.keys(sponsorshipTiers).includes(sponsorshipTier)) {
+      return res.status(400).json({ error: 'Choose a valid sponsorship package, or leave it blank for a custom proposal.' });
     }
     if (websiteUrl) {
       if (websiteUrl.length > 2048) return res.status(400).json({ error: 'Website link must be 2,048 characters or fewer.' });
@@ -3623,6 +3697,31 @@ function createApp(options = {}) {
 
   const adPlacements = ['listing', 'category', 'homepage', 'premium'];
 
+  app.get('/api/sponsorships/admin', requireAdmin, (req, res) => {
+    const purchases = db.prepare(`
+      SELECT id,tier,brand_name AS brandName,website_url AS websiteUrl,logo_url AS logoUrl,
+        buyer_name AS buyerName,phone,amount_kes AS amountKes,payment_method AS paymentMethod,
+        status,result_description AS resultDescription,starts_at AS startsAt,ends_at AS endsAt,
+        created_at AS createdAt,paid_at AS paidAt
+      FROM sponsorship_purchases
+      ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'pending' THEN 1 WHEN 'review' THEN 2 ELSE 3 END,created_at DESC
+      LIMIT 500
+    `).all();
+    res.json({ purchases });
+  });
+
+  app.patch('/api/sponsorships/admin/:id', requireAdmin, (req, res) => {
+    const existing = db.prepare('SELECT id,status FROM sponsorship_purchases WHERE id=?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Sponsorship purchase not found.' });
+    const { status } = req.body || {};
+    if (status !== 'cancelled') return res.status(400).json({ error: 'Only cancelling a sponsorship is supported.' });
+    if (!['active','review','pending'].includes(existing.status)) {
+      return res.status(409).json({ error: 'Only an active, pending, or review sponsorship can be cancelled.' });
+    }
+    db.prepare("UPDATE sponsorship_purchases SET status='cancelled' WHERE id=?").run(req.params.id);
+    res.json({ id: req.params.id, status: 'cancelled' });
+  });
+
   app.get('/api/ads/admin/packages', requireAdmin, (req, res) => {
     res.json({
       packages: db.prepare(`
@@ -4180,6 +4279,255 @@ function createApp(options = {}) {
     }
   });
 
+  function safeSponsorshipAccess(purchase, suppliedToken) {
+    if (!suppliedToken || !purchase) return false;
+    const actual = Buffer.from(purchase.access_token_hash, 'hex');
+    const expected = Buffer.from(sha256(suppliedToken), 'hex');
+    return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+  }
+
+  app.post('/api/sponsorships', (req, res, next) => {
+    if (req.body && req.body.paymentMethod === 'wallet') return requireAccount(req, res, next);
+    next();
+  }, async (req, res, next) => {
+    try {
+      const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
+      if (!['mpesa','wallet','nowpayments','paypal'].includes(paymentMethod)) {
+        return res.status(400).json({ error: 'Choose M-Pesa, Valor Wallet, Crypto, or PayPal as the payment method.' });
+      }
+      if (paymentMethod === 'mpesa' && paymentsUnavailable(res)) return;
+      if (paymentMethod === 'nowpayments' && !nowpaymentsGateway.isConfigured()) {
+        return res.status(503).json({ error: 'Crypto checkout is not enabled yet. Choose M-Pesa or Valor Wallet.' });
+      }
+      if (paymentMethod === 'paypal' && !paypalGateway.isConfigured()) {
+        return res.status(503).json({ error: 'PayPal checkout is not enabled yet. Choose M-Pesa or Valor Wallet.' });
+      }
+      const { tier, brandName, websiteUrl: inputWebsite, logoUrl: inputLogo, buyerName, phone: inputPhone } = req.body || {};
+      const tierInfo = sponsorshipTiers[tier];
+      if (!tierInfo) return res.status(400).json({ error: 'Choose a sponsorship package.' });
+      if (typeof brandName !== 'string' || !brandName.trim() || brandName.length > 160) {
+        return res.status(400).json({ error: 'Enter the brand or organization name.' });
+      }
+      const websiteUrl = typeof inputWebsite === 'string' ? inputWebsite.trim() : '';
+      if (websiteUrl) {
+        if (websiteUrl.length > 2048) return res.status(400).json({ error: 'Website link must be 2,048 characters or fewer.' });
+        try {
+          if (new URL(websiteUrl).protocol !== 'https:') return res.status(400).json({ error: 'Website links must use HTTPS.' });
+        } catch (error) {
+          return res.status(400).json({ error: 'Enter a valid HTTPS website link.' });
+        }
+      }
+      const logoUrl = typeof inputLogo === 'string' ? inputLogo.trim() : '';
+      if (logoUrl) {
+        if (logoUrl.length > 2048) return res.status(400).json({ error: 'Logo link must be 2,048 characters or fewer.' });
+        try {
+          if (new URL(logoUrl).protocol !== 'https:') return res.status(400).json({ error: 'Logo links must use HTTPS.' });
+        } catch (error) {
+          return res.status(400).json({ error: 'Enter a valid HTTPS logo image link.' });
+        }
+      }
+      if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) {
+        return res.status(400).json({ error: 'Enter your name.' });
+      }
+      req.wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
+      if (paymentMethod === 'wallet' && !req.wallet) return res.status(409).json({ error: 'Verify and link your phone number before paying from your wallet.' });
+      const phone = paymentMethod === 'wallet'
+        ? req.wallet.phone
+        : paymentMethod === 'nowpayments' || paymentMethod === 'paypal' ? '' : normalizePhone(inputPhone);
+      if (!phone && paymentMethod === 'mpesa') {
+        return res.status(400).json({ error: 'Enter a Kenyan Safaricom M-Pesa number: 0712345678, 0112345678, or +254712345678.' });
+      }
+
+      const id = crypto.randomUUID();
+      const accessToken = crypto.randomBytes(32).toString('base64url');
+      const brandNameTrimmed = brandName.trim();
+      const buyerNameTrimmed = buyerName.trim();
+
+      function activateNow() {
+        const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+        const endsAt = new Date(beginsAt.getTime() + tierInfo.days * 86400000);
+        db.prepare(`
+          UPDATE sponsorship_purchases SET status='active',starts_at=?,ends_at=?,paid_at=datetime('now') WHERE id=? AND status='pending'
+        `).run(beginsAt.toISOString(), endsAt.toISOString(), id);
+      }
+
+      try {
+        db.transaction(() => {
+          db.prepare(`
+            INSERT INTO sponsorship_purchases
+              (id,access_token_hash,account_id,tier,brand_name,website_url,logo_url,buyer_name,phone,amount_kes,payment_method)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+          `).run(
+            id, sha256(accessToken), req.account ? req.account.id : null, tier, brandNameTrimmed,
+            websiteUrl, logoUrl, buyerNameTrimmed, phone, tierInfo.priceKes, paymentMethod
+          );
+          if (paymentMethod === 'wallet') {
+            const balance = db.prepare("SELECT COALESCE(SUM(amount_kes),0) AS balance FROM wallet_transactions WHERE wallet_id=? AND status='completed'")
+              .get(req.wallet.id).balance;
+            if (balance < tierInfo.priceKes) {
+              throw Object.assign(new Error('Your wallet balance is too low. Add funds and try again.'), { statusCode: 402 });
+            }
+            activateNow();
+            db.prepare(`
+              INSERT INTO wallet_transactions (id,wallet_id,transaction_type,amount_kes,status,description,completed_at)
+              VALUES (?,?,'sponsorship_purchase',?,'completed',?,datetime('now'))
+            `).run(crypto.randomUUID(), req.wallet.id, -tierInfo.priceKes, `${tierInfo.label} sponsorship (${tierInfo.days} days) for ${brandNameTrimmed}`);
+          }
+        })();
+      } catch (error) {
+        if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+        throw error;
+      }
+
+      if (paymentMethod === 'wallet') {
+        return res.status(201).json({
+          purchaseId: id,
+          accessToken,
+          status: 'active',
+          message: 'Your sponsorship was activated using Valor Wallet.'
+        });
+      }
+
+      const baseUrl = publicSiteUrl.replace(/\/+$/, '');
+      if (paymentMethod === 'nowpayments') {
+        try {
+          const invoice = await nowpaymentsGateway.createInvoice({
+            id,
+            amountKes: tierInfo.priceKes,
+            description: `${tierInfo.label} sponsorship for ${brandNameTrimmed}`.slice(0, 127),
+            successUrl: `${baseUrl}/sponsorship-status.html?purchaseId=${encodeURIComponent(id)}&payment=nowpayments`,
+            cancelUrl: `${baseUrl}/partnership.html?checkout=cancelled`
+          });
+          if (!invoice || typeof invoice.id !== 'string' || typeof invoice.url !== 'string' ||
+              !Number.isFinite(invoice.priceAmountUsd) || invoice.priceAmountUsd <= 0) {
+            throw new Error('NOWPayments did not return a valid invoice.');
+          }
+          db.prepare(`
+            UPDATE sponsorship_purchases SET nowpayments_invoice_id=?,nowpayments_price_amount_usd=?
+            WHERE id=? AND status='pending'
+          `).run(invoice.id, invoice.priceAmountUsd, id);
+          return res.status(201).json({
+            purchaseId: id,
+            accessToken,
+            status: 'pending',
+            paymentMethod: 'nowpayments',
+            checkoutUrl: invoice.url,
+            cryptoPriceAmountUsd: invoice.priceAmountUsd,
+            message: 'Continue to NOWPayments to complete your crypto payment.'
+          });
+        } catch (error) {
+          db.prepare("UPDATE sponsorship_purchases SET status='failed',result_description=? WHERE id=? AND status='pending'")
+            .run('Could not start NOWPayments checkout.', id);
+          console.error('NOWPayments sponsorship invoice could not be created:', error.message);
+          return res.status(502).json({ error: 'NOWPayments could not start checkout. Please try again shortly.' });
+        }
+      }
+      if (paymentMethod === 'paypal') {
+        try {
+          const paypalOrder = await paypalGateway.createOrder({
+            id,
+            amountKes: tierInfo.priceKes,
+            description: `${tierInfo.label} sponsorship for ${brandNameTrimmed}`.slice(0, 127),
+            returnUrl: `${baseUrl}/sponsorship-status.html?purchaseId=${encodeURIComponent(id)}&payment=paypal`,
+            cancelUrl: `${baseUrl}/partnership.html?checkout=cancelled`
+          });
+          db.prepare(`
+            UPDATE sponsorship_purchases SET paypal_order_id=?,paypal_amount_usd=? WHERE id=? AND status='pending'
+          `).run(paypalOrder.orderId, paypalOrder.amountUsd, id);
+          return res.status(201).json({
+            purchaseId: id,
+            accessToken,
+            status: 'pending',
+            paymentMethod: 'paypal',
+            checkoutUrl: paypalOrder.approveUrl,
+            cryptoPriceAmountUsd: paypalOrder.amountUsd,
+            message: 'Continue to PayPal to complete your payment.'
+          });
+        } catch (error) {
+          db.prepare("UPDATE sponsorship_purchases SET status='failed',result_description=? WHERE id=? AND status='pending'")
+            .run('PayPal could not start the order.', id);
+          console.error('PayPal sponsorship order could not be started:', error.message);
+          return res.status(502).json({ error: 'PayPal could not start checkout. Please try again shortly.' });
+        }
+      }
+      try {
+        const request = await paymentGateway.initiateStkPush({ id, amountKes: tierInfo.priceKes, phone, orderType: 'sponsorship' });
+        db.prepare('UPDATE sponsorship_purchases SET checkout_request_id=?,merchant_request_id=? WHERE id=?')
+          .run(request.checkoutRequestId, request.merchantRequestId, id);
+        return res.status(201).json({
+          purchaseId: id,
+          accessToken,
+          status: 'pending',
+          paymentMethod: 'mpesa',
+          message: request.customerMessage
+        });
+      } catch (error) {
+        db.prepare("UPDATE sponsorship_purchases SET status='failed',result_description=? WHERE id=? AND status='pending'")
+          .run('Could not start M-Pesa checkout.', id);
+        console.error('M-Pesa sponsorship checkout could not be started:', error.message);
+        return res.status(502).json({ error: `M-Pesa could not start the prompt: ${error.message}` });
+      }
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  app.get('/api/sponsorships/:id', (req, res) => {
+    const purchase = db.prepare('SELECT * FROM sponsorship_purchases WHERE id=?').get(req.params.id);
+    if (!purchase || !safeSponsorshipAccess(purchase, req.get('X-Order-Access'))) {
+      return res.status(404).json({ error: 'Sponsorship purchase not found.' });
+    }
+    res.json({
+      purchaseId: purchase.id,
+      tier: purchase.tier,
+      brandName: purchase.brand_name,
+      status: purchase.status,
+      paymentMethod: purchase.payment_method,
+      amountKes: purchase.amount_kes,
+      cryptoPriceAmountUsd: purchase.nowpayments_price_amount_usd || purchase.paypal_amount_usd || null,
+      startsAt: purchase.starts_at,
+      endsAt: purchase.ends_at,
+      resultDescription: purchase.result_description
+    });
+  });
+
+  app.post('/api/sponsorships/:id/paypal-capture', async (req, res, next) => {
+    try {
+      const purchase = db.prepare("SELECT * FROM sponsorship_purchases WHERE id=? AND paypal_order_id IS NOT NULL").get(req.params.id);
+      if (!purchase || !safeSponsorshipAccess(purchase, req.get('X-Order-Access'))) {
+        return res.status(404).json({ error: 'Sponsorship purchase not found.' });
+      }
+      if (purchase.status !== 'pending') return res.json({ status: purchase.status });
+      const capture = await paypalGateway.captureOrder(purchase.paypal_order_id);
+      if (capture.customId !== purchase.id) {
+        db.prepare("UPDATE sponsorship_purchases SET status='review',result_description=? WHERE id=? AND status='pending'")
+          .run('PayPal capture did not match this sponsorship; support review is required.', purchase.id);
+        return res.status(409).json({ error: 'This PayPal payment could not be matched to your sponsorship.' });
+      }
+      if (capture.status !== 'COMPLETED' && capture.captureStatus !== 'COMPLETED') {
+        return res.status(202).json({ status: 'pending', message: 'PayPal has not completed this payment yet.' });
+      }
+      if (!Number.isFinite(capture.amountValue) ||
+          Math.round(capture.amountValue * 100) !== Math.round(purchase.paypal_amount_usd * 100) ||
+          String(capture.amountCurrency).toUpperCase() !== 'USD') {
+        db.prepare("UPDATE sponsorship_purchases SET status='review',result_description=? WHERE id=? AND status='pending'")
+          .run('PayPal payment amount did not match this sponsorship; support review is required.', purchase.id);
+        return res.status(409).json({ error: 'The PayPal payment amount did not match this sponsorship.' });
+      }
+      const tierInfo = sponsorshipTiers[purchase.tier];
+      const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+      const endsAt = new Date(beginsAt.getTime() + tierInfo.days * 86400000);
+      db.prepare(`
+        UPDATE sponsorship_purchases SET status='active',starts_at=?,ends_at=?,result_description=?,paid_at=datetime('now')
+        WHERE id=? AND status='pending'
+      `).run(beginsAt.toISOString(), endsAt.toISOString(), 'PayPal payment confirmed.', purchase.id);
+      return res.json({ status: 'active' });
+    } catch (error) {
+      console.error('PayPal sponsorship capture failed:', error.message);
+      return res.status(502).json({ error: 'Could not confirm your PayPal payment. Please try again shortly.' });
+    }
+  });
+
   app.get('/api/account/tickets', requireAccount, async (req, res, next) => {
     try {
       const tickets = db.prepare(`
@@ -4500,6 +4848,40 @@ function createApp(options = {}) {
         `).run(values.MpesaReceiptNumber, 'M-Pesa deposit confirmed.', walletDeposit.id);
       } catch (error) {
         console.error('M-Pesa wallet deposit verification failed; balance remains unchanged:', error.message);
+      }
+      return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
+    }
+    const sponsorshipPurchase = db.prepare(`
+      SELECT * FROM sponsorship_purchases WHERE checkout_request_id=?
+    `).get(callback.CheckoutRequestID);
+    if (sponsorshipPurchase) {
+      if (sponsorshipPurchase.status !== 'pending') return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
+      if (Number(callback.ResultCode) !== 0) {
+        db.prepare("UPDATE sponsorship_purchases SET status='failed',result_description=? WHERE id=? AND status='pending'")
+          .run(String(callback.ResultDesc || 'M-Pesa payment was not completed.').slice(0, 250), sponsorshipPurchase.id);
+        return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
+      }
+      try {
+        const query = await paymentGateway.queryStkPush(sponsorshipPurchase.checkout_request_id, sponsorshipPurchase.merchant_request_id);
+        if (String(query.CheckoutRequestID) !== sponsorshipPurchase.checkout_request_id || String(query.ResultCode) !== '0') {
+          return res.json({ ResultCode: 0, ResultDesc: 'Payment verification is pending.' });
+        }
+        const metadata = callback.CallbackMetadata && callback.CallbackMetadata.Item;
+        const values = Array.isArray(metadata) ? Object.fromEntries(metadata.map((item) => [item.Name, item.Value])) : {};
+        if (Number(values.Amount) !== sponsorshipPurchase.amount_kes) {
+          db.prepare("UPDATE sponsorship_purchases SET status='review',result_description=? WHERE id=? AND status='pending'")
+            .run('Payment details did not match this sponsorship; support review is required.', sponsorshipPurchase.id);
+          return res.json({ ResultCode: 0, ResultDesc: 'Payment requires review.' });
+        }
+        const tierInfo = sponsorshipTiers[sponsorshipPurchase.tier];
+        const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+        const endsAt = new Date(beginsAt.getTime() + tierInfo.days * 86400000);
+        db.prepare(`
+          UPDATE sponsorship_purchases SET status='active',starts_at=?,ends_at=?,result_description=?,paid_at=datetime('now')
+          WHERE id=? AND status='pending'
+        `).run(beginsAt.toISOString(), endsAt.toISOString(), 'Payment confirmed by M-Pesa.', sponsorshipPurchase.id);
+      } catch (error) {
+        console.error('M-Pesa sponsorship payment verification failed; sponsorship remains unconfirmed:', error.message);
       }
       return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
     }

@@ -21,6 +21,7 @@
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
   <script src="scripts/partnership.js?v=sponsor-tiers-1" defer></script>
+  <script src="scripts/sponsorship.js?v=1" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
   <script src="scripts/nav-history.js?v=1" defer></script>
@@ -120,7 +121,7 @@
             <li><strong>City</strong><span>KES 75,000</span></li>
             <li><strong>Premium</strong><span>KES 200,000</span></li>
           </ul>
-          <a class="partnership-apply" href="#sponsor-application">Apply for event sponsorship</a>
+          <a class="partnership-apply" href="#sponsor-checkout">Pay &amp; become a sponsor</a>
           <p class="partnership-requirement">Sponsors fund visibility or activations; sponsorship is not an investment in Valor Africa.</p>
         </article>
         <article class="partnership-card partnership-organizer">
@@ -148,6 +149,52 @@
           <p class="partnership-requirement">We value audience relevance and engagement—not a fixed follower count.</p>
         </article>
       </div>
+      <section class="wrap sponsor-checkout-section" id="sponsor-checkout" aria-labelledby="sponsor-checkout-title">
+        <p class="eyebrow">EVENT SPONSORSHIP</p>
+        <h2 id="sponsor-checkout-title">Become a sponsor today</h2>
+        <p>Choose a package and pay now to put your brand in front of Valor Africa's event audience right away. Prefer something custom? <a href="#sponsor-application">Send us a message instead</a>.</p>
+        <form class="service-card service-form" id="sponsorCheckoutForm">
+          <label>Brand or organization name<input name="brandName" maxlength="160" required></label>
+          <fieldset class="ad-tier-fieldset">
+            <legend>Sponsorship package</legend>
+            <div class="sponsorship-tier-grid" id="checkoutTierGrid" role="radiogroup" aria-label="Sponsorship package">
+              <label class="ad-tier-card">
+                <input type="radio" name="tier" value="community" required>
+                <span class="ad-tier-card-badge ad-tier-card-badge-listing">KES 25,000 · 14 days</span>
+                <strong class="ad-tier-card-name">Community Sponsor</strong>
+                <p class="ad-tier-card-desc">Logo placement, a social shoutout, and a sponsor mention at one event of your choice.</p>
+              </label>
+              <label class="ad-tier-card">
+                <input type="radio" name="tier" value="city">
+                <span class="ad-tier-card-badge ad-tier-card-badge-category">KES 75,000 · 30 days</span>
+                <strong class="ad-tier-card-name">City Sponsor</strong>
+                <p class="ad-tier-card-desc">Everything in Community, plus a place in the sponsor strip shown across the events page.</p>
+              </label>
+              <label class="ad-tier-card">
+                <input type="radio" name="tier" value="premium">
+                <span class="ad-tier-card-badge ad-tier-card-badge-premium">KES 200,000 · 60 days</span>
+                <strong class="ad-tier-card-name">Premium Partner</strong>
+                <p class="ad-tier-card-desc">Everything in City, plus top billing in the sponsor strip on the homepage too.</p>
+              </label>
+            </div>
+          </fieldset>
+          <label>Website (optional)<input name="websiteUrl" type="url" maxlength="2048" placeholder="https://..."></label>
+          <label>Logo image link (optional, HTTPS)<input name="logoUrl" type="url" maxlength="2048" placeholder="https://..."></label>
+          <label>Your name<input name="buyerName" maxlength="120" autocomplete="name" required></label>
+          <label>Payment method
+            <select name="paymentMethod" id="sponsorPaymentMethod">
+              <option value="mpesa">M-Pesa</option>
+              <option value="wallet">Valor Wallet</option>
+              <option value="nowpayments">Crypto (NOWPayments)</option>
+              <option value="paypal">PayPal</option>
+            </select>
+          </label>
+          <label>Safaricom M-Pesa number<input name="phone" id="sponsorPhone" type="tel" autocomplete="tel" placeholder="07…, 011…, or +254…"></label>
+          <p class="checkout-note">Your sponsorship activates automatically once payment is confirmed, for the number of days shown on your package.</p>
+          <button class="button button-primary" type="submit" id="sponsorCheckoutSubmit">Pay with M-Pesa</button>
+          <p class="page-feedback" id="sponsorCheckoutFeedback" aria-live="polite"></p>
+        </form>
+      </section>
       <section class="partnership-member-area business-partnership-applications" aria-labelledby="business-partnership-title">
         <p class="eyebrow">ORGANIZER &amp; SPONSOR PARTNERSHIPS</p>
         <h2 id="business-partnership-title">Start a partnership conversation</h2>
@@ -175,35 +222,13 @@
             </form>
           </section>
           <section class="business-partnership-form-card" id="sponsor-application" aria-labelledby="sponsor-application-title">
-            <h3 id="sponsor-application-title">Event sponsor inquiry</h3>
-            <p>Tell us about your brand, audience, campaign goals, and preferred timing.</p>
+            <h3 id="sponsor-application-title">Custom sponsorship proposal</h3>
+            <p>Want something bigger or different from the three packages above? Tell us about your brand, audience, campaign goals, and preferred timing, and our team will follow up to agree custom terms.</p>
             <p id="sponsorApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
             <div id="sponsorApplicationStatus" class="partnership-application-status" hidden></div>
             <form class="partnership-application-form business-partnership-form" id="sponsorPartnerApplication" data-partnership-type="sponsor" hidden>
               <label for="sponsorOrganizationName">Brand or organization name</label>
               <input id="sponsorOrganizationName" name="organizationName" maxlength="160" required>
-              <p class="sponsorship-tier-heading">Sponsorship package</p>
-              <div class="sponsorship-tier-grid" id="sponsorTierGrid" role="radiogroup" aria-label="Sponsorship package">
-                <label class="ad-tier-card">
-                  <input type="radio" name="sponsorshipTier" value="community" required>
-                  <span class="ad-tier-card-badge ad-tier-card-badge-listing">KES 25,000</span>
-                  <strong class="ad-tier-card-name">Community Sponsor</strong>
-                  <p class="ad-tier-card-desc">Logo placement, a social shoutout, and a sponsor mention at one event of your choice.</p>
-                </label>
-                <label class="ad-tier-card">
-                  <input type="radio" name="sponsorshipTier" value="city">
-                  <span class="ad-tier-card-badge ad-tier-card-badge-category">KES 75,000</span>
-                  <strong class="ad-tier-card-name">City Sponsor</strong>
-                  <p class="ad-tier-card-desc">Everything in Community, plus city or category-wide listing placement and booth space at up to 3 events.</p>
-                </label>
-                <label class="ad-tier-card">
-                  <input type="radio" name="sponsorshipTier" value="premium">
-                  <span class="ad-tier-card-badge ad-tier-card-badge-premium">KES 200,000</span>
-                  <strong class="ad-tier-card-name">Premium Partner</strong>
-                  <p class="ad-tier-card-desc">Everything in City, plus homepage "Presented by" placement, full-calendar co-branding, and a dedicated campaign report.</p>
-                </label>
-              </div>
-              <p class="checkout-note">Exact deliverables, timing, and audience are confirmed with our team before any agreement; no payment is collected here.</p>
               <label for="sponsorWebsite">Website (optional)</label>
               <input id="sponsorWebsite" name="websiteUrl" type="url" maxlength="2048" placeholder="https://...">
               <label for="sponsorDetails">Describe your audience, campaign goals, and ideal timing</label>
