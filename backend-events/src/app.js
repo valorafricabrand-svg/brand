@@ -560,7 +560,7 @@ function createApp(options = {}) {
       }
       const order = db.prepare(`
         SELECT * FROM orders
-        WHERE id=? AND order_type='ticket' AND payment_method='nowpayments'
+        WHERE id=? AND order_type IN ('ticket','ad') AND payment_method='nowpayments'
       `).get(payload.order_id);
       if (!order || order.nowpayments_invoice_id !== String(payload.invoice_id)) {
         return res.json({ received: true });
@@ -594,6 +594,16 @@ function createApp(options = {}) {
       db.transaction(() => {
         const current = db.prepare("SELECT * FROM orders WHERE id=? AND status='pending'").get(order.id);
         if (!current) return;
+        if (current.order_type === 'ad' && current.ad_booking_id) {
+          const booking = db.prepare('SELECT id,days FROM ad_bookings WHERE id=?').get(current.ad_booking_id);
+          const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+          const endsAt = new Date(beginsAt.getTime() + booking.days * 86400000);
+          db.prepare("UPDATE orders SET status='paid',result_description=?,paid_at=datetime('now') WHERE id=?")
+            .run('Payment confirmed by NOWPayments.', current.id);
+          db.prepare("UPDATE ad_bookings SET status='active',starts_at=?,ends_at=? WHERE id=?")
+            .run(beginsAt.toISOString(), endsAt.toISOString(), booking.id);
+          return;
+        }
         if (current.event_id) {
           const eventRow = db.prepare('SELECT capacity FROM events WHERE id=?').get(current.event_id);
           if (eventRow && eventRow.capacity !== null) {
@@ -615,8 +625,8 @@ function createApp(options = {}) {
           insertTicket.run(crypto.randomUUID(), current.id, current.event_id, current.ticket_type);
         }
       })();
-      const updated = db.prepare('SELECT status FROM orders WHERE id=?').get(order.id);
-      if (updated && updated.status === 'paid') {
+      const updated = db.prepare('SELECT status,order_type FROM orders WHERE id=?').get(order.id);
+      if (updated && updated.status === 'paid' && updated.order_type === 'ticket') {
         deliverTicketEmail(order.id).catch((error) => {
           console.error(`Could not process ticket confirmation email for order ${order.id}:`, error);
         });
@@ -642,23 +652,54 @@ function createApp(options = {}) {
       const deposit = db.prepare(`
         SELECT * FROM wallet_transactions WHERE id=? AND transaction_type='deposit' AND paypal_order_id IS NOT NULL
       `).get(depositId);
-      if (!deposit || deposit.status !== 'pending') return res.json({ received: true });
+      if (deposit) {
+        if (deposit.status !== 'pending') return res.json({ received: true });
+        if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
+          const amountValue = resource.amount && Number(resource.amount.value);
+          if (!Number.isFinite(amountValue) ||
+              Math.round(amountValue * 100) !== Math.round(deposit.paypal_amount_usd * 100) ||
+              String(resource.amount && resource.amount.currency_code).toUpperCase() !== 'USD') {
+            db.prepare("UPDATE wallet_transactions SET status='review',description=? WHERE id=? AND status='pending'")
+              .run('PayPal webhook amount did not match this deposit; support review is required.', deposit.id);
+            return res.json({ received: true });
+          }
+          db.prepare(`
+            UPDATE wallet_transactions SET status='completed',description=?,completed_at=datetime('now')
+            WHERE id=? AND status='pending'
+          `).run('PayPal deposit confirmed by webhook.', deposit.id);
+        } else {
+          db.prepare("UPDATE wallet_transactions SET status='failed',description=? WHERE id=? AND status='pending'")
+            .run('PayPal payment was not completed.', deposit.id);
+        }
+        return res.json({ received: true });
+      }
+      const order = db.prepare(`
+        SELECT * FROM orders WHERE id=? AND order_type='ad' AND paypal_order_id IS NOT NULL
+      `).get(depositId);
+      if (!order || order.status !== 'pending') return res.json({ received: true });
       if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
         const amountValue = resource.amount && Number(resource.amount.value);
         if (!Number.isFinite(amountValue) ||
-            Math.round(amountValue * 100) !== Math.round(deposit.paypal_amount_usd * 100) ||
+            Math.round(amountValue * 100) !== Math.round(order.paypal_amount_usd * 100) ||
             String(resource.amount && resource.amount.currency_code).toUpperCase() !== 'USD') {
-          db.prepare("UPDATE wallet_transactions SET status='review',description=? WHERE id=? AND status='pending'")
-            .run('PayPal webhook amount did not match this deposit; support review is required.', deposit.id);
+          db.prepare("UPDATE orders SET status='review',result_description=? WHERE id=? AND status='pending'")
+            .run('PayPal webhook amount did not match this order; support review is required.', order.id);
           return res.json({ received: true });
         }
-        db.prepare(`
-          UPDATE wallet_transactions SET status='completed',description=?,completed_at=datetime('now')
-          WHERE id=? AND status='pending'
-        `).run('PayPal deposit confirmed by webhook.', deposit.id);
+        db.transaction(() => {
+          const current = db.prepare("SELECT * FROM orders WHERE id=? AND status='pending'").get(order.id);
+          if (!current || !current.ad_booking_id) return;
+          const booking = db.prepare('SELECT id,days FROM ad_bookings WHERE id=?').get(current.ad_booking_id);
+          const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+          const endsAt = new Date(beginsAt.getTime() + booking.days * 86400000);
+          db.prepare("UPDATE orders SET status='paid',result_description=?,paid_at=datetime('now') WHERE id=?")
+            .run('PayPal payment confirmed by webhook.', current.id);
+          db.prepare("UPDATE ad_bookings SET status='active',starts_at=?,ends_at=? WHERE id=?")
+            .run(beginsAt.toISOString(), endsAt.toISOString(), booking.id);
+        })();
       } else {
-        db.prepare("UPDATE wallet_transactions SET status='failed',description=? WHERE id=? AND status='pending'")
-          .run('PayPal payment was not completed.', deposit.id);
+        db.prepare("UPDATE orders SET status='failed',result_description=? WHERE id=? AND status='pending'")
+          .run('PayPal payment was not completed.', order.id);
       }
       return res.json({ received: true });
     } catch (error) {
@@ -3983,17 +4024,27 @@ function createApp(options = {}) {
   }, async (req, res, next) => {
     try {
       const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
-      if (!['mpesa','wallet'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa or Valor Wallet as the payment method.' });
+      if (!['mpesa','wallet','nowpayments','paypal'].includes(paymentMethod)) {
+        return res.status(400).json({ error: 'Choose M-Pesa, Valor Wallet, Crypto, or PayPal as the payment method.' });
+      }
       if (paymentMethod === 'mpesa' && paymentsUnavailable(res)) return;
+      if (paymentMethod === 'nowpayments' && !nowpaymentsGateway.isConfigured()) {
+        return res.status(503).json({ error: 'Crypto checkout is not enabled yet. Choose M-Pesa or Valor Wallet.' });
+      }
+      if (paymentMethod === 'paypal' && !paypalGateway.isConfigured()) {
+        return res.status(503).json({ error: 'PayPal checkout is not enabled yet. Choose M-Pesa or Valor Wallet.' });
+      }
       const { eventId, packageId, buyerName, phone: inputPhone } = req.body || {};
       const days = Number(req.body && req.body.days);
       req.wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
       if (paymentMethod === 'wallet' && !req.wallet) return res.status(409).json({ error: 'Verify and link your phone number before paying from your wallet.' });
-      const phone = paymentMethod === 'wallet' ? req.wallet.phone : normalizePhone(inputPhone);
+      const phone = paymentMethod === 'wallet'
+        ? req.wallet.phone
+        : paymentMethod === 'nowpayments' || paymentMethod === 'paypal' ? '' : normalizePhone(inputPhone);
       if (typeof eventId !== 'string' || !eventId || typeof packageId !== 'string' || !packageId) return res.status(400).json({ error: 'Choose an approved event and advertising tier.' });
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the advertiser’s name.' });
-      if (!phone) return res.status(400).json({ error: 'Enter a Kenyan Safaricom M-Pesa number: 0712345678, 0112345678, or +254712345678.' });
-      const event = db.prepare("SELECT id FROM events WHERE id = ? AND status = 'approved' AND deleted_at IS NULL AND julianday(starts_at) > julianday('now')").get(eventId);
+      if (!phone && paymentMethod === 'mpesa') return res.status(400).json({ error: 'Enter a Kenyan Safaricom M-Pesa number: 0712345678, 0112345678, or +254712345678.' });
+      const event = db.prepare("SELECT id,title,slug FROM events WHERE id = ? AND status = 'approved' AND deleted_at IS NULL AND julianday(starts_at) > julianday('now')").get(eventId);
       if (!event) return res.status(404).json({ error: 'Only approved events can be advertised.' });
       const packageRow = db.prepare('SELECT * FROM ad_packages WHERE id = ? AND active = 1').get(packageId);
       if (!packageRow) return res.status(404).json({ error: 'This advertising tier is not available.' });
@@ -4011,7 +4062,7 @@ function createApp(options = {}) {
           `).run(bookingId, eventId, packageId, days, packageRow.placement, totalPriceKes);
           const created = createPendingOrder({
             orderType: 'ad', eventId, adBookingId: bookingId, buyerName, phone,
-            amountKes: totalPriceKes
+            amountKes: totalPriceKes, paymentMethod
           });
           if (paymentMethod === 'wallet') {
             const balance = db.prepare("SELECT COALESCE(SUM(amount_kes),0) AS balance FROM wallet_transactions WHERE wallet_id=? AND status='completed'")
@@ -4043,6 +4094,68 @@ function createApp(options = {}) {
           status: 'paid',
           message: 'Your event promotion was paid using Valor Wallet.'
         });
+      }
+      const baseUrl = publicSiteUrl.replace(/\/+$/, '');
+      if (paymentMethod === 'nowpayments') {
+        try {
+          const invoice = await nowpaymentsGateway.createInvoice({
+            id: order.id,
+            amountKes: totalPriceKes,
+            description: `${packageRow.name} promotion for ${event.title}`.slice(0, 127),
+            successUrl: `${baseUrl}/order.html?orderId=${encodeURIComponent(order.id)}&payment=nowpayments`,
+            cancelUrl: `${baseUrl}/advertise.html?checkout=cancelled`
+          });
+          if (!invoice || typeof invoice.id !== 'string' || typeof invoice.url !== 'string' ||
+              !Number.isFinite(invoice.priceAmountUsd) || invoice.priceAmountUsd <= 0) {
+            throw new Error('NOWPayments did not return a valid invoice.');
+          }
+          db.prepare(`
+            UPDATE orders SET nowpayments_invoice_id=?,nowpayments_price_amount_usd=?
+            WHERE id=? AND status='pending'
+          `).run(invoice.id, invoice.priceAmountUsd, order.id);
+          return res.status(201).json({
+            orderId: order.id,
+            accessToken: order.accessToken,
+            status: 'pending',
+            paymentMethod: 'nowpayments',
+            checkoutUrl: invoice.url,
+            cryptoPriceAmountUsd: invoice.priceAmountUsd,
+            message: 'Continue to NOWPayments to complete your crypto payment.'
+          });
+        } catch (error) {
+          db.prepare("UPDATE orders SET status='failed',result_description=? WHERE id=? AND status='pending'")
+            .run('Could not start NOWPayments checkout.', order.id);
+          console.error('NOWPayments ad invoice could not be created:', error.message);
+          return res.status(502).json({ error: 'NOWPayments could not start checkout. Please try again shortly.' });
+        }
+      }
+      if (paymentMethod === 'paypal') {
+        try {
+          const paypalOrder = await paypalGateway.createOrder({
+            id: order.id,
+            amountKes: totalPriceKes,
+            description: `${packageRow.name} promotion for ${event.title}`.slice(0, 127),
+            returnUrl: `${baseUrl}/order.html?orderId=${encodeURIComponent(order.id)}&payment=paypal`,
+            cancelUrl: `${baseUrl}/advertise.html?checkout=cancelled`
+          });
+          db.prepare(`
+            UPDATE orders SET paypal_order_id=?,paypal_amount_usd=? WHERE id=? AND status='pending'
+          `).run(paypalOrder.orderId, paypalOrder.amountUsd, order.id);
+          return res.status(201).json({
+            orderId: order.id,
+            accessToken: order.accessToken,
+            status: 'pending',
+            paymentMethod: 'paypal',
+            checkoutUrl: paypalOrder.approveUrl,
+            cryptoPriceAmountUsd: paypalOrder.amountUsd,
+            message: 'Continue to PayPal to complete your payment.'
+          });
+        } catch (error) {
+          db.prepare("UPDATE orders SET status='failed',result_description=? WHERE id=? AND status='pending'")
+            .run('PayPal could not start the order.', order.id);
+          console.error('PayPal ad order could not be started:', error.message);
+          return res.status(502).json({ error: 'PayPal could not start checkout. Please try again shortly.' });
+        }
       }
       return startCheckout(res, order, totalPriceKes, phone);
     } catch (error) {
@@ -4185,6 +4298,49 @@ function createApp(options = {}) {
       res.json(result);
     } catch (error) {
       next(error);
+    }
+  });
+
+  app.post('/api/orders/:id/paypal-capture', async (req, res, next) => {
+    try {
+      const order = db.prepare("SELECT * FROM orders WHERE id=? AND paypal_order_id IS NOT NULL").get(req.params.id);
+      if (!order || !safeOrderAccess(order, req.get('X-Order-Access'))) {
+        return res.status(404).json({ error: 'Order not found.' });
+      }
+      if (order.status !== 'pending') return res.json({ status: order.status });
+      const capture = await paypalGateway.captureOrder(order.paypal_order_id);
+      if (capture.customId !== order.id) {
+        db.prepare("UPDATE orders SET status='review',result_description=? WHERE id=? AND status='pending'")
+          .run('PayPal capture did not match this order; support review is required.', order.id);
+        return res.status(409).json({ error: 'This PayPal payment could not be matched to your order.' });
+      }
+      if (capture.status !== 'COMPLETED' && capture.captureStatus !== 'COMPLETED') {
+        return res.status(202).json({ status: 'pending', message: 'PayPal has not completed this payment yet.' });
+      }
+      if (!Number.isFinite(capture.amountValue) ||
+          Math.round(capture.amountValue * 100) !== Math.round(order.paypal_amount_usd * 100) ||
+          String(capture.amountCurrency).toUpperCase() !== 'USD') {
+        db.prepare("UPDATE orders SET status='review',result_description=? WHERE id=? AND status='pending'")
+          .run('PayPal payment amount did not match this order; support review is required.', order.id);
+        return res.status(409).json({ error: 'The PayPal payment amount did not match this order.' });
+      }
+      db.transaction(() => {
+        const current = db.prepare("SELECT * FROM orders WHERE id=? AND status='pending'").get(order.id);
+        if (!current) return;
+        if (current.order_type === 'ad' && current.ad_booking_id) {
+          const booking = db.prepare('SELECT id,days FROM ad_bookings WHERE id=?').get(current.ad_booking_id);
+          const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+          const endsAt = new Date(beginsAt.getTime() + booking.days * 86400000);
+          db.prepare("UPDATE orders SET status='paid',result_description=?,paid_at=datetime('now') WHERE id=?")
+            .run('PayPal payment confirmed.', current.id);
+          db.prepare("UPDATE ad_bookings SET status='active',starts_at=?,ends_at=? WHERE id=?")
+            .run(beginsAt.toISOString(), endsAt.toISOString(), booking.id);
+        }
+      })();
+      return res.json({ status: 'completed' });
+    } catch (error) {
+      console.error('PayPal order capture failed:', error.message);
+      return res.status(502).json({ error: 'Could not confirm your PayPal payment. Please try again shortly.' });
     }
   });
 

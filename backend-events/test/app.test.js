@@ -2126,6 +2126,61 @@ test('advertising tiers price by day, enforce day limits, and gate placement by 
   assert.ok(!homepageFeaturedAfter.body.events.some((item) => item.id === listingOnlyEvent.id));
 });
 
+test('advertising orders also accept NOWPayments and PayPal, activating the booking only once paid', async () => {
+  const organizerAuth = createTestAccountAuth('ad-payment-methods-organizer@example.com');
+  const event = createStoredTestEvent('Ad Payment Methods Festival', organizerAuth);
+  const listingTier = db.prepare("SELECT id,price_per_day_kes AS pricePerDayKes FROM ad_packages WHERE placement='listing'").get();
+
+  const cryptoOrder = await request(app).post('/api/orders/ads').send({
+    eventId: event.id, packageId: listingTier.id, days: 2, buyerName: 'Organizer', paymentMethod: 'nowpayments'
+  });
+  assert.equal(cryptoOrder.status, 201);
+  assert.equal(cryptoOrder.body.paymentMethod, 'nowpayments');
+  assert.ok(cryptoOrder.body.checkoutUrl);
+  const cryptoBookingBefore = db.prepare(`
+    SELECT b.status FROM ad_bookings b JOIN orders o ON o.ad_booking_id=b.id WHERE o.id=?
+  `).get(cryptoOrder.body.orderId);
+  assert.equal(cryptoBookingBefore.status, 'pending_payment');
+
+  const cryptoOrderRow = db.prepare('SELECT nowpayments_invoice_id,amount_kes FROM orders WHERE id=?').get(cryptoOrder.body.orderId);
+  const cryptoPriceUsd = Math.round((cryptoOrderRow.amount_kes / 130) * 100) / 100;
+  const ipn = await request(app).post('/api/nowpayments/ipn')
+    .set('x-nowpayments-sig', 'test-nowpayments-signature')
+    .send({
+      order_id: cryptoOrder.body.orderId,
+      invoice_id: cryptoOrderRow.nowpayments_invoice_id,
+      payment_status: 'finished',
+      price_amount: String(cryptoPriceUsd),
+      price_currency: 'usd'
+    });
+  assert.equal(ipn.status, 200);
+  const cryptoBookingAfter = db.prepare(`
+    SELECT b.status FROM ad_bookings b JOIN orders o ON o.ad_booking_id=b.id WHERE o.id=?
+  `).get(cryptoOrder.body.orderId);
+  assert.equal(cryptoBookingAfter.status, 'active');
+
+  const paypalOrder = await request(app).post('/api/orders/ads').send({
+    eventId: event.id, packageId: listingTier.id, days: 1, buyerName: 'Organizer', paymentMethod: 'paypal'
+  });
+  assert.equal(paypalOrder.status, 201);
+  assert.equal(paypalOrder.body.paymentMethod, 'paypal');
+  assert.ok(paypalOrder.body.checkoutUrl);
+
+  const captured = await request(app).post(`/api/orders/${paypalOrder.body.orderId}/paypal-capture`)
+    .set('X-Order-Access', paypalOrder.body.accessToken);
+  assert.equal(captured.status, 200);
+  assert.equal(captured.body.status, 'completed');
+  const paypalBooking = db.prepare(`
+    SELECT b.status FROM ad_bookings b JOIN orders o ON o.ad_booking_id=b.id WHERE o.id=?
+  `).get(paypalOrder.body.orderId);
+  assert.equal(paypalBooking.status, 'active');
+
+  const replay = await request(app).post(`/api/orders/${paypalOrder.body.orderId}/paypal-capture`)
+    .set('X-Order-Access', paypalOrder.body.accessToken);
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.status, 'paid');
+});
+
 after(() => {
   db.close();
   fs.rmSync(path.join(__dirname, '..', '.test-uploads'), { recursive: true, force: true });

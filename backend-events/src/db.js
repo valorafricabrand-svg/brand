@@ -632,10 +632,17 @@ if (!orderColumns.some((column) => column.name === 'gift_recipient_contact')) {
 if (!orderColumns.some((column) => column.name === 'gift_message')) {
   db.exec("ALTER TABLE orders ADD COLUMN gift_message TEXT NOT NULL DEFAULT ''");
 }
+if (!orderColumns.some((column) => column.name === 'paypal_order_id')) {
+  db.exec('ALTER TABLE orders ADD COLUMN paypal_order_id TEXT');
+}
+if (!orderColumns.some((column) => column.name === 'paypal_amount_usd')) {
+  db.exec('ALTER TABLE orders ADD COLUMN paypal_amount_usd REAL');
+}
 db.exec('CREATE INDEX IF NOT EXISTS orders_affiliate_partner ON orders(affiliate_partner_id, status, paid_at)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS wallets_account ON wallets(account_id)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_session ON orders(stripe_session_id) WHERE stripe_session_id IS NOT NULL');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS orders_nowpayments_invoice ON orders(nowpayments_invoice_id) WHERE nowpayments_invoice_id IS NOT NULL');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS orders_paypal_order ON orders(paypal_order_id) WHERE paypal_order_id IS NOT NULL');
 const ticketColumns = db.prepare('PRAGMA table_info(tickets)').all();
 if (!ticketColumns.some((column) => column.name === 'seat_label')) {
   db.exec("ALTER TABLE tickets ADD COLUMN seat_label TEXT NOT NULL DEFAULT ''");

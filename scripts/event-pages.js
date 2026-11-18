@@ -702,11 +702,12 @@
     let paymentsConfigured = false;
     let tiers = [];
 
+    const adPaymentLabels = { mpesa: 'M-Pesa', wallet: 'Valor Wallet', nowpayments: 'NOWPayments', paypal: 'PayPal' };
     const updatePaymentFields = () => {
-      const usesWallet = paymentMethod.value === 'wallet';
-      phoneInput.required = !usesWallet;
-      phoneInput.disabled = usesWallet;
-      form.querySelector('button[type=submit]').textContent = `Pay with ${usesWallet ? 'Valor Wallet' : 'M-Pesa'}`;
+      const needsPhone = paymentMethod.value === 'mpesa';
+      phoneInput.required = needsPhone;
+      phoneInput.disabled = !needsPhone;
+      form.querySelector('button[type=submit]').textContent = `Pay with ${adPaymentLabels[paymentMethod.value] || 'M-Pesa'}`;
     };
     paymentMethod.addEventListener('change', updatePaymentFields);
     updatePaymentFields();
@@ -806,7 +807,8 @@
   async function loadOrder() {
     const root = document.getElementById('orderStatus');
     if (!root) return;
-    const orderId = new URLSearchParams(window.location.search).get('orderId');
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get('orderId');
     const token = orderId && window.sessionStorage.getItem(`valor-order-${orderId}`);
     if (!orderId || !token) {
       root.replaceChildren();
@@ -817,6 +819,18 @@
       root.append(heading, text);
       return;
     }
+    const paypalCaptureKey = `valor-order-paypal-captured-${orderId}`;
+    if (params.get('payment') === 'paypal' && !window.sessionStorage.getItem(paypalCaptureKey)) {
+      window.sessionStorage.setItem(paypalCaptureKey, '1');
+      try {
+        await api(`/api/orders/${encodeURIComponent(orderId)}/paypal-capture`, {
+          method: 'POST',
+          headers: { 'X-Order-Access': token }
+        });
+      } catch (error) {
+        console.error('Could not confirm the PayPal payment automatically:', error.message);
+      }
+    }
     try {
       const headers = new Headers({ 'X-Order-Access': token });
       const accountToken = window.valorAccountToken();
@@ -826,7 +840,7 @@
         window.valorTrackPurchase(order);
       }
       const heading = document.createElement('h1');
-      heading.textContent = order.status === 'paid' ? 'Payment confirmed' : order.status === 'confirmed' ? 'Free registration confirmed' : order.status === 'failed' ? 'Payment not completed' : order.status === 'review' ? 'Payment needs support review' : order.paymentMethod === 'stripe' ? 'Waiting for Stripe payment confirmation' : order.paymentMethod === 'nowpayments' ? 'Waiting for crypto payment confirmation' : 'Waiting for M-Pesa payment';
+      heading.textContent = order.status === 'paid' ? 'Payment confirmed' : order.status === 'confirmed' ? 'Free registration confirmed' : order.status === 'failed' ? 'Payment not completed' : order.status === 'review' ? 'Payment needs support review' : order.paymentMethod === 'stripe' ? 'Waiting for Stripe payment confirmation' : order.paymentMethod === 'nowpayments' ? 'Waiting for crypto payment confirmation' : order.paymentMethod === 'paypal' ? 'Waiting for PayPal payment confirmation' : 'Waiting for M-Pesa payment';
       const details = document.createElement('p');
       const cryptoPrice = order.cryptoPriceAmountUsd !== null &&
         order.cryptoPriceAmountUsd !== undefined &&
@@ -841,7 +855,9 @@
           ? 'Complete payment in Stripe Checkout. This page checks for confirmation automatically.'
           : order.paymentMethod === 'nowpayments'
             ? 'Complete the crypto payment on NOWPayments. Tickets are issued after the payment is confirmed; this page checks for confirmation automatically.'
-            : 'Approve the payment prompt on your phone. This page checks for confirmation automatically.';
+            : order.paymentMethod === 'paypal'
+              ? 'Complete the payment on PayPal. This page confirms it automatically when you return.'
+              : 'Approve the payment prompt on your phone. This page checks for confirmation automatically.';
         root.appendChild(explanation);
         window.setTimeout(loadOrder, order.paymentMethod === 'stripe' ? 2500 : 5000);
       } else if (['paid','confirmed'].includes(order.status) && order.tickets?.length) {
