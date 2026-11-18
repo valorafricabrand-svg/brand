@@ -2011,7 +2011,7 @@ function createApp(options = {}) {
       db.prepare("UPDATE wallet_transactions SET status='failed',description=? WHERE id=? AND status='pending'")
         .run('M-Pesa could not start the wallet deposit.', id);
       console.error('M-Pesa wallet deposit could not be started:', error.message);
-      res.status(502).json({ error: 'M-Pesa could not start the deposit prompt. Try again shortly.' });
+      res.status(502).json({ error: `M-Pesa could not start the deposit prompt: ${error.message}` });
     }
   });
 
@@ -3643,7 +3643,7 @@ function createApp(options = {}) {
         .run('failed', 'Could not start M-Pesa checkout.', order.id, 'pending');
       console.error('M-Pesa checkout could not be started:', error.message);
       res.status(502).json({
-        error: 'M-Pesa could not start the prompt. Check that this is an active Safaricom M-Pesa number, and check your PayHero setup.'
+        error: `M-Pesa could not start the prompt: ${error.message}`
       });
     }
   }
