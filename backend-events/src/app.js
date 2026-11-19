@@ -1005,16 +1005,23 @@ function createApp(options = {}) {
       return callback(error);
     }
   }).single('eventImage');
-  const heroVideoUpload = multer({
+  const heroMediaUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 100 * 1024 * 1024, files: 1, fields: 12, parts: 13, fieldSize: 10000 },
+    limits: { fileSize: 100 * 1024 * 1024, files: 1, fields: 12, parts: 14, fieldSize: 10000 },
     fileFilter(req, file, callback) {
-      if (['video/mp4','video/webm'].includes(file.mimetype)) return callback(null, true);
-      const error = new Error('Upload an MP4 or WebM hero video.');
+      if (file.fieldname === 'videoFile' && ['video/mp4','video/webm'].includes(file.mimetype)) {
+        return callback(null, true);
+      }
+      if (file.fieldname === 'imageFile' && ['image/jpeg','image/png','image/gif','image/webp'].includes(file.mimetype)) {
+        return callback(null, true);
+      }
+      const error = new Error(file.fieldname === 'imageFile'
+        ? 'Upload a JPG, PNG, GIF, or WebP image.'
+        : 'Upload an MP4 or WebM hero video.');
       error.status = 400;
       return callback(error);
     }
-  }).single('videoFile');
+  }).fields([{ name: 'videoFile', maxCount: 1 }, { name: 'imageFile', maxCount: 1 }]);
 
   app.get('/api/health', (req, res) => {
     res.json({
@@ -3689,7 +3696,7 @@ function createApp(options = {}) {
     res.json({ slides: db.prepare('SELECT * FROM hero_slides ORDER BY position ASC').all().map(heroSlideFromRow) });
   });
 
-  function validateHeroSlideFields(body, existing, videoFile) {
+  function validateHeroSlideFields(body, existing, videoFile, imageFile) {
     const title = body.title ?? existing?.title ?? '';
     const category = body.category ?? existing?.category ?? '';
     const description = body.description ?? existing?.description ?? '';
@@ -3700,7 +3707,9 @@ function createApp(options = {}) {
     let mediaUrl = body.mediaUrl ?? existing?.media_url ?? '';
     let active = existing ? Boolean(existing.active) : true;
 
+    if (videoFile && imageFile) return { error: 'Upload only one file at a time.' };
     if (videoFile && mediaType !== 'video') return { error: 'Video uploads can only be used on video slides.' };
+    if (imageFile && mediaType !== 'image') return { error: 'Image uploads can only be used on image slides.' };
     if (typeof title !== 'string' || !title.trim() || title.length > 120) {
       return { error: 'Enter a slide title (120 characters maximum).' };
     }
@@ -3711,10 +3720,11 @@ function createApp(options = {}) {
     if (typeof linkUrl !== 'string' || !linkUrl.trim() || linkUrl.length > 2048) return { error: 'Enter a valid button destination.' };
     if (typeof ctaLabel !== 'string' || !ctaLabel.trim() || ctaLabel.length > 60) return { error: 'Enter a button label (60 characters maximum).' };
 
+    const uploadedFile = videoFile || imageFile;
     const mediaUrlError = validateHeroMediaUrl(
-      videoFile ? '/uploads/hero-ads/new-video.mp4' : mediaUrl,
+      uploadedFile ? `/uploads/hero-ads/new.${videoFile ? 'mp4' : 'jpg'}` : mediaUrl,
       'Video or image URL',
-      { required: !videoFile }
+      { required: !uploadedFile }
     );
     if (mediaUrlError) return { error: mediaUrlError };
     const posterUrlError = validateHeroMediaUrl(posterUrl, 'Poster URL');
@@ -3727,8 +3737,7 @@ function createApp(options = {}) {
       else if ([false,0,'0','false'].includes(body.active)) active = false;
       else return { error: 'Choose whether the slide is active.' };
     }
-    mediaUrl = videoFile ? `/uploads/hero-ads/${videoFile.filename}` : mediaUrl.trim();
-    if (mediaType === 'image' && videoFile) return { error: 'Image slides cannot contain a video upload.' };
+    mediaUrl = uploadedFile ? '/uploads/hero-ads/pending' : mediaUrl.trim();
     return {
       fields: {
         title: title.trim(),
@@ -3744,17 +3753,23 @@ function createApp(options = {}) {
     };
   }
 
-  app.post('/api/ads/admin/hero-slides', requireAdmin, heroVideoUpload, (req, res, next) => {
-    const validated = validateHeroSlideFields(req.body || {}, null, req.file);
+  app.post('/api/ads/admin/hero-slides', requireAdmin, heroMediaUpload, (req, res, next) => {
+    const videoFile = req.files?.videoFile?.[0];
+    const imageFile = req.files?.imageFile?.[0];
+    const validated = validateHeroSlideFields(req.body || {}, null, videoFile, imageFile);
     if (validated.error) return res.status(400).json({ error: validated.error });
     const id = crypto.randomUUID();
     let mediaUrl = validated.fields.mediaUrl;
-    if (req.file) {
-      const extension = validHeroVideo(req.file.buffer);
-      if (!extension) return res.status(400).json({ error: 'The uploaded file is not a supported MP4 or WebM video.' });
+    if (videoFile || imageFile) {
+      const extension = videoFile ? validHeroVideo(videoFile.buffer) : validImage(imageFile.buffer);
+      if (!extension) {
+        return res.status(400).json({
+          error: videoFile ? 'The uploaded file is not a supported MP4 or WebM video.' : 'The uploaded file is not a supported image.'
+        });
+      }
       mediaUrl = `/uploads/hero-ads/${id}.${extension}`;
       try {
-        fs.writeFileSync(path.join(heroAdUploadDirectory, `${id}.${extension}`), req.file.buffer, { flag: 'wx' });
+        fs.writeFileSync(path.join(heroAdUploadDirectory, `${id}.${extension}`), (videoFile || imageFile).buffer, { flag: 'wx' });
       } catch (error) {
         return next(error);
       }
@@ -3771,29 +3786,35 @@ function createApp(options = {}) {
         slide: heroSlideFromRow(db.prepare('SELECT * FROM hero_slides WHERE id=?').get(id))
       });
     } catch (error) {
-      if (req.file) {
+      if (videoFile || imageFile) {
         try {
           fs.unlinkSync(path.join(heroAdUploadDirectory, path.basename(mediaUrl)));
         } catch (cleanupError) {
-          console.error('Could not remove an unlinked hero video:', cleanupError.message);
+          console.error('Could not remove an unlinked hero media file:', cleanupError.message);
         }
       }
       return next(error);
     }
   });
 
-  app.patch('/api/ads/admin/hero-slides/:id', requireAdmin, heroVideoUpload, (req, res, next) => {
+  app.patch('/api/ads/admin/hero-slides/:id', requireAdmin, heroMediaUpload, (req, res, next) => {
     const existing = db.prepare('SELECT * FROM hero_slides WHERE id=?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Hero slide not found.' });
-    const validated = validateHeroSlideFields(req.body || {}, existing, req.file);
+    const videoFile = req.files?.videoFile?.[0];
+    const imageFile = req.files?.imageFile?.[0];
+    const validated = validateHeroSlideFields(req.body || {}, existing, videoFile, imageFile);
     if (validated.error) return res.status(400).json({ error: validated.error });
     let mediaUrl = validated.fields.mediaUrl;
-    if (req.file) {
-      const extension = validHeroVideo(req.file.buffer);
-      if (!extension) return res.status(400).json({ error: 'The uploaded file is not a supported MP4 or WebM video.' });
+    if (videoFile || imageFile) {
+      const extension = videoFile ? validHeroVideo(videoFile.buffer) : validImage(imageFile.buffer);
+      if (!extension) {
+        return res.status(400).json({
+          error: videoFile ? 'The uploaded file is not a supported MP4 or WebM video.' : 'The uploaded file is not a supported image.'
+        });
+      }
       mediaUrl = `/uploads/hero-ads/${crypto.randomUUID()}.${extension}`;
       try {
-        fs.writeFileSync(path.join(heroAdUploadDirectory, path.basename(mediaUrl)), req.file.buffer, { flag: 'wx' });
+        fs.writeFileSync(path.join(heroAdUploadDirectory, path.basename(mediaUrl)), (videoFile || imageFile).buffer, { flag: 'wx' });
       } catch (error) {
         return next(error);
       }
@@ -3806,20 +3827,20 @@ function createApp(options = {}) {
         SET title=?,category=?,description=?,media_type=?,media_url=?,poster_url=?,link_url=?,cta_label=?,active=?,updated_at=datetime('now')
         WHERE id=?
       `).run(title,category,description,mediaType,mediaUrl,posterUrl,linkUrl,ctaLabel,active,req.params.id);
-      if (req.file && existing.media_url.startsWith('/uploads/hero-ads/')) {
+      if ((videoFile || imageFile) && existing.media_url.startsWith('/uploads/hero-ads/')) {
         try {
           fs.unlinkSync(path.join(heroAdUploadDirectory, path.basename(existing.media_url)));
         } catch (cleanupError) {
-          if (cleanupError.code !== 'ENOENT') console.error('Could not remove the replaced hero video:', cleanupError.message);
+          if (cleanupError.code !== 'ENOENT') console.error('Could not remove the replaced hero media file:', cleanupError.message);
         }
       }
       return res.json({ slide: heroSlideFromRow(db.prepare('SELECT * FROM hero_slides WHERE id=?').get(req.params.id)) });
     } catch (error) {
-      if (req.file) {
+      if (videoFile || imageFile) {
         try {
           fs.unlinkSync(path.join(heroAdUploadDirectory, path.basename(mediaUrl)));
         } catch (cleanupError) {
-          console.error('Could not remove an unlinked hero video:', cleanupError.message);
+          console.error('Could not remove an unlinked hero media file:', cleanupError.message);
         }
       }
       return next(error);

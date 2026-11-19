@@ -551,6 +551,37 @@ test('homepage hero slides are public, ordered, editable, and admin protected', 
   const videoResponse = await request(app).get(uploaded.body.slide.mediaUrl);
   assert.equal(videoResponse.status, 200);
   assert.match(videoResponse.headers['content-type'], /video\/mp4/);
+
+  const pngSignature = Buffer.from([137,80,78,71,13,10,26,10]);
+  const uploadedImage = await request(app).post('/api/ads/admin/hero-slides').set(admin)
+    .field('title', 'Uploaded image spotlight')
+    .field('mediaType', 'image')
+    .field('linkUrl', 'events.html')
+    .field('ctaLabel', 'Browse events')
+    .attach('imageFile', pngSignature, { filename: 'spotlight.png', contentType: 'image/png' });
+  assert.equal(uploadedImage.status, 201);
+  assert.match(uploadedImage.body.slide.mediaUrl, /^\/uploads\/hero-ads\/[0-9a-f-]+\.png$/i);
+  const imageResponse = await request(app).get(uploadedImage.body.slide.mediaUrl);
+  assert.equal(imageResponse.status, 200);
+  assert.match(imageResponse.headers['content-type'], /image\/png/);
+
+  const wrongSlideType = await request(app).post('/api/ads/admin/hero-slides').set(admin)
+    .field('title', 'Mismatched upload')
+    .field('mediaType', 'video')
+    .field('linkUrl', 'events.html')
+    .field('ctaLabel', 'Browse events')
+    .attach('imageFile', pngSignature, { filename: 'spotlight.png', contentType: 'image/png' });
+  assert.equal(wrongSlideType.status, 400);
+  assert.match(wrongSlideType.body.error, /image slides/i);
+
+  const replacedWithImage = await request(app).patch(`/api/ads/admin/hero-slides/${uploaded.body.slide.id}`)
+    .set(admin)
+    .field('mediaType', 'image')
+    .attach('imageFile', pngSignature, { filename: 'replacement.png', contentType: 'image/png' });
+  assert.equal(replacedWithImage.status, 200);
+  assert.match(replacedWithImage.body.slide.mediaUrl, /^\/uploads\/hero-ads\/[0-9a-f-]+\.png$/i);
+  const replacedVideoGone = await request(app).get(uploaded.body.slide.mediaUrl);
+  assert.equal(replacedVideoGone.status, 404);
 });
 
 test('event posters require valid image signatures', async () => {

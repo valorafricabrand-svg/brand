@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Event admin | Valor Africa</title>
   <link rel="stylesheet" href="/admin-assets/admin.css?v=hero-slide-manager-2">
-  <script src="/admin-assets/admin.js?v=hero-slide-manager-2" defer></script>
+  <script src="/admin-assets/admin.js?v=hero-image-upload-1" defer></script>
 </head>
 <body>
   <main class="admin-shell">
@@ -59,7 +59,8 @@
           <label>Slide type<select name="mediaType" required><option value="video">Video</option><option value="image">Image</option></select></label>
           <label class="hero-slide-url">Video or image URL<input name="mediaUrl" maxlength="2048" placeholder="videos/my-promo.mp4 or https://…"></label>
           <label class="hero-slide-upload">Upload MP4 or WebM<input name="videoFile" type="file" accept="video/mp4,video/webm"></label>
-          <p class="hero-slide-upload-note">For video slides, upload a video (up to 100 MB) or enter an existing site path / HTTPS video URL. Image slides use an image URL.</p>
+          <label class="hero-slide-image-upload">Upload JPG, PNG, GIF, or WebP<input name="imageFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp"></label>
+          <p class="hero-slide-upload-note">Upload a file (up to 100 MB) or enter an existing site path / HTTPS URL instead.</p>
           <label>Video poster image URL<input name="posterUrl" maxlength="2048" placeholder="images/events/poster.jpg"></label>
           <label>Button label<input name="ctaLabel" maxlength="60" value="Learn more" required></label>
           <label class="hero-slide-wide">Button destination<input name="linkUrl" maxlength="2048" value="events.html" required></label>

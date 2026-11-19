@@ -199,6 +199,7 @@
         ['Button label','ctaLabel',slide.ctaLabel,'text',60],
         ['Button destination','linkUrl',slide.linkUrl,'text',2048]
       ];
+      let mediaTypeSelect = null;
       fields.forEach(([labelText,name,value,type,maxLength]) => {
         const label = document.createElement('label');
         label.textContent = labelText;
@@ -221,18 +222,40 @@
         input.name = name;
         input.value = value || '';
         if (maxLength) input.maxLength = maxLength;
+        if (name === 'mediaType') mediaTypeSelect = input;
         label.appendChild(input);
         card.appendChild(label);
       });
 
-      const uploadLabel = document.createElement('label');
-      uploadLabel.textContent = 'Replace video (optional)';
+      const videoUploadLabel = document.createElement('label');
+      videoUploadLabel.textContent = 'Replace video (optional)';
       const videoFile = document.createElement('input');
       videoFile.type = 'file';
       videoFile.name = 'videoFile';
       videoFile.accept = 'video/mp4,video/webm';
-      uploadLabel.appendChild(videoFile);
-      card.appendChild(uploadLabel);
+      videoUploadLabel.appendChild(videoFile);
+      card.appendChild(videoUploadLabel);
+
+      const imageUploadLabel = document.createElement('label');
+      imageUploadLabel.textContent = 'Replace image (optional)';
+      const imageFile = document.createElement('input');
+      imageFile.type = 'file';
+      imageFile.name = 'imageFile';
+      imageFile.accept = 'image/jpeg,image/png,image/gif,image/webp';
+      imageUploadLabel.appendChild(imageFile);
+      card.appendChild(imageUploadLabel);
+
+      const updateHeroCardUploadVisibility = () => {
+        const isVideo = mediaTypeSelect.value === 'video';
+        videoUploadLabel.hidden = !isVideo;
+        imageUploadLabel.hidden = isVideo;
+      };
+      mediaTypeSelect.addEventListener('change', () => {
+        videoFile.value = '';
+        imageFile.value = '';
+        updateHeroCardUploadVisibility();
+      });
+      updateHeroCardUploadVisibility();
 
       const actions = document.createElement('div');
       actions.className = 'record-actions';
@@ -801,16 +824,22 @@
   const heroMediaType = heroSlideForm.elements.mediaType;
   const heroMediaUrl = heroSlideForm.elements.mediaUrl;
   const heroVideoFile = heroSlideForm.elements.videoFile;
+  const heroImageFile = heroSlideForm.elements.imageFile;
   const heroVideoUploadLabel = heroSlideForm.querySelector('.hero-slide-upload');
+  const heroImageUploadLabel = heroSlideForm.querySelector('.hero-slide-image-upload');
   function updateHeroMediaFields() {
     const isVideo = heroMediaType.value === 'video';
     heroVideoUploadLabel.hidden = !isVideo;
     heroVideoFile.disabled = !isVideo;
-    heroMediaUrl.required = !isVideo || !heroVideoFile.files.length;
+    heroImageUploadLabel.hidden = isVideo;
+    heroImageFile.disabled = isVideo;
+    const hasUpload = isVideo ? heroVideoFile.files.length : heroImageFile.files.length;
+    heroMediaUrl.required = !hasUpload;
     heroMediaUrl.placeholder = isVideo ? 'videos/my-promo.mp4 or https://…' : 'images/my-promo.jpg or https://…';
   }
   heroMediaType.addEventListener('change', updateHeroMediaFields);
   heroVideoFile.addEventListener('change', updateHeroMediaFields);
+  heroImageFile.addEventListener('change', updateHeroMediaFields);
   updateHeroMediaFields();
 
   heroSlideForm.addEventListener('submit', async (event) => {
@@ -818,6 +847,7 @@
     const form = event.currentTarget;
     const data = new FormData(form);
     if (!heroVideoFile.files.length) data.delete('videoFile');
+    if (!heroImageFile.files.length) data.delete('imageFile');
     data.set('active', String(form.elements.active.checked));
     const submit = form.querySelector('[type=submit]');
     submit.disabled = true;
