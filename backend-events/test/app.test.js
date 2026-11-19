@@ -124,6 +124,41 @@ const paypalGateway = {
     return event;
   }
 };
+let googlePayTransactionCalls = 0;
+const braintreeGateway = {
+  enabled: true,
+  lastTransaction: null,
+  nextTransactionResult: null,
+  isConfigured() {
+    return this.enabled;
+  },
+  environment() {
+    return 'TEST';
+  },
+  kesPerUsdRate() {
+    return 130;
+  },
+  googleMerchantId() {
+    return 'google-merchant-test';
+  },
+  convertKesToUsd(amountKes) {
+    return Math.round((amountKes / 130) * 100) / 100;
+  },
+  async generateClientToken() {
+    return 'test-braintree-client-token';
+  },
+  async createTransaction(details) {
+    googlePayTransactionCalls += 1;
+    this.lastTransaction = details;
+    const result = this.nextTransactionResult || {
+      success: true,
+      transactionId: `BRAINTREE-${details.orderId}`,
+      amountUsd: details.amountUsd
+    };
+    this.nextTransactionResult = null;
+    return result;
+  }
+};
 const smsCodes = new Map();
 const smsGateway = {
   enabled: true,
@@ -186,6 +221,7 @@ const app = createApp({
   stripe: stripeGateway,
   nowpayments: nowpaymentsGateway,
   paypal: paypalGateway,
+  braintree: braintreeGateway,
   sms: smsGateway,
   email: emailGateway,
   ticketEmail: ticketEmailGateway,
@@ -890,6 +926,124 @@ test('PayPal ticket checkout reserves payment until capture and issues tickets o
   assert.equal(webhook.status, 200);
   assert.equal(db.prepare('SELECT status FROM orders WHERE id=?').get(webhookOrder.id).status, 'paid');
   assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(webhookOrder.id).total, 1);
+});
+
+test('Google Pay ticket checkout charges the verified Braintree total before issuing tickets', async () => {
+  const accountAuth = createTestAccountAuth('google-pay-ticket-buyer@example.com');
+  const event = createStoredTestEvent('Google Pay Ticket Checkout', accountAuth);
+  const noAccountToken = await request(app).post('/api/payments/googlepay/client-token');
+  assert.equal(noAccountToken.status, 401);
+
+  const clientToken = await request(app).post('/api/payments/googlepay/client-token').set(accountAuth);
+  assert.equal(clientToken.status, 200);
+  assert.equal(clientToken.body.clientToken, 'test-braintree-client-token');
+  assert.equal(clientToken.body.environment, 'TEST');
+  assert.equal(clientToken.body.googleMerchantId, 'google-merchant-test');
+  assert.equal(JSON.stringify(clientToken.body).includes('private'), false);
+
+  const amountBeforeInvalidQuote = db.prepare("SELECT COUNT(*) AS total FROM orders WHERE payment_method='googlepay'").get().total;
+  const invalidQuote = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Regular',
+    buyerName: 'Google Pay Buyer',
+    quantity: 1,
+    paymentMethod: 'googlepay',
+    googlePayQuotedAmountUsd: 1
+  });
+  assert.equal(invalidQuote.status, 409);
+  assert.equal(db.prepare("SELECT COUNT(*) AS total FROM orders WHERE payment_method='googlepay'").get().total, amountBeforeInvalidQuote);
+
+  const checkout = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Regular',
+    buyerName: 'Google Pay Buyer',
+    quantity: 1,
+    paymentMethod: 'googlepay',
+    googlePayQuotedAmountUsd: 9.23
+  });
+  assert.equal(checkout.status, 201);
+  assert.equal(checkout.body.paymentMethod, 'googlepay');
+  assert.equal(checkout.body.googlePayAmountUsd, 9.23);
+  const pending = db.prepare('SELECT * FROM orders WHERE id=?').get(checkout.body.orderId);
+  assert.equal(pending.payment_method, 'googlepay');
+  assert.equal(pending.phone, '');
+  assert.equal(pending.braintree_amount_usd, 9.23);
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(pending.id).total, 0);
+
+  const invalidAccess = await request(app).post(`/api/orders/${pending.id}/googlepay-capture`)
+    .set(accountAuth).send({ nonce: 'one-time-nonce' });
+  assert.equal(invalidAccess.status, 404);
+  assert.equal(googlePayTransactionCalls, 0);
+
+  const captured = await request(app).post(`/api/orders/${pending.id}/googlepay-capture`)
+    .set(accountAuth)
+    .set('X-Order-Access', checkout.body.accessToken)
+    .send({ nonce: 'one-time-nonce', deviceData: '{"correlationId":"test"}', postalCode: '00100' });
+  assert.equal(captured.status, 200);
+  assert.equal(captured.body.status, 'completed');
+  assert.equal(braintreeGateway.lastTransaction.amountUsd, 9.23);
+  assert.equal(braintreeGateway.lastTransaction.orderId, pending.id);
+  assert.equal(braintreeGateway.lastTransaction.postalCode, '00100');
+
+  const paid = await request(app).get(`/api/orders/${pending.id}`)
+    .set(accountAuth).set('X-Order-Access', checkout.body.accessToken);
+  assert.equal(paid.body.status, 'paid');
+  assert.equal(paid.body.paymentMethod, 'googlepay');
+  assert.equal(paid.body.googlePayAmountUsd, 9.23);
+  assert.equal(paid.body.tickets.length, 1);
+  assert.equal(db.prepare('SELECT braintree_transaction_id FROM orders WHERE id=?').get(pending.id).braintree_transaction_id,
+    `BRAINTREE-${pending.id}`);
+
+  const replay = await request(app).post(`/api/orders/${pending.id}/googlepay-capture`)
+    .set(accountAuth)
+    .set('X-Order-Access', checkout.body.accessToken)
+    .send({ nonce: 'different-nonce' });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.status, 'paid');
+  assert.equal(googlePayTransactionCalls, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(pending.id).total, 1);
+
+  const reviewCheckout = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Regular',
+    buyerName: 'Google Pay Review Buyer',
+    quantity: 1,
+    paymentMethod: 'googlepay',
+    googlePayQuotedAmountUsd: 9.23
+  });
+  braintreeGateway.nextTransactionResult = {
+    success: true,
+    transactionId: 'BRAINTREE-WRONG-AMOUNT',
+    amountUsd: 1
+  };
+  const mismatchedCapture = await request(app).post(`/api/orders/${reviewCheckout.body.orderId}/googlepay-capture`)
+    .set(accountAuth)
+    .set('X-Order-Access', reviewCheckout.body.accessToken)
+    .send({ nonce: 'mismatched-amount-nonce' });
+  assert.equal(mismatchedCapture.status, 409);
+  assert.equal(db.prepare('SELECT status FROM orders WHERE id=?').get(reviewCheckout.body.orderId).status, 'review');
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(reviewCheckout.body.orderId).total, 0);
+
+  const declinedCheckout = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Regular',
+    buyerName: 'Google Pay Declined Buyer',
+    quantity: 1,
+    paymentMethod: 'googlepay',
+    googlePayQuotedAmountUsd: 9.23
+  });
+  braintreeGateway.nextTransactionResult = {
+    success: false,
+    transactionId: 'BRAINTREE-DECLINED',
+    amountUsd: 9.23
+  };
+  const declined = await request(app).post(`/api/orders/${declinedCheckout.body.orderId}/googlepay-capture`)
+    .set(accountAuth)
+    .set('X-Order-Access', declinedCheckout.body.accessToken)
+    .send({ nonce: 'declined-nonce' });
+  assert.equal(declined.status, 402);
+  assert.equal(db.prepare('SELECT status FROM orders WHERE id=?').get(declinedCheckout.body.orderId).status, 'failed');
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(declinedCheckout.body.orderId).total, 0);
 });
 
 test('paid ticket order issues only after PayHero verifies the callback', async () => {

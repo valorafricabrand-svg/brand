@@ -113,7 +113,9 @@
   let stripeCheckoutEnabled = false;
   let nowpaymentsCheckoutEnabled = false;
   let paypalCheckoutEnabled = false;
+  let googlePayCheckoutEnabled = false;
   let nowpaymentsKesPerUsd = null;
+  let googlePayKesPerUsd = null;
   const apiBase = window.valorEventsApiBase;
   let requestEventListing = null;
   let toPublicEvent = (event) => event;
@@ -1015,7 +1017,8 @@
               mpesaCheckoutEnabled && 'M-Pesa',
               stripeCheckoutEnabled && 'Stripe Checkout',
               nowpaymentsCheckoutEnabled && 'NOWPayments',
-              paypalCheckoutEnabled && 'PayPal'
+              paypalCheckoutEnabled && 'PayPal',
+              googlePayCheckoutEnabled && 'Google Pay'
             ].filter(Boolean).join(' and ')}. Tickets are issued only after payment is confirmed.`
             : 'Paid ticket checkout is temporarily unavailable. Free-event registrations remain open.';
   }
@@ -1094,8 +1097,10 @@
       stripeCheckoutEnabled = Boolean(data.health.stripePaymentsConfigured);
       nowpaymentsCheckoutEnabled = Boolean(data.health.nowpaymentsConfigured);
       paypalCheckoutEnabled = Boolean(data.health.paypalConfigured);
+      googlePayCheckoutEnabled = Boolean(data.health.googlePayConfigured);
       nowpaymentsKesPerUsd = Number(data.health.nowpaymentsKesPerUsd) || null;
-      checkoutEnabled = mpesaCheckoutEnabled || stripeCheckoutEnabled || nowpaymentsCheckoutEnabled || paypalCheckoutEnabled;
+      googlePayKesPerUsd = Number(data.health.googlePayKesPerUsd) || null;
+      checkoutEnabled = mpesaCheckoutEnabled || stripeCheckoutEnabled || nowpaymentsCheckoutEnabled || paypalCheckoutEnabled || googlePayCheckoutEnabled;
       if (paymentMethodSelect && buyerPhoneInput && ticketPaymentNote && ticketForm) {
         updateTicketPaymentMethod();
       }
@@ -1114,7 +1119,13 @@
   const buyerPhoneInput = document.getElementById('buyerPhone');
   const ticketPaymentNote = document.getElementById('ticketPaymentNote');
   const cryptoPriceEstimate = document.getElementById('cryptoPriceEstimate');
+  const googlePayPriceEstimate = document.getElementById('googlePayPriceEstimate');
+  const googlePayStatus = document.getElementById('googlePayStatus');
+  const googlePayButtonContainer = document.getElementById('googlePayButtonContainer');
   const ticketForm = document.getElementById('ticketRequestForm');
+  let googlePayReady = false;
+  let googlePayPreparation = null;
+  let googlePaySubmitting = false;
   const ticketDraftKey = 'valor-pending-ticket';
   const ticketReturnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   const accountLink = ticketDialog && ticketDialog.querySelector('a[href="account.html"]');
@@ -1168,12 +1179,17 @@
       paypalTicketOption.disabled = !paypalCheckoutEnabled;
       paypalTicketOption.textContent = paypalCheckoutEnabled ? 'PayPal' : 'PayPal (coming soon)';
     }
+    const googlePayTicketOption = paymentMethodSelect.querySelector('option[value="googlepay"]');
+    if (googlePayTicketOption) {
+      googlePayTicketOption.disabled = !googlePayCheckoutEnabled;
+      googlePayTicketOption.textContent = googlePayCheckoutEnabled ? 'Google Pay' : 'Google Pay (coming soon)';
+    }
     const selectedTicket = activeEvent && activeEvent.tickets.find((item) => item.name === ticketSelect.value);
     const isFreeTicket = Number(selectedTicket && selectedTicket.price) === 0;
     if (!isFreeTicket) {
       const selectedOption = Array.from(paymentMethodSelect.options).find((option) => option.value === paymentMethodSelect.value);
       if (selectedOption && selectedOption.disabled) {
-        const fallback = ['mpesa','paypal','nowpayments','stripe','wallet'].find((method) =>
+        const fallback = ['mpesa','paypal','googlepay','nowpayments','stripe','wallet'].find((method) =>
           Array.from(paymentMethodSelect.options).some((option) => option.value === method && !option.disabled)
         );
         if (fallback) paymentMethodSelect.value = fallback;
@@ -1183,14 +1199,15 @@
     const usesStripe = !isFreeTicket && paymentMethodSelect.value === 'stripe';
     const usesNowpayments = !isFreeTicket && paymentMethodSelect.value === 'nowpayments';
     const usesPaypal = !isFreeTicket && paymentMethodSelect.value === 'paypal';
+    const usesGooglePay = !isFreeTicket && paymentMethodSelect.value === 'googlepay';
     const paymentMethodLabel = document.getElementById('ticketPaymentMethodLabel');
     if (paymentMethodLabel) paymentMethodLabel.hidden = isFreeTicket;
     paymentMethodSelect.hidden = isFreeTicket;
     paymentMethodSelect.disabled = isFreeTicket;
-    buyerPhoneInput.required = isFreeTicket || (!usesWallet && !usesNowpayments && !usesPaypal);
-    buyerPhoneInput.disabled = !isFreeTicket && (usesWallet || usesNowpayments || usesPaypal);
+    buyerPhoneInput.required = isFreeTicket || (!usesWallet && !usesNowpayments && !usesPaypal && !usesGooglePay);
+    buyerPhoneInput.disabled = !isFreeTicket && (usesWallet || usesNowpayments || usesPaypal || usesGooglePay);
     const buyerPhoneLabel = document.querySelector('label[for="buyerPhone"]');
-    if (buyerPhoneLabel) buyerPhoneLabel.hidden = usesPaypal;
+    if (buyerPhoneLabel) buyerPhoneLabel.hidden = usesPaypal || usesGooglePay;
     if (buyerPhoneLabel) buyerPhoneLabel.firstChild.textContent = usesWallet
       ? 'M-Pesa number (not needed for wallet)'
       : isFreeTicket ? 'WhatsApp number'
@@ -1205,8 +1222,10 @@
           ? 'Continue to NOWPayments to choose a supported cryptocurrency. Your ticket is issued only after payment is confirmed.'
           : usesPaypal
             ? 'Continue to PayPal to pay securely. Your ticket is issued after PayPal confirms payment.'
+            : usesGooglePay
+              ? 'Authorize payment securely with Google Pay. Your ticket is issued after Braintree confirms the charge.'
           : 'You will receive an M-Pesa payment prompt. Your ticket is issued only after payment is confirmed.';
-    const paymentLabel = usesWallet ? 'Valor Wallet' : usesStripe ? 'Stripe Checkout' : usesNowpayments ? 'NOWPayments' : usesPaypal ? 'PayPal' : 'M-Pesa';
+    const paymentLabel = usesWallet ? 'Valor Wallet' : usesStripe ? 'Stripe Checkout' : usesNowpayments ? 'NOWPayments' : usesPaypal ? 'PayPal' : usesGooglePay ? 'Google Pay' : 'M-Pesa';
     if (cryptoPriceEstimate) {
       const ticket = activeEvent?.tickets.find((item) => item.name === ticketSelect.value);
       const quantity = Number(ticketForm.elements.quantity.value) || 1;
@@ -1216,12 +1235,149 @@
         ? `Estimated total: $${(kesTotal / nowpaymentsKesPerUsd).toFixed(2)} USD. The final crypto amount is set by NOWPayments.`
         : 'The final USD estimate will be shown at checkout.';
     }
+    if (googlePayPriceEstimate) {
+      const ticket = activeEvent?.tickets.find((item) => item.name === ticketSelect.value);
+      const quantity = Number(ticketForm.elements.quantity.value) || 1;
+      const kesTotal = Number(ticket?.price) * quantity;
+      const amountUsd = Math.round((kesTotal / googlePayKesPerUsd) * 100) / 100;
+      googlePayPriceEstimate.hidden = !usesGooglePay || !Number.isFinite(amountUsd) ||
+        !Number.isFinite(googlePayKesPerUsd) || googlePayKesPerUsd <= 0 || amountUsd <= 0;
+      googlePayPriceEstimate.textContent = googlePayPriceEstimate.hidden
+        ? ''
+        : `Google Pay total: USD ${amountUsd.toFixed(2)} (KES ${kesTotal.toLocaleString('en-KE')} at 1 USD = KES ${googlePayKesPerUsd.toLocaleString('en-KE')}).`;
+    }
     const submitButton = ticketForm.querySelector('[type=submit]');
     if (isFreeTicket) submitButton.textContent = 'Get free ticket';
     else submitButton.innerHTML = usesPaypal
       ? 'Continue to PayPal <span aria-hidden="true">→</span>'
       : `Pay with ${paymentLabel} <span aria-hidden="true">→</span>`;
+    if (googlePayButtonContainer) {
+      googlePayButtonContainer.hidden = !usesGooglePay || !googlePayReady;
+    }
+    if (googlePayStatus && !usesGooglePay) googlePayStatus.hidden = true;
+    if (usesGooglePay) {
+      const accountToken = window.valorAccountToken();
+      if (!accountToken) {
+        submitButton.hidden = false;
+        if (googlePayStatus && googlePayCheckoutEnabled) {
+          googlePayStatus.textContent = 'Sign in to prepare Google Pay checkout.';
+          googlePayStatus.hidden = false;
+        }
+      } else if (googlePayReady) {
+        submitButton.hidden = true;
+        if (googlePayStatus) googlePayStatus.hidden = true;
+      } else {
+        submitButton.hidden = true;
+        prepareGooglePay();
+      }
+    } else {
+      submitButton.hidden = false;
+    }
   }
+  const prepareGooglePay = () => {
+    const accountToken = window.valorAccountToken();
+    if (!googlePayCheckoutEnabled || !accountToken || googlePayReady || googlePayPreparation) return;
+    googlePayStatus.textContent = 'Preparing Google Pay…';
+    googlePayStatus.hidden = false;
+    googlePayPreparation = window.valorGooglePay.prepare({
+      api: window.valorEventsApi,
+      accountToken
+    }).then(() => {
+      googlePayReady = true;
+      if (paymentMethodSelect.value === 'googlepay') {
+        window.valorGooglePay.mountButton(googlePayButtonContainer, submitGooglePayTicket);
+        googlePayButtonContainer.hidden = false;
+        googlePayStatus.hidden = true;
+        ticketForm.querySelector('[type=submit]').hidden = true;
+      }
+    }).catch((error) => {
+      const option = paymentMethodSelect.querySelector('option[value="googlepay"]');
+      if (option) {
+        option.disabled = true;
+        option.textContent = 'Google Pay unavailable';
+      }
+      const fallback = ['mpesa','paypal','nowpayments','stripe','wallet'].find((method) =>
+        Array.from(paymentMethodSelect.options).some((entry) => entry.value === method && !entry.disabled)
+      );
+      if (fallback) paymentMethodSelect.value = fallback;
+      updateTicketPaymentMethod();
+      googlePayStatus.textContent = error.message;
+      googlePayStatus.hidden = false;
+    }).finally(() => { googlePayPreparation = null; });
+  };
+  const submitGooglePayTicket = async () => {
+    if (googlePaySubmitting || !ticketForm.reportValidity()) return;
+    if (!activeEvent) return;
+    const accountToken = window.valorAccountToken();
+    if (!accountToken) {
+      showAccountSignIn(document.getElementById('ticketFeedback'));
+      return;
+    }
+    const data = new FormData(ticketForm);
+    const ticket = activeEvent.tickets.find((item) => item.name === data.get('ticketType'));
+    const quantity = Number(data.get('quantity'));
+    if (!ticket || Number(ticket.price) <= 0 ||
+        !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 10) {
+      showError(document.getElementById('ticketFeedback'), 'Choose a valid paid ticket and quantity.');
+      return;
+    }
+    const totalKes = Number(ticket.price) * quantity;
+    const amountUsd = Math.round((totalKes / googlePayKesPerUsd) * 100) / 100;
+    if (!Number.isFinite(amountUsd) || amountUsd < 0.01) {
+      showError(document.getElementById('ticketFeedback'), 'This ticket total is below the minimum Google Pay amount.');
+      return;
+    }
+    googlePaySubmitting = true;
+    googlePayStatus.textContent = 'Opening Google Pay…';
+    googlePayStatus.hidden = false;
+    let order = null;
+    try {
+      const payment = await window.valorGooglePay.requestPayment({
+        amountUsd,
+        merchantName: 'Valor Africa Events'
+      });
+      await window.valorAffiliateReferralReady;
+      order = await window.valorEventsApi('/api/orders/tickets', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accountToken}` },
+        body: JSON.stringify({
+          eventId: activeEvent.id,
+          ticketType: ticket.name,
+          quantity,
+          buyerName: data.get('name'),
+          phone: '',
+          paymentMethod: 'googlepay',
+          googlePayQuotedAmountUsd: amountUsd,
+          affiliateReferralToken: window.valorAffiliateReferralToken()
+        })
+      });
+      window.sessionStorage.setItem(`valor-order-${order.orderId}`, order.accessToken);
+      await window.valorEventsApi(`/api/orders/${encodeURIComponent(order.orderId)}/googlepay-capture`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accountToken}`,
+          'X-Order-Access': order.accessToken
+        },
+        body: JSON.stringify(payment)
+      });
+      window.location.assign(`order.html?orderId=${encodeURIComponent(order.orderId)}`);
+    } catch (error) {
+      if (order) {
+        window.sessionStorage.setItem(`valor-order-${order.orderId}`, order.accessToken);
+        window.location.assign(`order.html?orderId=${encodeURIComponent(order.orderId)}`);
+        return;
+      }
+      if (/session has expired|sign in to your valor africa account/i.test(error.message)) {
+        window.valorClearAccountToken();
+        showAccountSignIn(document.getElementById('ticketFeedback'));
+      } else {
+        showError(document.getElementById('ticketFeedback'), error.message);
+      }
+      googlePayStatus.hidden = true;
+    } finally {
+      googlePaySubmitting = false;
+    }
+  };
   if (paymentMethodSelect && buyerPhoneInput && ticketPaymentNote && ticketForm) {
     paymentMethodSelect.addEventListener('change', updateTicketPaymentMethod);
     ticketSelect.addEventListener('change', updateTicketPaymentMethod);
@@ -1253,8 +1409,9 @@
     paymentMethodSelect.value = mpesaCheckoutEnabled
       ? 'mpesa'
       : paypalCheckoutEnabled ? 'paypal'
-        : nowpaymentsCheckoutEnabled ? 'nowpayments'
-          : stripeCheckoutEnabled ? 'stripe' : 'wallet';
+        : googlePayCheckoutEnabled ? 'googlepay'
+          : nowpaymentsCheckoutEnabled ? 'nowpayments'
+            : stripeCheckoutEnabled ? 'stripe' : 'wallet';
     if (draft) {
       if (availableTickets.some((ticket) => ticket.name === draft.ticketType)) ticketSelect.value = draft.ticketType;
       ticketForm.elements.quantity.value = String(Math.min(10, Math.max(1, Number(draft.quantity) || 1)));
@@ -1298,6 +1455,11 @@
         showAccountSignIn(ticketFeedback);
         return;
       }
+      if (!isFreeTicket && paymentMethod === 'googlepay') {
+        ticketFeedback.textContent = 'Use the Google Pay button to authorize this payment.';
+        ticketFeedback.classList.add('error');
+        return;
+      }
       if (!isFreeTicket && paymentMethod === 'mpesa' && !mpesaCheckoutEnabled) {
         ticketFeedback.textContent = apiBase
           ? 'M-Pesa checkout is not available right now. Choose another available payment method or try again later.'
@@ -1329,7 +1491,8 @@
           : paymentMethod === 'stripe'
             ? 'Starting Stripe Checkout…'
             : paymentMethod === 'nowpayments' ? 'Starting NOWPayments checkout…'
-              : paymentMethod === 'paypal' ? 'Redirecting to PayPal…' : 'Sending an M-Pesa payment prompt…';
+              : paymentMethod === 'paypal' ? 'Redirecting to PayPal…'
+                : paymentMethod === 'googlepay' ? 'Preparing Google Pay…' : 'Sending an M-Pesa payment prompt…';
       try {
         await window.valorAffiliateReferralReady;
         const order = await window.valorEventsApi('/api/orders/tickets', {

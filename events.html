@@ -20,7 +20,8 @@
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=local-live-read-fallback-1" defer></script>
-  <script src="scripts/events.js?v=ticket-paypal-checkout-1" defer></script>
+  <script src="scripts/google-pay.js?v=braintree-google-pay-1" defer></script>
+  <script src="scripts/events.js?v=braintree-google-pay-1" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/branding-marquee.js?v=branding-perf-1" defer></script>
   <script src="scripts/sponsors.js?v=1" defer></script>
@@ -123,7 +124,10 @@
         <label for="ticketType">Ticket type</label><select id="ticketType" name="ticketType" required></select>
         <label for="ticketQuantity">Number of tickets</label><input id="ticketQuantity" name="quantity" type="number" min="1" max="10" value="1" required>
         <label for="buyerName">Your name</label><input id="buyerName" name="name" autocomplete="name" required>
-        <label for="ticketPaymentMethod">Payment method</label><select id="ticketPaymentMethod" name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="stripe" disabled>Card (Stripe Checkout; coming soon)</option><option value="nowpayments" disabled>Cryptocurrency (NOWPayments; coming soon)</option><option value="paypal" disabled>PayPal (coming soon)</option></select>
+        <label for="ticketPaymentMethod">Payment method</label><select id="ticketPaymentMethod" name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="stripe" disabled>Card (Stripe Checkout; coming soon)</option><option value="nowpayments" disabled>Cryptocurrency (NOWPayments; coming soon)</option><option value="paypal" disabled>PayPal (coming soon)</option><option value="googlepay" disabled>Google Pay (coming soon)</option></select>
+        <p class="checkout-note" id="googlePayPriceEstimate" hidden></p>
+        <p class="checkout-note" id="googlePayStatus" role="status" aria-live="polite" hidden></p>
+        <div class="google-pay-button-container" id="googlePayButtonContainer" hidden></div>
         <p class="checkout-note">Payment options are available when configured for the event checkout.</p>
         <label for="buyerPhone">WhatsApp number</label><input id="buyerPhone" name="phone" type="tel" autocomplete="tel" required>
         <p class="checkout-note" id="cryptoPriceEstimate" hidden></p>
