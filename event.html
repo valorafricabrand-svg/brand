@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
-  <script src="scripts/event-pages.js?v=free-ticket-delivery-1" defer></script>
+  <script src="scripts/event-pages.js?v=ticket-paypal-checkout-1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
   <script src="scripts/nav-history.js?v=1" defer></script>
 </head>
@@ -45,7 +45,7 @@
         <label>Gift message<textarea name="giftMessage" maxlength="500" rows="3" placeholder="Write a personal message"></textarea></label>
       </fieldset>
       <label class="event-ticket-field">Your name<input name="buyerName" maxlength="120" autocomplete="name" required></label>
-      <label class="event-ticket-field">Payment method<select name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="stripe" disabled>Card (Stripe Checkout; coming soon)</option><option value="nowpayments" disabled>Cryptocurrency (NOWPayments; coming soon)</option></select></label>
+      <label class="event-ticket-field">Payment method<select name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="stripe" disabled>Card (Stripe Checkout; coming soon)</option><option value="nowpayments" disabled>Cryptocurrency (NOWPayments; coming soon)</option><option value="paypal" disabled>PayPal (coming soon)</option></select></label>
       <p class="checkout-note" id="nowpaymentsPriceNote" hidden></p>
       <label class="event-ticket-field event-ticket-field-wide">Safaricom M-Pesa number<input name="phone" type="tel" autocomplete="tel" placeholder="07…, 011…, or +254…" required></label>
       <p class="checkout-note">Sign in to get tickets: <a href="account.html">account</a> or <a href="wallet.html">wallet</a>. Free tickets require no payment; paid tickets are confirmed after payment. By continuing, you agree to our <a href="refund-policy.html">Refund Policy</a>.</p>

@@ -637,7 +637,11 @@
       const health = await api('/api/health');
       const stripePaymentsConfigured = Boolean(health.stripePaymentsConfigured);
       const nowpaymentsConfigured = Boolean(health.nowpaymentsConfigured);
+      const paypalConfigured = Boolean(health.paypalConfigured);
       const nowpaymentsKesPerUsd = Number(health.nowpaymentsKesPerUsd);
+      const mpesaOption = form.elements.paymentMethod.querySelector('option[value="mpesa"]');
+      mpesaOption.disabled = !health.paymentsConfigured;
+      mpesaOption.textContent = health.paymentsConfigured ? 'M-Pesa' : 'M-Pesa (coming soon)';
       const stripeOption = form.elements.paymentMethod.querySelector('option[value="stripe"]');
       stripeOption.disabled = !stripePaymentsConfigured;
       stripeOption.textContent = stripePaymentsConfigured ? 'Card (Stripe Checkout)' : 'Card (Stripe Checkout; coming soon)';
@@ -646,11 +650,16 @@
       nowpaymentsOption.textContent = nowpaymentsConfigured
         ? 'Cryptocurrency (NOWPayments)'
         : 'Cryptocurrency (NOWPayments; coming soon)';
-      if (!health.paymentsConfigured && nowpaymentsConfigured &&
-          form.elements.paymentMethod.value === 'mpesa') {
-        form.elements.paymentMethod.value = 'nowpayments';
+      const paypalOption = form.elements.paymentMethod.querySelector('option[value="paypal"]');
+      paypalOption.disabled = !paypalConfigured;
+      paypalOption.textContent = paypalConfigured ? 'PayPal' : 'PayPal (coming soon)';
+      if (!health.paymentsConfigured && form.elements.paymentMethod.value === 'mpesa') {
+        form.elements.paymentMethod.value = paypalConfigured
+          ? 'paypal'
+          : nowpaymentsConfigured ? 'nowpayments'
+            : stripePaymentsConfigured ? 'stripe' : 'wallet';
       }
-      const anyOnlinePaymentConfigured = Boolean(health.paymentsConfigured || stripePaymentsConfigured || nowpaymentsConfigured);
+      const anyOnlinePaymentConfigured = Boolean(health.paymentsConfigured || stripePaymentsConfigured || nowpaymentsConfigured || paypalConfigured);
       const hasFreeTickets = event.tickets.some((ticket) => Number(ticket.price) === 0);
       const accountToken = window.valorAccountToken();
       if (!anyOnlinePaymentConfigured) {
@@ -668,7 +677,7 @@
         button.disabled = true;
         showError(document.getElementById('pageFeedback'), 'Paid checkout is not available yet. Please try again later or use a funded wallet after signing in.');
       } else if (!anyOnlinePaymentConfigured) {
-        document.getElementById('pageFeedback').textContent = 'M-Pesa, Stripe, and NOWPayments are unavailable; free registration and funded Valor Wallet payments remain available.';
+        document.getElementById('pageFeedback').textContent = 'M-Pesa, Stripe, NOWPayments, and PayPal are unavailable; free registration and funded Valor Wallet payments remain available.';
       }
       const paymentMethod = form.elements.paymentMethod;
       const phoneInput = form.elements.phone;
@@ -695,22 +704,32 @@
       const updatePaymentFields = () => {
         const selectedTicket = event.tickets.find((entry) => entry.name === select.value);
         const isFreeTicket = Number(selectedTicket && selectedTicket.price) === 0;
+        if (!isFreeTicket) {
+          const selectedOption = Array.from(paymentMethod.options).find((option) => option.value === paymentMethod.value);
+          if (selectedOption && selectedOption.disabled) {
+            const fallback = ['mpesa','paypal','nowpayments','stripe','wallet'].find((method) =>
+              Array.from(paymentMethod.options).some((option) => option.value === method && !option.disabled)
+            );
+            if (fallback) paymentMethod.value = fallback;
+          }
+        }
         const usesWallet = !isFreeTicket && paymentMethod.value === 'wallet';
         const usesStripe = !isFreeTicket && paymentMethod.value === 'stripe';
         const usesNowpayments = !isFreeTicket && paymentMethod.value === 'nowpayments';
+        const usesPaypal = !isFreeTicket && paymentMethod.value === 'paypal';
         const paymentMethodLabel = paymentMethod.closest('label');
         if (paymentMethodLabel) paymentMethodLabel.hidden = isFreeTicket;
         paymentMethod.disabled = isFreeTicket;
-        phoneInput.required = isFreeTicket || (!usesWallet && !usesNowpayments);
-        phoneInput.disabled = !isFreeTicket && (usesWallet || usesNowpayments);
+        phoneInput.required = isFreeTicket || (!usesWallet && !usesNowpayments && !usesPaypal);
+        phoneInput.disabled = !isFreeTicket && (usesWallet || usesNowpayments || usesPaypal);
         const phoneLabel = phoneInput.closest('label');
         if (phoneLabel) {
-          phoneLabel.hidden = !isFreeTicket && (usesWallet || usesNowpayments);
+          phoneLabel.hidden = !isFreeTicket && (usesWallet || usesNowpayments || usesPaypal);
           phoneLabel.firstChild.textContent = isFreeTicket
             ? 'WhatsApp number'
             : usesStripe ? 'Contact phone number' : 'Safaricom M-Pesa number';
         }
-        form.querySelector('[type=submit]').textContent = isFreeTicket ? 'Get free ticket' : `Pay with ${usesWallet
+        form.querySelector('[type=submit]').textContent = isFreeTicket ? 'Get free ticket' : usesPaypal ? 'Continue to PayPal' : `Pay with ${usesWallet
           ? 'Valor Wallet'
           : usesStripe ? 'Stripe Checkout' : usesNowpayments ? 'NOWPayments' : 'M-Pesa'}`;
         updateCryptoPriceNote();
@@ -740,17 +759,22 @@
           return;
         }
         if (!isFreeTicket && selectedMethod === 'mpesa' && !health.paymentsConfigured) {
-          showError(document.getElementById('pageFeedback'), 'M-Pesa checkout is not configured yet. Choose Stripe Checkout or Valor Wallet.');
+          showError(document.getElementById('pageFeedback'), 'M-Pesa checkout is not configured yet. Choose another available payment method.');
           button.disabled = false;
           return;
         }
         if (!isFreeTicket && selectedMethod === 'stripe' && !stripePaymentsConfigured) {
-          showError(document.getElementById('pageFeedback'), 'Stripe Checkout is not configured yet. Choose M-Pesa or Valor Wallet.');
+          showError(document.getElementById('pageFeedback'), 'Stripe Checkout is not configured yet. Choose another available payment method.');
           button.disabled = false;
           return;
         }
         if (!isFreeTicket && selectedMethod === 'nowpayments' && !nowpaymentsConfigured) {
-          showError(document.getElementById('pageFeedback'), 'NOWPayments is not configured yet. Choose M-Pesa or Valor Wallet.');
+          showError(document.getElementById('pageFeedback'), 'NOWPayments is not configured yet. Choose another available payment method.');
+          button.disabled = false;
+          return;
+        }
+        if (!isFreeTicket && selectedMethod === 'paypal' && !paypalConfigured) {
+          showError(document.getElementById('pageFeedback'), 'PayPal is not configured yet. Choose another available payment method.');
           button.disabled = false;
           return;
         }
@@ -957,10 +981,15 @@
         Number.isFinite(Number(order.cryptoPriceAmountUsd))
         ? ` · NOWPayments invoice: USD ${Number(order.cryptoPriceAmountUsd).toFixed(2)}`
         : '';
+      const paypalPrice = order.paypalAmountUsd !== null &&
+        order.paypalAmountUsd !== undefined &&
+        Number.isFinite(Number(order.paypalAmountUsd))
+        ? ` · PayPal: USD ${Number(order.paypalAmountUsd).toFixed(2)}`
+        : '';
       const total = order.orderType === 'ticket' && Number(order.amountKes) === 0
         ? 'Free'
         : `KES ${Number(order.amountKes).toLocaleString('en-KE')}`;
-      details.textContent = `${order.orderType === 'ticket' ? `${order.quantity} ${order.ticketType} ticket(s)` : `Advertising: ${order.campaign?.packageName || 'Event promotion'}`} · ${total}${cryptoPrice}${order.receipt ? ` · Receipt ${order.receipt}` : ''}`;
+      details.textContent = `${order.orderType === 'ticket' ? `${order.quantity} ${order.ticketType} ticket(s)` : `Advertising: ${order.campaign?.packageName || 'Event promotion'}`} · ${total}${cryptoPrice}${paypalPrice}${order.receipt ? ` · Receipt ${order.receipt}` : ''}`;
       root.replaceChildren(heading, details);
       if (order.status === 'pending') {
         const explanation = document.createElement('p');

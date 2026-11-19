@@ -731,7 +731,7 @@ function createApp(options = {}) {
         return res.json({ received: true });
       }
       const order = db.prepare(`
-        SELECT * FROM orders WHERE id=? AND order_type='ad' AND paypal_order_id IS NOT NULL
+        SELECT * FROM orders WHERE id=? AND order_type IN ('ticket','ad') AND paypal_order_id IS NOT NULL
       `).get(depositId);
       if (!order || order.status !== 'pending') return res.json({ received: true });
       if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
@@ -741,6 +741,10 @@ function createApp(options = {}) {
             String(resource.amount && resource.amount.currency_code).toUpperCase() !== 'USD') {
           db.prepare("UPDATE orders SET status='review',result_description=? WHERE id=? AND status='pending'")
             .run('PayPal webhook amount did not match this order; support review is required.', order.id);
+          return res.json({ received: true });
+        }
+        if (order.order_type === 'ticket') {
+          completePayPalTicketOrder(order.id, 'PayPal payment confirmed by webhook.');
           return res.json({ received: true });
         }
         db.transaction(() => {
@@ -4120,6 +4124,78 @@ function createApp(options = {}) {
     }
   }
 
+  async function startPayPalTicketCheckout(res, order, amountKes, event) {
+    try {
+      const baseUrl = publicSiteUrl.replace(/\/+$/, '');
+      const paypalOrder = await paypalGateway.createOrder({
+        id: order.id,
+        amountKes,
+        description: `${event.title} - ${order.ticketType} x ${order.quantity}`.slice(0, 127),
+        returnUrl: `${baseUrl}/order.html?orderId=${encodeURIComponent(order.id)}&payment=paypal`,
+        cancelUrl: `${baseUrl}/event.html?slug=${encodeURIComponent(event.slug)}&checkout=cancelled`
+      });
+      if (!paypalOrder || typeof paypalOrder.orderId !== 'string' ||
+          typeof paypalOrder.approveUrl !== 'string' ||
+          !Number.isFinite(paypalOrder.amountUsd) || paypalOrder.amountUsd <= 0) {
+        throw new Error('PayPal did not return a valid order.');
+      }
+      db.prepare(`
+        UPDATE orders SET paypal_order_id=?,paypal_amount_usd=? WHERE id=? AND status='pending'
+      `).run(paypalOrder.orderId, paypalOrder.amountUsd, order.id);
+      return res.status(201).json({
+        orderId: order.id,
+        accessToken: order.accessToken,
+        status: 'pending',
+        paymentMethod: 'paypal',
+        checkoutUrl: paypalOrder.approveUrl,
+        paypalAmountUsd: paypalOrder.amountUsd,
+        message: 'Continue to PayPal to complete your ticket payment.'
+      });
+    } catch (error) {
+      db.prepare("UPDATE orders SET status='failed',result_description=? WHERE id=? AND status='pending'")
+        .run('Could not start PayPal Checkout.', order.id);
+      console.error('PayPal ticket checkout could not be started:', error.message);
+      return res.status(502).json({ error: 'PayPal could not start checkout. Please try again shortly.' });
+    }
+  }
+
+  function completePayPalTicketOrder(orderId, resultDescription) {
+    const status = db.transaction(() => {
+      const current = db.prepare(`
+        SELECT * FROM orders WHERE id=? AND order_type='ticket' AND status='pending'
+      `).get(orderId);
+      if (!current) {
+        const existing = db.prepare('SELECT status FROM orders WHERE id=?').get(orderId);
+        return existing ? existing.status : null;
+      }
+      const eventRow = db.prepare('SELECT capacity FROM events WHERE id=?').get(current.event_id);
+      if (eventRow && eventRow.capacity !== null) {
+        const sold = db.prepare(`
+          SELECT COALESCE(SUM(quantity),0) AS total FROM orders
+          WHERE event_id=? AND order_type='ticket' AND status IN ('paid','confirmed')
+        `).get(current.event_id).total;
+        if (sold + current.quantity > eventRow.capacity) {
+          db.prepare("UPDATE orders SET status='review',result_description=? WHERE id=? AND status='pending'")
+            .run('PayPal payment received but ticket capacity was reached; contact support for a refund.', current.id);
+          return 'review';
+        }
+      }
+      db.prepare("UPDATE orders SET status='paid',result_description=?,paid_at=datetime('now') WHERE id=?")
+        .run(resultDescription, current.id);
+      const insertTicket = db.prepare('INSERT INTO tickets (code,order_id,event_id,ticket_type) VALUES (?,?,?,?)');
+      for (let ticket = 0; ticket < current.quantity; ticket += 1) {
+        insertTicket.run(crypto.randomUUID(), current.id, current.event_id, current.ticket_type);
+      }
+      return 'paid';
+    })();
+    if (status === 'paid') {
+      deliverTicketEmail(orderId).catch((error) => {
+        console.error(`Could not process ticket confirmation email for order ${orderId}:`, error);
+      });
+    }
+    return status;
+  }
+
   function processStripeWebhook(event) {
     const session = event && event.data && event.data.object;
     if (!session || typeof session.id !== 'string') return;
@@ -4191,15 +4267,15 @@ function createApp(options = {}) {
         giftRecipientName = '', giftRecipientContact = '', giftMessage = '',
         showtimeAt = '', seatLabels = [] } = req.body || {};
       const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
-      if (!['mpesa','wallet','stripe','nowpayments'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa, Valor Wallet, Stripe Checkout, or NOWPayments as the payment method.' });
+      if (!['mpesa','wallet','stripe','nowpayments','paypal'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa, Valor Wallet, Stripe Checkout, NOWPayments, or PayPal as the payment method.' });
       req.wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
       if (paymentMethod === 'wallet' && !req.wallet) return res.status(409).json({ error: 'Verify and link your phone number before paying from your wallet.' });
       const phone = paymentMethod === 'wallet'
         ? req.wallet.phone
-        : paymentMethod === 'nowpayments' ? '' : normalizePhone(inputPhone);
+        : paymentMethod === 'nowpayments' || paymentMethod === 'paypal' ? '' : normalizePhone(inputPhone);
       if (typeof eventId !== 'string' || !eventId || typeof ticketType !== 'string' || !ticketType) return res.status(400).json({ error: 'Choose a published event and ticket type.' });
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the ticket buyer’s name.' });
-      if (!phone && paymentMethod !== 'nowpayments') {
+      if (!phone && paymentMethod !== 'nowpayments' && paymentMethod !== 'paypal') {
         return res.status(400).json({ error: 'Enter a Kenyan Safaricom M-Pesa number: 0712345678, 0112345678, or +254712345678.' });
       }
       if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 10) return res.status(400).json({ error: 'Ticket quantity must be 1–10.' });
@@ -4239,6 +4315,9 @@ function createApp(options = {}) {
       if (price > 0 && paymentMethod === 'nowpayments' && !nowpaymentsGateway.isConfigured()) {
         return res.status(503).json({ error: 'NOWPayments checkout is not enabled yet. Valor Africa must configure its API key, IPN secret, callback URL, and KES-to-USD rate.' });
       }
+      if (price > 0 && paymentMethod === 'paypal' && !paypalGateway.isConfigured()) {
+        return res.status(503).json({ error: 'PayPal checkout is not enabled yet. Valor Africa must configure its PayPal credentials, webhook, and KES-to-USD rate.' });
+      }
       const referralToken = typeof req.body?.affiliateReferralToken === 'string' &&
         req.body.affiliateReferralToken.length <= 100
         ? req.body.affiliateReferralToken
@@ -4254,7 +4333,8 @@ function createApp(options = {}) {
                     status IN ('paid','confirmed') OR (
                       status = 'pending' AND (
                         created_at >= datetime('now','-5 minutes') OR
-                        (payment_method='stripe' AND julianday(stripe_session_expires_at) > julianday('now'))
+                        (payment_method='stripe' AND julianday(stripe_session_expires_at) > julianday('now')) OR
+                        (payment_method='paypal' AND created_at >= datetime('now','-3 hours'))
                       )
                     )
                   )
@@ -4333,6 +4413,9 @@ function createApp(options = {}) {
       }
       if (paymentMethod === 'nowpayments') {
         return startNowPaymentsCheckout(res, order, price * quantity, event);
+      }
+      if (paymentMethod === 'paypal') {
+        return startPayPalTicketCheckout(res, order, price * quantity, event);
       }
       return startCheckout(res, order, price * quantity, phone);
     } catch (error) {
@@ -4865,6 +4948,7 @@ function createApp(options = {}) {
         ticketType: order.ticket_type,
         paymentMethod: order.payment_method,
         cryptoPriceAmountUsd: order.nowpayments_price_amount_usd,
+        paypalAmountUsd: order.paypal_amount_usd,
         receipt: order.status === 'paid' ? order.mpesa_receipt : '',
         ticketEmailStatus: order.order_type === 'ticket' ? order.ticket_email_status : null,
         resultDescription: order.result_description,
@@ -4917,6 +5001,15 @@ function createApp(options = {}) {
         db.prepare("UPDATE orders SET status='review',result_description=? WHERE id=? AND status='pending'")
           .run('PayPal payment amount did not match this order; support review is required.', order.id);
         return res.status(409).json({ error: 'The PayPal payment amount did not match this order.' });
+      }
+      if (order.order_type === 'ticket') {
+        const status = completePayPalTicketOrder(order.id, 'PayPal ticket payment confirmed.');
+        return res.json({
+          status: status === 'paid' ? 'completed' : status,
+          message: status === 'review'
+            ? 'PayPal received your payment, but ticket availability needs support review.'
+            : undefined
+        });
       }
       db.transaction(() => {
         const current = db.prepare("SELECT * FROM orders WHERE id=? AND status='pending'").get(order.id);

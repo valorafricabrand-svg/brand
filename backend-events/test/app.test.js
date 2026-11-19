@@ -804,6 +804,94 @@ test('NOWPayments issues tickets only after a signed, matching finished-payment 
   assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(order.id).total, 1);
 });
 
+test('PayPal ticket checkout reserves payment until capture and issues tickets once', async () => {
+  const accountAuth = createTestAccountAuth('paypal-ticket-buyer@example.com');
+  const event = createStoredTestEvent('PayPal Ticket Checkout', accountAuth);
+  const checkout = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Regular',
+    buyerName: 'PayPal Ticket Buyer',
+    quantity: 1,
+    paymentMethod: 'paypal'
+  });
+  assert.equal(checkout.status, 201);
+  assert.equal(checkout.body.paymentMethod, 'paypal');
+  assert.match(checkout.body.checkoutUrl, /^https:\/\/paypal\.test\/approve\//);
+  assert.equal(checkout.body.paypalAmountUsd, 9.23);
+  const pending = db.prepare('SELECT * FROM orders WHERE id=?').get(checkout.body.orderId);
+  assert.equal(pending.payment_method, 'paypal');
+  assert.equal(pending.phone, '');
+  assert.equal(pending.paypal_amount_usd, 9.23);
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(pending.id).total, 0);
+
+  const invalidAccess = await request(app).post(`/api/orders/${pending.id}/paypal-capture`);
+  assert.equal(invalidAccess.status, 404);
+
+  const mismatchedCheckout = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Regular',
+    buyerName: 'PayPal Amount Review Buyer',
+    quantity: 1,
+    paymentMethod: 'paypal'
+  });
+  const mismatchedOrder = db.prepare('SELECT * FROM orders WHERE id=?').get(mismatchedCheckout.body.orderId);
+  const originalCapture = paypalGateway.captureOrder;
+  paypalGateway.captureOrder = async () => ({
+    status: 'COMPLETED',
+    customId: mismatchedOrder.id,
+    captureStatus: 'COMPLETED',
+    amountValue: 1,
+    amountCurrency: 'USD'
+  });
+  let mismatchedCapture;
+  try {
+    mismatchedCapture = await request(app).post(`/api/orders/${mismatchedOrder.id}/paypal-capture`)
+      .set('X-Order-Access', mismatchedCheckout.body.accessToken);
+  } finally {
+    paypalGateway.captureOrder = originalCapture;
+  }
+  assert.equal(mismatchedCapture.status, 409);
+  assert.equal(db.prepare('SELECT status FROM orders WHERE id=?').get(mismatchedOrder.id).status, 'review');
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(mismatchedOrder.id).total, 0);
+
+  const captured = await request(app).post(`/api/orders/${pending.id}/paypal-capture`)
+    .set('X-Order-Access', checkout.body.accessToken);
+  assert.equal(captured.status, 200);
+  assert.equal(captured.body.status, 'completed');
+  const paid = await request(app).get(`/api/orders/${pending.id}`)
+    .set(accountAuth).set('X-Order-Access', checkout.body.accessToken);
+  assert.equal(paid.body.status, 'paid');
+  assert.equal(paid.body.paymentMethod, 'paypal');
+  assert.equal(paid.body.paypalAmountUsd, 9.23);
+  assert.equal(paid.body.tickets.length, 1);
+
+  const replay = await request(app).post(`/api/orders/${pending.id}/paypal-capture`)
+    .set('X-Order-Access', checkout.body.accessToken);
+  assert.equal(replay.status, 200);
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(pending.id).total, 1);
+
+  const webhookCheckout = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Regular',
+    buyerName: 'PayPal Webhook Buyer',
+    quantity: 1,
+    paymentMethod: 'paypal'
+  });
+  const webhookOrder = db.prepare('SELECT * FROM orders WHERE id=?').get(webhookCheckout.body.orderId);
+  const webhook = await request(app).post('/api/paypal/webhook')
+    .set('paypal-transmission-sig', 'test-paypal-signature')
+    .send({
+      event_type: 'PAYMENT.CAPTURE.COMPLETED',
+      resource: {
+        custom_id: webhookOrder.id,
+        amount: { value: String(webhookOrder.paypal_amount_usd), currency_code: 'USD' }
+      }
+    });
+  assert.equal(webhook.status, 200);
+  assert.equal(db.prepare('SELECT status FROM orders WHERE id=?').get(webhookOrder.id).status, 'paid');
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(webhookOrder.id).total, 1);
+});
+
 test('paid ticket order issues only after PayHero verifies the callback', async () => {
   const event = db.prepare("SELECT id FROM events WHERE slug='test-live-festival'").get();
   const accountAuth = await ticketAccountAuth();
