@@ -8,7 +8,7 @@
   <meta name="description" content="View event details, dates, venues, and ticket information from Valor Africa Events.">
   <meta name="robots" content="index, follow">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles/events.css?v=real-reviews-1">
+  <link rel="stylesheet" href="styles/events.css?v=compact-event-checkout-1">
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
@@ -23,8 +23,8 @@
     <div id="eventDetails" class="service-card"><p>Loading event details…</p></div>
     <form id="eventTicketForm" class="service-form" hidden>
       <h2>Get your tickets</h2>
-      <label>Ticket type<select name="ticketType" required></select></label>
-      <label>Quantity<input name="quantity" type="number" min="1" max="10" value="1" required></label>
+      <label class="event-ticket-field">Ticket type<select name="ticketType" required></select></label>
+      <label class="event-ticket-field">Quantity<input name="quantity" type="number" min="1" max="10" value="1" required></label>
       <fieldset class="checkout-choice" id="movieSelection" hidden>
         <legend>Movie showtime and seats</legend>
         <label>Showtime<select name="showtimeAt"></select></label>
@@ -33,8 +33,10 @@
       </fieldset>
       <fieldset class="checkout-choice">
         <legend>Who are the tickets for?</legend>
-        <label><input type="radio" name="deliveryType" value="self" checked> For me</label>
-        <label><input type="radio" name="deliveryType" value="gift"> Send as a gift</label>
+        <div class="checkout-choice-options">
+          <label class="checkout-choice-option"><input type="radio" name="deliveryType" value="self" checked> For me</label>
+          <label class="checkout-choice-option"><input type="radio" name="deliveryType" value="gift"> Send as a gift</label>
+        </div>
       </fieldset>
       <fieldset class="checkout-choice" id="giftFields" hidden>
         <legend>Gift recipient</legend>
@@ -42,12 +44,11 @@
         <label>Recipient email or phone<input name="giftRecipientContact" maxlength="160" autocomplete="email"></label>
         <label>Gift message<textarea name="giftMessage" maxlength="500" rows="3" placeholder="Write a personal message"></textarea></label>
       </fieldset>
-      <label>Your name<input name="buyerName" maxlength="120" autocomplete="name" required></label>
-      <label>Payment method<select name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="stripe" disabled>Card (Stripe Checkout; coming soon)</option><option value="nowpayments" disabled>Cryptocurrency (NOWPayments; coming soon)</option></select></label>
+      <label class="event-ticket-field">Your name<input name="buyerName" maxlength="120" autocomplete="name" required></label>
+      <label class="event-ticket-field">Payment method<select name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="stripe" disabled>Card (Stripe Checkout; coming soon)</option><option value="nowpayments" disabled>Cryptocurrency (NOWPayments; coming soon)</option></select></label>
       <p class="checkout-note" id="nowpaymentsPriceNote" hidden></p>
-      <label>Safaricom M-Pesa number<input name="phone" type="tel" autocomplete="tel" placeholder="07…, 011…, or +254…" required></label>
-      <p class="checkout-note">Sign in to your account to get tickets. <a href="account.html">Open your account</a> or <a href="wallet.html">wallet</a>.</p>
-      <p class="checkout-note">By continuing, you agree to our <a href="refund-policy.html">Refund Policy</a>.</p>
+      <label class="event-ticket-field event-ticket-field-wide">Safaricom M-Pesa number<input name="phone" type="tel" autocomplete="tel" placeholder="07…, 011…, or +254…" required></label>
+      <p class="checkout-note">Sign in to get tickets: <a href="account.html">account</a> or <a href="wallet.html">wallet</a>. Tickets confirm after payment. By continuing, you agree to our <a href="refund-policy.html">Refund Policy</a>.</p>
       <button class="button button-primary" type="submit">Pay with M-Pesa</button>
     </form>
     <p class="page-feedback" id="pageFeedback" aria-live="polite"></p>

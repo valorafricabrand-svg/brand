@@ -95,6 +95,24 @@ img { display: block; max-width: 100%; }
 .service-form input, .service-form select { width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: #fff; color: var(--ink); }
 .service-form .button { justify-self: start; }
 .service-form .button:disabled { cursor: not-allowed; opacity: .6; }
+.event-page #eventTicketForm { width: min(100%, 860px); margin: 16px auto 0; padding: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; border-radius: 14px; box-shadow: none; }
+.event-page #eventTicketForm > h2,
+.event-page #eventTicketForm > .checkout-choice,
+.event-page #eventTicketForm > .checkout-note,
+.event-page #eventTicketForm > #nowpaymentsPriceNote,
+.event-page #eventTicketForm > .button,
+.event-page #eventTicketForm > .event-ticket-field-wide { grid-column: 1 / -1; }
+.event-page #eventTicketForm > .event-ticket-field { min-width: 0; }
+.event-page #eventTicketForm > h2 { margin-bottom: 2px; font-size: 20px; }
+.event-page #eventTicketForm > .checkout-choice { padding: 10px 12px; }
+.checkout-choice-options { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+.service-form .checkout-choice-option { display: flex; align-items: center; gap: 8px; width: fit-content; margin: 0; cursor: pointer; }
+.service-form .checkout-choice-option input[type="radio"] { flex: 0 0 auto; width: auto; min-height: auto; margin: 0; padding: 0; }
+.event-page #eventTicketForm > .checkout-note { margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--mint-light); font-size: 12px; line-height: 1.5; }
+.event-page #eventTicketForm > .button { justify-self: stretch; width: 100%; justify-content: center; }
+@media (max-width: 640px) {
+  .event-page #eventTicketForm { padding: 16px; grid-template-columns: 1fr; gap: 10px; }
+}
 @media (max-width: 720px) {
   .event-page { width: min(100% - 32px, 560px); padding-top: 24px; }
   .event-detail-layout { grid-template-columns: 1fr; gap: 24px; padding: 18px; }

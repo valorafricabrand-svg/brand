@@ -9,17 +9,6 @@
   const ACCENTS = ['accent-0', 'accent-1', 'accent-2', 'accent-3', 'accent-4'];
   const LOCAL_VIDEO_SLIDES = [
     {
-      id: 'valor-sponsored-video-promo',
-      title: 'Valor Events and Tickets',
-      category: 'Featured on Valor Africa',
-      description: 'Explore experiences and find your next event.',
-      mediaType: 'video',
-      mediaUrl: 'videos/valor-sponsored-video.mp4',
-      posterUrl: 'images/events/video-ad-poster.svg',
-      linkUrl: 'events.html',
-      ctaLabel: 'Get tickets now'
-    },
-    {
       id: 'valor-ticket-buyer-promo',
       title: 'Your next great experience starts here.',
       category: 'For ticket buyers',
@@ -184,11 +173,17 @@
     try {
       const data = await window.valorEventsApi('/api/hero-highlights');
       const apiBase = data.apiBase;
-      const remoteSlides = Array.isArray(data.slides) ? data.slides.map((slide) => ({
-        ...slide,
-        mediaUrl: resolveAsset(slide.mediaUrl, apiBase),
-        posterUrl: resolveAsset(slide.posterUrl, apiBase)
-      })).sort((left, right) => Number(right.mediaType === 'video') - Number(left.mediaType === 'video')) : [];
+      const remoteSlides = Array.isArray(data.slides)
+        ? data.slides
+          .filter((slide) => !(
+            slide.id === 'valor-sponsored-video-promo' && slide.mediaType === 'video'
+          ))
+          .map((slide) => ({
+            ...slide,
+            mediaUrl: resolveAsset(slide.mediaUrl, apiBase),
+            posterUrl: resolveAsset(slide.posterUrl, apiBase)
+          }))
+        : [];
       if (!remoteSlides.length) return;
 
       slides = remoteSlides;
