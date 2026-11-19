@@ -4866,12 +4866,13 @@ function createApp(options = {}) {
         paymentMethod: order.payment_method,
         cryptoPriceAmountUsd: order.nowpayments_price_amount_usd,
         receipt: order.status === 'paid' ? order.mpesa_receipt : '',
+        ticketEmailStatus: order.order_type === 'ticket' ? order.ticket_email_status : null,
         resultDescription: order.result_description,
         createdAt: order.created_at
       };
       if (order.order_type === 'ticket' && ['paid','confirmed'].includes(order.status)) {
         const tickets = db.prepare(`
-          SELECT t.code,t.ticket_type AS ticketType,e.title,e.slug,e.starts_at AS startsAt,e.venue_name AS venueName,e.city
+          SELECT t.code,t.ticket_type AS ticketType,e.title,e.title AS eventTitle,e.slug,e.starts_at AS startsAt,e.venue_name AS venueName,e.city
           FROM tickets t JOIN events e ON e.id=t.event_id WHERE t.order_id=? ORDER BY t.created_at,t.code
         `).all(order.id);
         result.tickets = await Promise.all(tickets.map(async (ticket) => ({

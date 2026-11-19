@@ -16,11 +16,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/events.css?v=real-reviews-1">
+  <link rel="stylesheet" href="styles/events.css?v=free-ticket-delivery-1">
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
-  <script src="scripts/events.js?v=payment-methods-1" defer></script>
+  <script src="scripts/events.js?v=free-ticket-delivery-1" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
   <script src="scripts/nav-history.js?v=1" defer></script>
@@ -117,8 +117,16 @@
             <input id="eventCapacity" name="eventCapacity" type="number" min="1" step="1">
           </div>
           <div class="form-field">
-            <label for="ticketPrice">Regular ticket price</label>
-            <input id="ticketPrice" name="ticketPrice" type="number" min="0" step="1" value="0" required>
+            <label class="free-ticket-toggle" for="freeRegularTicket">
+              <input id="freeRegularTicket" type="checkbox" checked aria-controls="regularTicketPriceField">
+              Regular ticket is free
+            </label>
+            <p class="free-ticket-price-display" id="freeTicketPriceDisplay" aria-live="polite">Free</p>
+            <div id="regularTicketPriceField" hidden>
+              <label for="ticketPrice">Regular ticket price (KES)</label>
+              <input id="ticketPrice" name="ticketPrice" type="number" min="0" step="1" value="0" placeholder="Enter price in KES">
+            </div>
+            <p class="field-hint" id="ticketPriceHint">Regular tickets cost nothing. Paid VIP tickets can still be added below.</p>
           </div>
           <div class="form-field">
             <label for="ticketCurrency">Currency</label>
@@ -145,7 +153,7 @@
 
         <section class="ticket-types" aria-labelledby="ticketTypesHeading">
           <h2 id="ticketTypesHeading"><span aria-hidden="true">▣</span> Ticket types <span style="font-weight:500;">(optional)</span></h2>
-          <p>The ticket price above is your <strong>Regular</strong> ticket. Add an early-bird deal to sell early, and a VIP ticket for premium access. Use the same currency.</p>
+          <p>The Regular ticket above may be free or paid. Add an early-bird deal to sell early, and a VIP ticket for premium access. Use the same currency.</p>
           <div class="form-grid-3">
             <div class="form-field">
               <label for="earlyBirdPrice">Early-bird price</label>

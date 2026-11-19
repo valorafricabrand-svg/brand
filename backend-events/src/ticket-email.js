@@ -46,7 +46,7 @@ async function sendConfirmation(orderId, publicSiteUrl) {
   const timezone = escapeHtml(order.timezone);
   const location = escapeHtml([order.venueName, order.city].filter(Boolean).join(', '));
   const ticketType = escapeHtml(order.ticketType);
-  const total = `KES ${Number(order.amountKes).toLocaleString('en-KE')}`;
+  const total = Number(order.amountKes) === 0 ? 'Free' : `KES ${Number(order.amountKes).toLocaleString('en-KE')}`;
   const attachments = await Promise.all(tickets.map(async (ticket, index) => ({
     filename: `valor-ticket-${index + 1}.png`,
     content: (await QRCode.toBuffer(

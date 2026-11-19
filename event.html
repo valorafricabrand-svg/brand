@@ -8,11 +8,11 @@
   <meta name="description" content="View event details, dates, venues, and ticket information from Valor Africa Events.">
   <meta name="robots" content="index, follow">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles/events.css?v=compact-event-checkout-1">
+  <link rel="stylesheet" href="styles/events.css?v=free-ticket-delivery-1">
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
-  <script src="scripts/event-pages.js?v=real-reviews-1" defer></script>
+  <script src="scripts/event-pages.js?v=free-ticket-delivery-1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
   <script src="scripts/nav-history.js?v=1" defer></script>
 </head>
@@ -48,7 +48,7 @@
       <label class="event-ticket-field">Payment method<select name="paymentMethod"><option value="mpesa">M-Pesa</option><option value="wallet">Valor Wallet</option><option value="stripe" disabled>Card (Stripe Checkout; coming soon)</option><option value="nowpayments" disabled>Cryptocurrency (NOWPayments; coming soon)</option></select></label>
       <p class="checkout-note" id="nowpaymentsPriceNote" hidden></p>
       <label class="event-ticket-field event-ticket-field-wide">Safaricom M-Pesa number<input name="phone" type="tel" autocomplete="tel" placeholder="07…, 011…, or +254…" required></label>
-      <p class="checkout-note">Sign in to get tickets: <a href="account.html">account</a> or <a href="wallet.html">wallet</a>. Tickets confirm after payment. By continuing, you agree to our <a href="refund-policy.html">Refund Policy</a>.</p>
+      <p class="checkout-note">Sign in to get tickets: <a href="account.html">account</a> or <a href="wallet.html">wallet</a>. Free tickets require no payment; paid tickets are confirmed after payment. By continuing, you agree to our <a href="refund-policy.html">Refund Policy</a>.</p>
       <button class="button button-primary" type="submit">Pay with M-Pesa</button>
     </form>
     <p class="page-feedback" id="pageFeedback" aria-live="polite"></p>

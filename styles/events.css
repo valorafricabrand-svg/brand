@@ -213,6 +213,9 @@ img { display: block; max-width: 100%; }
 .issued-ticket { display: grid; justify-items: center; gap: 8px; margin-top: 20px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; text-align: center; }
 .issued-ticket h2, .issued-ticket p { margin: 0; }
 .issued-ticket img { width: 220px; height: 220px; margin-top: 8px; image-rendering: pixelated; }
+.ticket-delivery-note { margin: 16px 0 0; }
+.service-card .whatsapp-ticket-share { display: inline-flex; width: auto; margin: 16px 0 0; justify-content: center; text-decoration: none; }
+.ticket-whatsapp-note { margin: 10px 0 0; color: #64748b; font-size: 12px; line-height: 1.5; }
 .ticket-feedback { display: grid; justify-items: center; gap: 16px; width: min(100%, 520px); margin-top: 14px; padding-top: 16px; border-top: 1px solid var(--border); text-align: left; }
 .ticket-love { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 46px; padding: 8px 16px; border: 1px solid #d7dce3; border-radius: 999px; color: #344054; background: #fff; font: 700 15px Manrope, sans-serif; cursor: pointer; transition: color .18s ease, border-color .18s ease, transform .18s ease; }
 .ticket-love:hover { transform: translateY(-1px); border-color: #d92d45; }
@@ -843,6 +846,9 @@ img { display: block; max-width: 100%; }
 .host-layout { display: grid; grid-template-columns: minmax(0, 900px); justify-content: center; gap: 22px; align-items: start; }
 .host-form { padding: clamp(19px, 3vw, 34px); border: 1px solid #dfe6ee; border-radius: 16px; background: #fff; box-shadow: 0 10px 32px rgba(20,39,58,.05); }
 .host-form label { margin: 0 0 6px; }
+.host-form .free-ticket-toggle { display: flex; align-items: center; gap: 9px; margin: 0 0 10px; cursor: pointer; }
+.host-form .free-ticket-toggle input { width: auto; min-height: 0; margin: 0; flex: 0 0 auto; }
+.free-ticket-price-display { margin: 0 0 10px; color: var(--green); font-size: 20px; font-weight: 800; }
 .host-form input, .host-form select, .host-form textarea { width: 100%; min-height: 46px; padding: 10px 13px; border: 1px solid #d3dce7; border-radius: 8px; outline: none; color: #14233a; background: #fff; }
 .host-form input:focus, .host-form select:focus, .host-form textarea:focus { border-color: #28a17a; box-shadow: 0 0 0 3px rgba(8,127,91,.11); }
 .host-form textarea { min-height: 150px; resize: vertical; }

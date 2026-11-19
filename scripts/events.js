@@ -157,6 +157,7 @@
   events.sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt));
 
   const formatMoney = (amount, currency) => {
+    if (Number(amount) === 0) return 'Free';
     const formatted = new Intl.NumberFormat('en-KE', {
       minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
       maximumFractionDigits: 2
@@ -1154,15 +1155,25 @@
       nowpaymentsTicketOption.disabled = !nowpaymentsCheckoutEnabled;
       nowpaymentsTicketOption.textContent = nowpaymentsCheckoutEnabled ? 'Cryptocurrency (NOWPayments)' : 'Cryptocurrency (NOWPayments; coming soon)';
     }
-    const usesWallet = paymentMethodSelect.value === 'wallet';
-    const usesStripe = paymentMethodSelect.value === 'stripe';
-    const usesNowpayments = paymentMethodSelect.value === 'nowpayments';
-    buyerPhoneInput.required = !usesWallet && !usesNowpayments;
-    buyerPhoneInput.disabled = usesWallet || usesNowpayments;
-    document.querySelector('label[for="buyerPhone"]').textContent = usesWallet
+    const selectedTicket = activeEvent && activeEvent.tickets.find((item) => item.name === ticketSelect.value);
+    const isFreeTicket = Number(selectedTicket && selectedTicket.price) === 0;
+    const usesWallet = !isFreeTicket && paymentMethodSelect.value === 'wallet';
+    const usesStripe = !isFreeTicket && paymentMethodSelect.value === 'stripe';
+    const usesNowpayments = !isFreeTicket && paymentMethodSelect.value === 'nowpayments';
+    const paymentMethodLabel = document.getElementById('ticketPaymentMethodLabel');
+    if (paymentMethodLabel) paymentMethodLabel.hidden = isFreeTicket;
+    paymentMethodSelect.hidden = isFreeTicket;
+    paymentMethodSelect.disabled = isFreeTicket;
+    buyerPhoneInput.required = isFreeTicket || (!usesWallet && !usesNowpayments);
+    buyerPhoneInput.disabled = !isFreeTicket && (usesWallet || usesNowpayments);
+    const buyerPhoneLabel = document.querySelector('label[for="buyerPhone"]');
+    if (buyerPhoneLabel) buyerPhoneLabel.firstChild.textContent = usesWallet
       ? 'M-Pesa number (not needed for wallet)'
-      : usesStripe ? 'Contact phone number' : usesNowpayments ? 'WhatsApp number (not needed for crypto)' : 'WhatsApp number';
-    ticketPaymentNote.textContent = usesWallet
+      : isFreeTicket ? 'WhatsApp number'
+        : usesStripe ? 'Contact phone number' : usesNowpayments ? 'WhatsApp number (not needed for crypto)' : 'WhatsApp number';
+    ticketPaymentNote.textContent = isFreeTicket
+      ? 'No payment is required. Your confirmed ticket will be emailed to your account; use the WhatsApp button after registration to send a copy.'
+      : usesWallet
       ? 'Your verified wallet balance will be charged immediately. Tickets are issued as soon as payment succeeds.'
       : usesStripe
         ? 'Continue to Stripe Checkout to pay by card. Your ticket is issued after Stripe confirms payment.'
@@ -1179,7 +1190,9 @@
         ? `Estimated total: $${(kesTotal / nowpaymentsKesPerUsd).toFixed(2)} USD. The final crypto amount is set by NOWPayments.`
         : 'The final USD estimate will be shown at checkout.';
     }
-    ticketForm.querySelector('[type=submit]').innerHTML = `Pay with ${paymentLabel} <span aria-hidden="true">→</span>`;
+    const submitButton = ticketForm.querySelector('[type=submit]');
+    if (isFreeTicket) submitButton.textContent = 'Get free ticket';
+    else submitButton.innerHTML = `Pay with ${paymentLabel} <span aria-hidden="true">→</span>`;
   }
   if (paymentMethodSelect && buyerPhoneInput && ticketPaymentNote && ticketForm) {
     paymentMethodSelect.addEventListener('change', updateTicketPaymentMethod);
@@ -1246,25 +1259,26 @@
       if (!ticket) return;
       const ticketFeedback = document.getElementById('ticketFeedback');
       const submitButton = ticketForm.querySelector('[type=submit]');
-      const paymentMethod = data.get('paymentMethod');
+      const isFreeTicket = Number(ticket.price) === 0;
+      const paymentMethod = isFreeTicket ? 'mpesa' : data.get('paymentMethod');
       const accountToken = window.valorAccountToken();
       if (!accountToken) {
         showAccountSignIn(ticketFeedback);
         return;
       }
-      if (paymentMethod === 'mpesa' && !mpesaCheckoutEnabled) {
+      if (!isFreeTicket && paymentMethod === 'mpesa' && !mpesaCheckoutEnabled) {
         ticketFeedback.textContent = apiBase
           ? 'M-Pesa checkout is not available right now. Choose another available payment method or try again later.'
           : 'Secure ticket checkout is not connected on this preview website yet.';
         ticketFeedback.classList.add('error');
         return;
       }
-      if (paymentMethod === 'stripe' && !stripeCheckoutEnabled) {
+      if (!isFreeTicket && paymentMethod === 'stripe' && !stripeCheckoutEnabled) {
         ticketFeedback.textContent = 'Stripe Checkout is not configured yet. Choose another available payment method instead.';
         ticketFeedback.classList.add('error');
         return;
       }
-      if (paymentMethod === 'nowpayments' && !nowpaymentsCheckoutEnabled) {
+      if (!isFreeTicket && paymentMethod === 'nowpayments' && !nowpaymentsCheckoutEnabled) {
         ticketFeedback.textContent = 'NOWPayments is not configured yet. Choose another available payment method instead.';
         ticketFeedback.classList.add('error');
         return;
@@ -1357,6 +1371,12 @@
     const eventEndField = endsInput.closest('.form-field');
     const earlyBirdPriceInput = document.getElementById('earlyBirdPrice');
     const earlyBirdEndsInput = document.getElementById('earlyBirdEnds');
+    const regularTicketPriceInput = document.getElementById('ticketPrice');
+    const freeRegularTicketToggle = document.getElementById('freeRegularTicket');
+    const regularTicketPriceField = document.getElementById('regularTicketPriceField');
+    const freeTicketPriceDisplay = document.getElementById('freeTicketPriceDisplay');
+    const ticketPriceHint = document.getElementById('ticketPriceHint');
+    let lastPaidTicketPrice = '';
     const publishWithoutEarlyBirdButton = document.getElementById('publishWithoutEarlyBirdButton');
     let editingId = null;
     let editingEventId = new URLSearchParams(window.location.search).get('editEvent');
@@ -1375,6 +1395,31 @@
     function isMovieListing() {
       return /movie|cinema|film/i.test(categoryInput.value);
     }
+
+    function updateRegularTicketPriceMode() {
+      const isFree = freeRegularTicketToggle.checked;
+      regularTicketPriceField.hidden = isFree;
+      freeTicketPriceDisplay.hidden = !isFree;
+      regularTicketPriceInput.required = !isFree;
+      regularTicketPriceInput.min = isFree ? '0' : '1';
+      ticketPriceHint.textContent = isFree
+        ? 'Regular tickets cost nothing. Paid VIP tickets can still be added below.'
+        : 'Enter a whole-number KES price for each Regular ticket.';
+    }
+
+    updateRegularTicketPriceMode();
+    freeRegularTicketToggle.addEventListener('change', () => {
+      if (freeRegularTicketToggle.checked) {
+        if (Number(regularTicketPriceInput.value) > 0) lastPaidTicketPrice = regularTicketPriceInput.value;
+        regularTicketPriceInput.value = '0';
+      } else {
+        regularTicketPriceInput.value = lastPaidTicketPrice;
+      }
+      updateRegularTicketPriceMode();
+    });
+    regularTicketPriceInput.addEventListener('input', () => {
+      if (!freeRegularTicketToggle.checked) lastPaidTicketPrice = regularTicketPriceInput.value;
+    });
 
     function parsedMovieShowtimes() {
       return movieShowtimesInput.value.split(/\r?\n/)
@@ -1469,6 +1514,9 @@
           const input = document.getElementById(id);
           if (input) input.value = value || '';
         });
+        freeRegularTicketToggle.checked = Number(event.regularPrice) === 0;
+        lastPaidTicketPrice = freeRegularTicketToggle.checked ? '' : String(event.regularPrice);
+        updateRegularTicketPriceMode();
         updateMovieListingFields();
         slugWasEdited = true;
         if (event.poster) {
@@ -1731,7 +1779,7 @@
           `Venue: ${fields.venueName || 'Not provided'}`,
           `City: ${fields.city}`,
           `Capacity: ${fields.capacity || 'Not specified'}`,
-          `Regular ticket price: KES ${fields.regularPrice}`,
+          `Regular ticket price: ${Number(fields.regularPrice) === 0 ? 'Free' : `KES ${fields.regularPrice}`}`,
           `Early-bird ticket price: ${fields.earlyBirdPrice || 'Not offered'}`,
           `VIP ticket price: ${fields.vipPrice || 'Not offered'}`,
           `Organizer: ${fields.organizerName}`,
@@ -1797,6 +1845,9 @@
             const field = hostForm.elements.namedItem(name);
             if (field && typeof value === 'string') field.value = value;
           });
+          freeRegularTicketToggle.checked = Number(regularTicketPriceInput.value) === 0;
+          lastPaidTicketPrice = freeRegularTicketToggle.checked ? '' : regularTicketPriceInput.value;
+          updateRegularTicketPriceMode();
           updateMovieListingFields();
           editingId = draft.id;
           slugWasEdited = true;
@@ -1822,7 +1873,11 @@
       editingId = null;
       slugWasEdited = false;
       imageNames.textContent = 'No images selected.';
-      window.setTimeout(updateMovieListingFields, 0);
+      window.setTimeout(() => {
+        lastPaidTicketPrice = '';
+        updateRegularTicketPriceMode();
+        updateMovieListingFields();
+      }, 0);
     });
     renderDrafts();
   }

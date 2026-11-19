@@ -3,6 +3,13 @@
   const api = window.valorEventsApi;
   const escapeDate = (value) => new Date(value).toLocaleString('en-KE', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Africa/Nairobi' });
   const saveAccess = (order) => window.sessionStorage.setItem(`valor-order-${order.orderId}`, order.accessToken);
+  const formatTicketPrice = (amount, currency) => Number(amount) === 0
+    ? 'Free'
+    : new Intl.NumberFormat('en-KE', {
+      style: 'currency',
+      currency: currency || 'KES',
+      maximumFractionDigits: 0
+    }).format(Number(amount));
 
   function showError(element, message) {
     element.textContent = message;
@@ -503,11 +510,7 @@
       if (event.tickets.length) {
         const lowestPrice = Math.min(...event.tickets.map((ticket) => Number(ticket.price)));
         const price = document.createElement('strong');
-        price.textContent = new Intl.NumberFormat('en-KE', {
-          style: 'currency',
-          currency: event.tickets[0].currency || 'KES',
-          maximumFractionDigits: 0
-        }).format(lowestPrice);
+        price.textContent = formatTicketPrice(lowestPrice, event.tickets[0].currency);
         priceLabel.append(priceCaption, price);
       }
       event.tickets.forEach((ticket) => {
@@ -515,11 +518,7 @@
         const name = document.createElement('span');
         name.textContent = ticket.name;
         const amount = document.createElement('strong');
-        amount.textContent = new Intl.NumberFormat('en-KE', {
-          style: 'currency',
-          currency: ticket.currency || 'KES',
-          maximumFractionDigits: 0
-        }).format(Number(ticket.price));
+        amount.textContent = formatTicketPrice(ticket.price, ticket.currency);
         item.append(name, amount);
         tickets.appendChild(item);
       });
@@ -534,7 +533,7 @@
       });
       const secureNote = document.createElement('p');
       secureNote.className = 'event-detail-secure-note';
-      secureNote.textContent = 'Secure checkout · Tickets are confirmed after payment.';
+      secureNote.textContent = 'Secure checkout · Free tickets require no payment; paid tickets are confirmed after payment.';
       copy.append(categories, heading, details, priceLabel, tickets);
       if (slug) copy.append(bookLink, secureNote);
       else {
@@ -557,11 +556,7 @@
       const form = document.getElementById('eventTicketForm');
       const select = form.elements.ticketType;
       select.replaceChildren(...event.tickets.map((ticket) => new Option(
-        `${ticket.name} · ${new Intl.NumberFormat('en-KE', {
-          style: 'currency',
-          currency: ticket.currency || 'KES',
-          maximumFractionDigits: 0
-        }).format(Number(ticket.price))}`,
+        `${ticket.name} · ${formatTicketPrice(ticket.price, ticket.currency)}`,
         ticket.name
       )));
       form.hidden = false;
@@ -679,13 +674,14 @@
       const phoneInput = form.elements.phone;
       const cryptoPriceNote = document.getElementById('nowpaymentsPriceNote');
       const updateCryptoPriceNote = () => {
+        const ticket = event.tickets.find((entry) => entry.name === select.value);
         if (paymentMethod.value !== 'nowpayments' || !nowpaymentsConfigured ||
-            !Number.isFinite(nowpaymentsKesPerUsd) || nowpaymentsKesPerUsd <= 0) {
+            !Number.isFinite(nowpaymentsKesPerUsd) || nowpaymentsKesPerUsd <= 0 ||
+            Number(ticket && ticket.price) === 0) {
           cryptoPriceNote.hidden = true;
           cryptoPriceNote.textContent = '';
           return;
         }
-        const ticket = event.tickets.find((entry) => entry.name === select.value);
         const quantity = Number(form.elements.quantity.value);
         if (!ticket || !Number.isSafeInteger(quantity) || quantity < 1) {
           cryptoPriceNote.hidden = true;
@@ -697,30 +693,39 @@
         cryptoPriceNote.hidden = false;
       };
       const updatePaymentFields = () => {
-        const usesWallet = paymentMethod.value === 'wallet';
-        const usesStripe = paymentMethod.value === 'stripe';
-        const usesNowpayments = paymentMethod.value === 'nowpayments';
-        phoneInput.required = !usesWallet && !usesNowpayments;
-        phoneInput.disabled = usesWallet || usesNowpayments;
+        const selectedTicket = event.tickets.find((entry) => entry.name === select.value);
+        const isFreeTicket = Number(selectedTicket && selectedTicket.price) === 0;
+        const usesWallet = !isFreeTicket && paymentMethod.value === 'wallet';
+        const usesStripe = !isFreeTicket && paymentMethod.value === 'stripe';
+        const usesNowpayments = !isFreeTicket && paymentMethod.value === 'nowpayments';
+        const paymentMethodLabel = paymentMethod.closest('label');
+        if (paymentMethodLabel) paymentMethodLabel.hidden = isFreeTicket;
+        paymentMethod.disabled = isFreeTicket;
+        phoneInput.required = isFreeTicket || (!usesWallet && !usesNowpayments);
+        phoneInput.disabled = !isFreeTicket && (usesWallet || usesNowpayments);
         const phoneLabel = phoneInput.closest('label');
         if (phoneLabel) {
-          phoneLabel.hidden = usesWallet || usesNowpayments;
-          phoneLabel.firstChild.textContent = usesStripe ? 'Contact phone number' : 'Safaricom M-Pesa number';
+          phoneLabel.hidden = !isFreeTicket && (usesWallet || usesNowpayments);
+          phoneLabel.firstChild.textContent = isFreeTicket
+            ? 'WhatsApp number'
+            : usesStripe ? 'Contact phone number' : 'Safaricom M-Pesa number';
         }
-        form.querySelector('[type=submit]').textContent = `Pay with ${usesWallet
+        form.querySelector('[type=submit]').textContent = isFreeTicket ? 'Get free ticket' : `Pay with ${usesWallet
           ? 'Valor Wallet'
           : usesStripe ? 'Stripe Checkout' : usesNowpayments ? 'NOWPayments' : 'M-Pesa'}`;
         updateCryptoPriceNote();
       };
       paymentMethod.addEventListener('change', updatePaymentFields);
-      select.addEventListener('change', updateCryptoPriceNote);
+      select.addEventListener('change', updatePaymentFields);
       form.elements.quantity.addEventListener('input', updateCryptoPriceNote);
       updatePaymentFields();
       form.addEventListener('submit', async (submitEvent) => {
         submitEvent.preventDefault();
         const button = form.querySelector('[type=submit]');
         button.disabled = true;
-        const selectedMethod = paymentMethod.value;
+        const selectedTicket = event.tickets.find((ticket) => ticket.name === select.value);
+        const isFreeTicket = Number(selectedTicket && selectedTicket.price) === 0;
+        const selectedMethod = isFreeTicket ? 'mpesa' : paymentMethod.value;
         const currentAccountToken = window.valorAccountToken();
         if (!currentAccountToken) {
           const feedback = document.getElementById('pageFeedback');
@@ -734,17 +739,17 @@
           button.disabled = false;
           return;
         }
-        if (selectedMethod === 'mpesa' && !health.paymentsConfigured) {
+        if (!isFreeTicket && selectedMethod === 'mpesa' && !health.paymentsConfigured) {
           showError(document.getElementById('pageFeedback'), 'M-Pesa checkout is not configured yet. Choose Stripe Checkout or Valor Wallet.');
           button.disabled = false;
           return;
         }
-        if (selectedMethod === 'stripe' && !stripePaymentsConfigured) {
+        if (!isFreeTicket && selectedMethod === 'stripe' && !stripePaymentsConfigured) {
           showError(document.getElementById('pageFeedback'), 'Stripe Checkout is not configured yet. Choose M-Pesa or Valor Wallet.');
           button.disabled = false;
           return;
         }
-        if (selectedMethod === 'nowpayments' && !nowpaymentsConfigured) {
+        if (!isFreeTicket && selectedMethod === 'nowpayments' && !nowpaymentsConfigured) {
           showError(document.getElementById('pageFeedback'), 'NOWPayments is not configured yet. Choose M-Pesa or Valor Wallet.');
           button.disabled = false;
           return;
@@ -952,7 +957,10 @@
         Number.isFinite(Number(order.cryptoPriceAmountUsd))
         ? ` · NOWPayments invoice: USD ${Number(order.cryptoPriceAmountUsd).toFixed(2)}`
         : '';
-      details.textContent = `${order.orderType === 'ticket' ? `${order.quantity} ${order.ticketType} ticket(s)` : `Advertising: ${order.campaign?.packageName || 'Event promotion'}`} · KES ${Number(order.amountKes).toLocaleString('en-KE')}${cryptoPrice}${order.receipt ? ` · Receipt ${order.receipt}` : ''}`;
+      const total = order.orderType === 'ticket' && Number(order.amountKes) === 0
+        ? 'Free'
+        : `KES ${Number(order.amountKes).toLocaleString('en-KE')}`;
+      details.textContent = `${order.orderType === 'ticket' ? `${order.quantity} ${order.ticketType} ticket(s)` : `Advertising: ${order.campaign?.packageName || 'Event promotion'}`} · ${total}${cryptoPrice}${order.receipt ? ` · Receipt ${order.receipt}` : ''}`;
       root.replaceChildren(heading, details);
       if (order.status === 'pending') {
         const explanation = document.createElement('p');
@@ -979,6 +987,39 @@
           section.append(title, info, qr);
           root.appendChild(section);
         });
+        const emailNotice = document.createElement('p');
+        emailNotice.className = 'ticket-delivery-note checkout-note';
+        emailNotice.textContent = order.ticketEmailStatus === 'sent'
+          ? 'Ticket confirmation sent to your account email.'
+          : order.ticketEmailStatus === 'sending'
+            ? 'Ticket email is being sent to your account. Your QR passes are available below.'
+            : order.ticketEmailStatus === 'failed'
+              ? 'Email delivery could not be confirmed. Your QR passes are available below; contact support if the email does not arrive.'
+              : 'Email delivery is not confirmed yet. Your QR passes are available below.';
+        root.appendChild(emailNotice);
+
+        const ticketLinks = order.tickets.map((ticket) => {
+          const ticketUrl = new URL('ticket.html', window.location.href);
+          ticketUrl.searchParams.set('code', ticket.code);
+          return `${ticket.eventTitle || ticket.title} (${ticket.ticketType}): ${ticketUrl.href}`;
+        });
+        const message = [
+          `My Valor Africa ticket${order.tickets.length === 1 ? '' : 's'}:`,
+          ...ticketLinks,
+          'Keep these ticket links private. Show the QR pass at the event.'
+        ].join('\n');
+        const whatsappLink = document.createElement('a');
+        whatsappLink.className = 'button button-primary whatsapp-ticket-share';
+        whatsappLink.href = `https://wa.me/?text=${encodeURIComponent(message)}`;
+        whatsappLink.target = '_blank';
+        whatsappLink.rel = 'noopener noreferrer';
+        whatsappLink.textContent = 'Send tickets on WhatsApp';
+        root.appendChild(whatsappLink);
+
+        const whatsappNote = document.createElement('p');
+        whatsappNote.className = 'ticket-whatsapp-note';
+        whatsappNote.textContent = 'WhatsApp opens with a prepared message. Review it and tap Send; ticket links grant entry, so keep them private.';
+        root.appendChild(whatsappNote);
       } else if (order.status === 'paid' && order.campaign) {
         const campaign = document.createElement('p');
         campaign.textContent = `${order.campaign.eventTitle} promotion is active until ${new Date(order.campaign.endsAt).toLocaleString('en-KE')}.`;

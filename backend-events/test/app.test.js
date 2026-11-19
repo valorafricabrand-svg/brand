@@ -1043,7 +1043,10 @@ test('free registrations require an account but do not require M-Pesa', async ()
     .set(accountAuth).set('X-Order-Access', registration.body.accessToken);
   assert.equal(order.body.status, 'confirmed');
   assert.equal(order.body.amountKes, 0);
+  assert.equal(order.body.ticketEmailStatus, 'sent');
   assert.equal(order.body.tickets.length, 1);
+  assert.equal(order.body.tickets[0].eventTitle, 'Free Ticket Registration');
+  assert.equal(order.body.tickets[0].title, 'Free Ticket Registration');
   assert.match(order.body.tickets[0].qr, /^data:image\/png;base64,/);
   const accountTickets = await request(app).get('/api/account/tickets').set(accountAuth);
   assert.equal(accountTickets.status, 200);
