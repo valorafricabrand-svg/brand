@@ -625,11 +625,16 @@ img { display: block; max-width: 100%; }
 .partnership-member-area { margin-top: 36px; padding: clamp(24px, 5vw, 40px); border: 1px solid #dfe6ee; border-radius: 12px; background: #fff; }
 .partnership-member-area > .eyebrow { margin: 0 0 8px; color: #087f5b; font-size: 12px; font-weight: 800; letter-spacing: .1em; }
 .partnership-member-area > h2 { margin: 0 0 8px; font: 800 clamp(22px, 3vw, 30px)/1.2 Manrope, sans-serif; }
+.partner-dashboard-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+.partner-dashboard-nav a { display: inline-flex; min-height: 38px; align-items: center; padding: 7px 13px; border: 1px solid var(--border); border-radius: 999px; color: var(--green-dark); background: #fff; font-size: 13px; font-weight: 700; }
+.partner-dashboard-nav a:hover, .partner-dashboard-nav a[aria-current="page"] { border-color: var(--green); color: #fff; background: var(--green); }
 .partnership-member-intro { max-width: 800px; color: #596a82; }
 .partnership-application-form { display: grid; max-width: 680px; gap: 10px; margin-top: 22px; }
 .partnership-application-form label, .partnership-member-dashboard label { color: #33445b; font-size: 13px; font-weight: 700; }
 .partnership-application-form input, .partnership-application-form select, .partnership-application-form textarea, .partnership-referral-link input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); background: #fff; font: inherit; }
 .partnership-application-form textarea { min-height: 120px; resize: vertical; }
+.partner-terms-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin: 0; padding: 12px; border-radius: 9px; color: #53647a; background: var(--mint-light); font-size: 13px; line-height: 1.5; cursor: pointer; }
+.partnership-application-form .partner-terms-acknowledgement input[type="checkbox"] { appearance: auto; width: 18px; height: 18px; min-width: 18px; min-height: 18px; flex: 0 0 18px; margin: 2px 0 0; padding: 0; border: 1px solid #7b8b98; border-radius: 3px; background: #fff; accent-color: var(--green); }
 .partnership-application-form .button { width: fit-content; margin-top: 8px; }
 .partnership-account-name { color: #596a82; font-size: 13px; }
 .partnership-member-feedback { min-height: 0; color: var(--green-dark); font-size: 13px; }
@@ -1297,7 +1302,12 @@ img { display: block; max-width: 100%; }
 .testimonial-meta strong { color: var(--ink); font-size: 13px; }
 .testimonial-event-link { color: var(--green); font-size: 12.5px; font-weight: 800; }
 .testimonial-sold-out-tag { padding: 3px 9px; border-radius: 999px; color: #fff; background: #c51636; font-size: 10px; font-weight: 800; letter-spacing: .05em; }
-.testimonials-empty { margin: 0; padding: 30px; border: 1px dashed #c9d3de; border-radius: 14px; color: var(--muted); text-align: center; font-size: 14px; }
+.testimonial-sold-out-tag.is-example { background: #64748b; }
+.testimonials-grid.is-example-state { grid-template-columns: 1fr; justify-items: center; }
+.testimonials-empty { max-width: 560px; margin: 0; color: var(--muted); text-align: center; font-size: 14px; }
+.testimonial-card.is-example { max-width: 380px; border-style: dashed; border-color: #c9d3de; background: #f8fafc; }
+.testimonial-example-badge { justify-self: start; padding: 3px 9px; border-radius: 999px; color: #fff; background: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .05em; }
+.testimonial-stars.is-example { color: #9aa5b1; }
 
 @media (max-width: 900px) {
   .testimonials-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
