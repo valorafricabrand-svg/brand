@@ -45,7 +45,8 @@
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=local-live-read-fallback-1" defer></script>
-  <script src="scripts/events.js?v=payment-methods-1" defer></script>
+  <script src="scripts/events.js?v=hero-promo-1" defer></script>
+  <script src="scripts/hero-promo.js?v=1" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/branding-marquee.js?v=branding-perf-1" defer></script>
   <script src="scripts/sponsors.js?v=1" defer></script>
@@ -87,6 +88,13 @@
   </nav>
 
   <main id="main">
+    <section class="hero-promo wrap" id="heroPromo" aria-roledescription="carousel" aria-label="Valor Africa highlights" hidden>
+      <div class="hero-promo-window">
+        <div class="hero-promo-track" id="heroPromoTrack"></div>
+      </div>
+      <div class="hero-promo-dots" id="heroPromoDots" role="group" aria-label="Choose a highlight"></div>
+    </section>
+
     <section class="valor-ads wrap" aria-labelledby="valorAdsHeading">
       <div class="ad-strip">
         <div class="ad-strip-heading">

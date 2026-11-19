@@ -4,7 +4,7 @@ Valor Africa is an event discovery, publishing, ticketing, and event-promotion p
 
 ## Website
 
-- `index.html` — event discovery, approved event listings, the paid Valor Ads carousel, a "What people are saying" strip of real reviews from sold-out events, and a pausable right-to-left showcase of branding examples.
+- `index.html` — a two-panel "hero promo" carousel at the very top showing the admin-managed homepage highlights (`GET /api/ads/hero`), the paid Valor Ads carousel just below it, event discovery and approved event listings, a "What people are saying" strip of real reviews from sold-out events, and a pausable right-to-left showcase of branding examples.
 - `events.html` — searchable and filterable event listings with M-Pesa and wallet checkout, alongside the same branding showcase.
 - `account.html` — Google/email account sign-in, account session management, and sign-out. Sign-in links return users to the page they came from; the account session is maintained for the current browser tab.
 - `my-tickets.html`, `event.html`, and `organizer-dashboard.html` — account-linked ticket QR passes with event love/review feedback on ticket and event pages, organizer sales summaries, and event editing/removal when there are no active ticket orders or promotions.
@@ -88,6 +88,8 @@ Merchant payouts are records of manual transfers already made; recording a payou
 The wallet-credit and merchant-voucher flows are product implementations, not legal or regulatory approval. Before public launch, obtain Kenya-specific legal and payments advice on stored value/payment-service classification, safeguarding/customer funds, consumer disclosures, tax, merchant agreements, settlement, expiry/refund rules, and any licensing or exemption requirements. Do not accept real gift-marketplace payments until this review and the required operational controls are complete.
 
 With the API configured, the Valor Ads carousel displays events with active paid bookings. The static-only preview still contains sample artwork/listings and cannot publish events, accept checkout, or issue tickets. Existing animated artwork and configured video previews can be used; campaign-video upload management and impression analytics are not included yet.
+
+The admin dashboard's "Homepage hero slides" manager (video or image, with a title, category, description, and call-to-action) now feeds a dedicated two-panel carousel at the very top of `index.html` (`scripts/hero-promo.js`), separate from the Valor Ads carousel beneath it. Each slide's own media plays on one side while a colored panel cycling through a small accent palette shows its title, category badge, description, and call-to-action alongside a generic "Browse all events" link. It stays hidden if no hero slides are active.
 
 ### Oracle Cloud Free Tier setup
 
