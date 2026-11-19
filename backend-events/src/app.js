@@ -1048,6 +1048,11 @@ function createApp(options = {}) {
       googlePayKesPerUsd: typeof braintreeGateway.kesPerUsdRate === 'function'
         ? braintreeGateway.kesPerUsdRate()
         : null,
+      applePayConfigured: braintreeGateway.isApplePayConfigured(),
+      applePayEnvironment: typeof braintreeGateway.environment === 'function' ? braintreeGateway.environment() : null,
+      applePayKesPerUsd: typeof braintreeGateway.kesPerUsdRate === 'function'
+        ? braintreeGateway.kesPerUsdRate()
+        : null,
       phoneLinkSmsConfigured: smsGateway.isConfigured(),
       emailAuthConfigured: emailGateway.isConfigured(),
       ticketEmailsConfigured: ticketEmailGateway.isConfigured(),
@@ -1074,6 +1079,25 @@ function createApp(options = {}) {
     } catch (error) {
       console.error('Braintree client token could not be generated:', error.message);
       return res.status(502).json({ error: 'Google Pay could not be prepared. Please try another payment method.' });
+    }
+  });
+
+  app.post('/api/payments/applepay/client-token', requireAccount, async (req, res) => {
+    if (!braintreeGateway.isApplePayConfigured()) {
+      return res.status(503).json({ error: 'Apple Pay is not enabled yet. Configure Braintree and complete Apple Pay merchant setup first.' });
+    }
+    try {
+      const clientToken = await braintreeGateway.generateClientToken();
+      if (typeof clientToken !== 'string' || !clientToken) {
+        throw new Error('Braintree did not return a client token.');
+      }
+      return res.json({
+        clientToken,
+        environment: braintreeGateway.environment()
+      });
+    } catch (error) {
+      console.error('Braintree Apple Pay client token could not be generated:', error.message);
+      return res.status(502).json({ error: 'Apple Pay could not be prepared. Please try another payment method.' });
     }
   });
 
@@ -4188,7 +4212,9 @@ function createApp(options = {}) {
     }
   }
 
-  function startGooglePayTicketCheckout(res, order, amountUsd) {
+  function startBraintreeTicketCheckout(res, order, amountUsd, paymentMethod) {
+    const isApplePay = paymentMethod === 'applepay';
+    const providerName = isApplePay ? 'Apple Pay' : 'Google Pay';
     try {
       db.prepare(`
         UPDATE orders SET braintree_amount_usd=? WHERE id=? AND status='pending'
@@ -4197,15 +4223,15 @@ function createApp(options = {}) {
         orderId: order.id,
         accessToken: order.accessToken,
         status: 'pending',
-        paymentMethod: 'googlepay',
-        googlePayAmountUsd: amountUsd,
-        message: 'Continue with Google Pay to complete your ticket payment.'
+        paymentMethod,
+        ...(isApplePay ? { applePayAmountUsd: amountUsd } : { googlePayAmountUsd: amountUsd }),
+        message: `Continue with ${providerName} to complete your ticket payment.`
       });
     } catch (error) {
       db.prepare("UPDATE orders SET status='failed',result_description=? WHERE id=? AND status='pending'")
-        .run('Could not prepare Google Pay checkout.', order.id);
-      console.error('Google Pay ticket checkout could not be prepared:', error.message);
-      return res.status(503).json({ error: 'Google Pay could not start checkout. Please try another payment method.' });
+        .run(`Could not prepare ${providerName} checkout.`, order.id);
+      console.error(`${providerName} ticket checkout could not be prepared:`, error.message);
+      return res.status(503).json({ error: `${providerName} could not start checkout. Please try another payment method.` });
     }
   }
 
@@ -4321,15 +4347,15 @@ function createApp(options = {}) {
         giftRecipientName = '', giftRecipientContact = '', giftMessage = '',
         showtimeAt = '', seatLabels = [] } = req.body || {};
       const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
-      if (!['mpesa','wallet','stripe','nowpayments','paypal','googlepay'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa, Valor Wallet, Stripe Checkout, NOWPayments, PayPal, or Google Pay as the payment method.' });
+      if (!['mpesa','wallet','stripe','nowpayments','paypal','googlepay','applepay'].includes(paymentMethod)) return res.status(400).json({ error: 'Choose M-Pesa, Valor Wallet, Stripe Checkout, NOWPayments, PayPal, Google Pay, or Apple Pay as the payment method.' });
       req.wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
       if (paymentMethod === 'wallet' && !req.wallet) return res.status(409).json({ error: 'Verify and link your phone number before paying from your wallet.' });
       const phone = paymentMethod === 'wallet'
         ? req.wallet.phone
-        : paymentMethod === 'nowpayments' || paymentMethod === 'paypal' || paymentMethod === 'googlepay' ? '' : normalizePhone(inputPhone);
+        : paymentMethod === 'nowpayments' || paymentMethod === 'paypal' || paymentMethod === 'googlepay' || paymentMethod === 'applepay' ? '' : normalizePhone(inputPhone);
       if (typeof eventId !== 'string' || !eventId || typeof ticketType !== 'string' || !ticketType) return res.status(400).json({ error: 'Choose a published event and ticket type.' });
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) return res.status(400).json({ error: 'Enter the ticket buyer’s name.' });
-      if (!phone && paymentMethod !== 'nowpayments' && paymentMethod !== 'paypal' && paymentMethod !== 'googlepay') {
+      if (!phone && paymentMethod !== 'nowpayments' && paymentMethod !== 'paypal' && paymentMethod !== 'googlepay' && paymentMethod !== 'applepay') {
         return res.status(400).json({ error: 'Enter a Kenyan Safaricom M-Pesa number: 0712345678, 0112345678, or +254712345678.' });
       }
       if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 10) return res.status(400).json({ error: 'Ticket quantity must be 1–10.' });
@@ -4373,6 +4399,7 @@ function createApp(options = {}) {
         return res.status(503).json({ error: 'PayPal checkout is not enabled yet. Valor Africa must configure its PayPal credentials, webhook, and KES-to-USD rate.' });
       }
       let googlePayAmountUsd = null;
+      let applePayAmountUsd = null;
       if (price > 0 && paymentMethod === 'googlepay') {
         if (!braintreeGateway.isConfigured()) {
           return res.status(503).json({ error: 'Google Pay is not enabled yet. Valor Africa must configure Braintree credentials and Google Pay for its merchant account.' });
@@ -4386,6 +4413,21 @@ function createApp(options = {}) {
         if (!Number.isFinite(quotedAmountUsd) ||
             Math.round(quotedAmountUsd * 100) !== Math.round(googlePayAmountUsd * 100)) {
           return res.status(409).json({ error: 'The Google Pay total changed. Refresh checkout and try again.' });
+        }
+      }
+      if (price > 0 && paymentMethod === 'applepay') {
+        if (!braintreeGateway.isApplePayConfigured()) {
+          return res.status(503).json({ error: 'Apple Pay is not enabled yet. Valor Africa must configure Braintree and complete Apple Pay merchant setup.' });
+        }
+        try {
+          applePayAmountUsd = braintreeGateway.convertKesToUsd(price * quantity);
+        } catch (error) {
+          return res.status(400).json({ error: error.message });
+        }
+        const quotedAmountUsd = req.body && req.body.applePayQuotedAmountUsd;
+        if (!Number.isFinite(quotedAmountUsd) ||
+            Math.round(quotedAmountUsd * 100) !== Math.round(applePayAmountUsd * 100)) {
+          return res.status(409).json({ error: 'The Apple Pay total changed. Refresh checkout and try again.' });
         }
       }
       const referralToken = typeof req.body?.affiliateReferralToken === 'string' &&
@@ -4488,7 +4530,10 @@ function createApp(options = {}) {
         return startPayPalTicketCheckout(res, order, price * quantity, event);
       }
       if (paymentMethod === 'googlepay') {
-        return startGooglePayTicketCheckout(res, order, googlePayAmountUsd);
+        return startBraintreeTicketCheckout(res, order, googlePayAmountUsd, paymentMethod);
+      }
+      if (paymentMethod === 'applepay') {
+        return startBraintreeTicketCheckout(res, order, applePayAmountUsd, paymentMethod);
       }
       return startCheckout(res, order, price * quantity, phone);
     } catch (error) {
@@ -5022,7 +5067,8 @@ function createApp(options = {}) {
         paymentMethod: order.payment_method,
         cryptoPriceAmountUsd: order.nowpayments_price_amount_usd,
         paypalAmountUsd: order.paypal_amount_usd,
-        googlePayAmountUsd: order.braintree_amount_usd,
+        googlePayAmountUsd: order.payment_method === 'googlepay' ? order.braintree_amount_usd : null,
+        applePayAmountUsd: order.payment_method === 'applepay' ? order.braintree_amount_usd : null,
         receipt: order.status === 'paid' ? order.mpesa_receipt : '',
         ticketEmailStatus: order.order_type === 'ticket' ? order.ticket_email_status : null,
         resultDescription: order.result_description,
@@ -5105,25 +5151,30 @@ function createApp(options = {}) {
     }
   });
 
-  app.post('/api/orders/:id/googlepay-capture', requireAccount, async (req, res, next) => {
+  async function captureBraintreeTicketPayment(req, res, next, paymentMethod) {
     try {
       const order = db.prepare(`
         SELECT * FROM orders
-        WHERE id=? AND order_type='ticket' AND payment_method='googlepay'
-      `).get(req.params.id);
+        WHERE id=? AND order_type='ticket' AND payment_method=?
+      `).get(req.params.id, paymentMethod);
       if (!order || order.account_id !== req.account.id ||
           !safeOrderAccess(order, req.get('X-Order-Access'))) {
         return res.status(404).json({ error: 'Order not found.' });
       }
+      const isApplePay = paymentMethod === 'applepay';
+      const providerName = isApplePay ? 'Apple Pay' : 'Google Pay';
+      const providerConfigured = isApplePay
+        ? braintreeGateway.isApplePayConfigured()
+        : braintreeGateway.isConfigured();
       if (order.status !== 'pending') return res.json({ status: order.status });
-      if (!braintreeGateway.isConfigured()) {
-        return res.status(503).json({ error: 'Google Pay is not available right now. Please contact support before retrying.' });
+      if (!providerConfigured) {
+        return res.status(503).json({ error: `${providerName} is not available right now. Please contact support before retrying.` });
       }
       const { nonce, deviceData = '', postalCode = '' } = req.body || {};
       if (typeof nonce !== 'string' || !nonce || nonce.length > 4096 ||
           typeof deviceData !== 'string' || deviceData.length > 20000 ||
           typeof postalCode !== 'string' || postalCode.length > 32) {
-        return res.status(400).json({ error: 'Google Pay returned invalid payment details. Please try again.' });
+        return res.status(400).json({ error: `${providerName} returned invalid payment details. Please try again.` });
       }
       const claim = db.prepare(`
         UPDATE orders SET braintree_capture_started_at=datetime('now')
@@ -5133,7 +5184,7 @@ function createApp(options = {}) {
         const current = db.prepare('SELECT status FROM orders WHERE id=?').get(order.id);
         if (!current) return res.status(404).json({ error: 'Order not found.' });
         if (current.status !== 'pending') return res.json({ status: current.status });
-        return res.status(202).json({ status: 'pending', message: 'Your Google Pay payment is already being confirmed.' });
+        return res.status(202).json({ status: 'pending', message: `Your ${providerName} payment is already being confirmed.` });
       }
 
       let transaction;
@@ -5149,9 +5200,9 @@ function createApp(options = {}) {
         db.prepare(`
           UPDATE orders SET status='review',result_description=?
           WHERE id=? AND status='pending'
-        `).run('Google Pay transaction could not be confirmed; support review is required.', order.id);
+        `).run(`${providerName} transaction could not be confirmed; support review is required.`, order.id);
         console.error('Braintree ticket transaction could not be confirmed:', error.message);
-        return res.status(502).json({ error: 'We could not confirm this Google Pay payment. Please contact support before retrying.' });
+        return res.status(502).json({ error: `We could not confirm this ${providerName} payment. Please contact support before retrying.` });
       }
 
       const transactionId = transaction && typeof transaction.transactionId === 'string'
@@ -5161,22 +5212,22 @@ function createApp(options = {}) {
         db.prepare(`
           UPDATE orders SET status='failed',result_description=?,braintree_transaction_id=?
           WHERE id=? AND status='pending'
-        `).run('Google Pay payment was not approved.', transactionId, order.id);
-        return res.status(402).json({ error: 'Google Pay did not approve this payment. Please try another payment method.' });
+        `).run(`${providerName} payment was not approved.`, transactionId, order.id);
+        return res.status(402).json({ error: `${providerName} did not approve this payment. Please try another payment method.` });
       }
       if (!transactionId || !Number.isFinite(transaction.amountUsd) ||
           Math.round(transaction.amountUsd * 100) !== Math.round(order.braintree_amount_usd * 100)) {
         db.prepare(`
           UPDATE orders SET status='review',result_description=?,braintree_transaction_id=?
           WHERE id=? AND status='pending'
-        `).run('Google Pay payment details did not match this order; support review is required.', transactionId, order.id);
-        return res.status(409).json({ error: 'The Google Pay payment could not be matched to this order. Please contact support.' });
+        `).run(`${providerName} payment details did not match this order; support review is required.`, transactionId, order.id);
+        return res.status(409).json({ error: `The ${providerName} payment could not be matched to this order. Please contact support.` });
       }
       let status;
       try {
         status = completePaidTicketOrder(
           order.id,
-          'Google Pay payment confirmed by Braintree.',
+          `${providerName} payment confirmed by Braintree.`,
           transactionId
         );
       } catch (error) {
@@ -5190,13 +5241,18 @@ function createApp(options = {}) {
       return res.json({
         status: status === 'paid' ? 'completed' : status,
         message: status === 'review'
-          ? 'Your payment was received, but ticket availability needs support review.'
+          ? `Your ${providerName} payment was received, but ticket availability needs support review.`
           : undefined
       });
     } catch (error) {
       return next(error);
     }
-  });
+  }
+
+  app.post('/api/orders/:id/googlepay-capture', requireAccount,
+    (req, res, next) => captureBraintreeTicketPayment(req, res, next, 'googlepay'));
+  app.post('/api/orders/:id/applepay-capture', requireAccount,
+    (req, res, next) => captureBraintreeTicketPayment(req, res, next, 'applepay'));
 
   async function completeGiftCardMpesaPayment(callback, purchase) {
     if (purchase.status !== 'pending') return;

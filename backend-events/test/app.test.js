@@ -125,12 +125,17 @@ const paypalGateway = {
   }
 };
 let googlePayTransactionCalls = 0;
+let applePayTransactionCalls = 0;
 const braintreeGateway = {
   enabled: true,
+  applePayEnabled: true,
   lastTransaction: null,
   nextTransactionResult: null,
   isConfigured() {
     return this.enabled;
+  },
+  isApplePayConfigured() {
+    return this.enabled && this.applePayEnabled;
   },
   environment() {
     return 'TEST';
@@ -148,7 +153,9 @@ const braintreeGateway = {
     return 'test-braintree-client-token';
   },
   async createTransaction(details) {
-    googlePayTransactionCalls += 1;
+    const order = db.prepare('SELECT payment_method FROM orders WHERE id=?').get(details.orderId);
+    if (order && order.payment_method === 'applepay') applePayTransactionCalls += 1;
+    else googlePayTransactionCalls += 1;
     this.lastTransaction = details;
     const result = this.nextTransactionResult || {
       success: true,
@@ -1044,6 +1051,87 @@ test('Google Pay ticket checkout charges the verified Braintree total before iss
   assert.equal(declined.status, 402);
   assert.equal(db.prepare('SELECT status FROM orders WHERE id=?').get(declinedCheckout.body.orderId).status, 'failed');
   assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(declinedCheckout.body.orderId).total, 0);
+});
+
+test('Apple Pay ticket checkout stays gated until configured and charges the verified Braintree total once', async () => {
+  const accountAuth = createTestAccountAuth('apple-pay-ticket-buyer@example.com');
+  const event = createStoredTestEvent('Apple Pay Ticket Checkout', accountAuth);
+  const noAccountToken = await request(app).post('/api/payments/applepay/client-token');
+  assert.equal(noAccountToken.status, 401);
+
+  braintreeGateway.applePayEnabled = false;
+  const unavailable = await request(app).post('/api/payments/applepay/client-token').set(accountAuth);
+  const unavailableHealth = await request(app).get('/api/health');
+  braintreeGateway.applePayEnabled = true;
+  assert.equal(unavailable.status, 503);
+  assert.equal(unavailableHealth.body.applePayConfigured, false);
+
+  const clientToken = await request(app).post('/api/payments/applepay/client-token').set(accountAuth);
+  assert.equal(clientToken.status, 200);
+  assert.equal(clientToken.body.clientToken, 'test-braintree-client-token');
+  assert.equal(clientToken.body.environment, 'TEST');
+
+  const amountBeforeInvalidQuote = db.prepare("SELECT COUNT(*) AS total FROM orders WHERE payment_method='applepay'").get().total;
+  const invalidQuote = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Regular',
+    buyerName: 'Apple Pay Buyer',
+    quantity: 1,
+    paymentMethod: 'applepay',
+    applePayQuotedAmountUsd: 1
+  });
+  assert.equal(invalidQuote.status, 409);
+  assert.equal(db.prepare("SELECT COUNT(*) AS total FROM orders WHERE payment_method='applepay'").get().total, amountBeforeInvalidQuote);
+
+  const checkout = await request(app).post('/api/orders/tickets').set(accountAuth).send({
+    eventId: event.id,
+    ticketType: 'Regular',
+    buyerName: 'Apple Pay Buyer',
+    quantity: 1,
+    paymentMethod: 'applepay',
+    applePayQuotedAmountUsd: 9.23
+  });
+  assert.equal(checkout.status, 201);
+  assert.equal(checkout.body.paymentMethod, 'applepay');
+  assert.equal(checkout.body.applePayAmountUsd, 9.23);
+  const pending = db.prepare('SELECT * FROM orders WHERE id=?').get(checkout.body.orderId);
+  assert.equal(pending.payment_method, 'applepay');
+  assert.equal(pending.phone, '');
+  assert.equal(pending.braintree_amount_usd, 9.23);
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(pending.id).total, 0);
+
+  const invalidAccess = await request(app).post(`/api/orders/${pending.id}/applepay-capture`)
+    .set(accountAuth).send({ nonce: 'one-time-nonce' });
+  assert.equal(invalidAccess.status, 404);
+  assert.equal(applePayTransactionCalls, 0);
+
+  const captured = await request(app).post(`/api/orders/${pending.id}/applepay-capture`)
+    .set(accountAuth)
+    .set('X-Order-Access', checkout.body.accessToken)
+    .send({ nonce: 'one-time-nonce', deviceData: '{"correlationId":"test"}', postalCode: '00100' });
+  assert.equal(captured.status, 200);
+  assert.equal(captured.body.status, 'completed');
+  assert.equal(braintreeGateway.lastTransaction.amountUsd, 9.23);
+  assert.equal(braintreeGateway.lastTransaction.orderId, pending.id);
+  assert.equal(braintreeGateway.lastTransaction.postalCode, '00100');
+
+  const paid = await request(app).get(`/api/orders/${pending.id}`)
+    .set(accountAuth).set('X-Order-Access', checkout.body.accessToken);
+  assert.equal(paid.body.status, 'paid');
+  assert.equal(paid.body.paymentMethod, 'applepay');
+  assert.equal(paid.body.applePayAmountUsd, 9.23);
+  assert.equal(paid.body.tickets.length, 1);
+  assert.equal(db.prepare('SELECT braintree_transaction_id FROM orders WHERE id=?').get(pending.id).braintree_transaction_id,
+    `BRAINTREE-${pending.id}`);
+
+  const replay = await request(app).post(`/api/orders/${pending.id}/applepay-capture`)
+    .set(accountAuth)
+    .set('X-Order-Access', checkout.body.accessToken)
+    .send({ nonce: 'different-nonce' });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.body.status, 'paid');
+  assert.equal(applePayTransactionCalls, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM tickets WHERE order_id=?').get(pending.id).total, 1);
 });
 
 test('paid ticket order issues only after PayHero verifies the callback', async () => {
