@@ -457,6 +457,10 @@ test('local development origins can read the public API', async () => {
     .set('Origin', 'http://127.0.0.1:8877');
   assert.equal(heroSlides.status, 200);
   assert.equal(heroSlides.headers['access-control-allow-origin'], 'http://127.0.0.1:8877');
+  const heroHighlights = await request(app).get('/api/hero-highlights')
+    .set('Origin', 'http://127.0.0.1:8877');
+  assert.equal(heroHighlights.status, 200);
+  assert.equal(heroHighlights.headers['access-control-allow-origin'], 'http://127.0.0.1:8877');
 });
 
 test('local development origins cannot use private API routes cross-origin', async () => {
@@ -476,6 +480,9 @@ test('homepage hero slides are public, ordered, editable, and admin protected', 
   assert.equal(initial.status, 200);
   assert.equal(initial.body.slides.length, 5);
   assert.equal(initial.body.slides[0].id, 'valor-sponsored-video-promo');
+  const highlightsAlias = await request(app).get('/api/hero-highlights');
+  assert.equal(highlightsAlias.status, 200);
+  assert.deepEqual(highlightsAlias.body, initial.body);
   assert.deepEqual(initial.body.slides.slice(-2).map((slide) => slide.id), [
     'valor-featured-clip-002',
     'valor-featured-clip-001'

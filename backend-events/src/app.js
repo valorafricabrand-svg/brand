@@ -492,7 +492,7 @@ function createApp(options = {}) {
     const sameOrigin = origin && origin === `${req.protocol}://${req.get('host')}`;
     const localDevelopmentPublicRead = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin || '')
       && req.method === 'GET'
-      && ['/api/events', '/api/ads/featured', '/api/ads/hero', '/api/health'].includes(req.path);
+      && ['/api/events', '/api/ads/featured', '/api/ads/hero', '/api/hero-highlights', '/api/health'].includes(req.path);
     if (!origin || origins.includes(origin) || sameOrigin || localDevelopmentPublicRead) {
       return callback(null, {
         origin: true,
@@ -3655,12 +3655,17 @@ function createApp(options = {}) {
     });
   });
 
-  app.get('/api/ads/hero', (req, res) => {
+  function listActiveHeroSlides(req, res) {
     const slides = db.prepare(`
       SELECT * FROM hero_slides WHERE active=1 ORDER BY position ASC,created_at ASC
     `).all();
     res.json({ slides: slides.map(heroSlideFromRow) });
-  });
+  }
+  // Also served at /api/hero-highlights: some ad blockers block any request whose
+  // path contains "/ads/", and this is the homepage's own brand carousel, not a
+  // third-party ad, so it should never be silently dropped by that filtering.
+  app.get('/api/ads/hero', listActiveHeroSlides);
+  app.get('/api/hero-highlights', listActiveHeroSlides);
 
   app.get('/api/ads/admin/hero-slides', requireAdmin, (req, res) => {
     const slides = db.prepare('SELECT * FROM hero_slides ORDER BY position ASC,created_at ASC').all();

@@ -96,7 +96,7 @@
 
   async function init() {
     try {
-      const data = await window.valorEventsApi('/api/ads/hero');
+      const data = await window.valorEventsApi('/api/hero-highlights');
       const apiBase = data.apiBase;
       slides = Array.isArray(data.slides) ? data.slides.map((slide) => ({
         ...slide,
