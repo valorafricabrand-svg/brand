@@ -329,27 +329,35 @@ img { display: block; max-width: 100%; }
 .ad-strip-cta:hover { background: #056d4e; }
 .ad-stage { position: relative; height: clamp(155px, 16vw, 210px); overflow: hidden; border-radius: 16px; color: #fff; background: #111827; box-shadow: 0 16px 38px rgba(12,27,44,.15); }
 .ad-stage.is-sponsored-video-stage { height: clamp(155px, 16vw, 210px); aspect-ratio: auto; }
-.ad-slides, .ad-slide, .ad-visual { position: absolute; inset: 0; }
-.ad-slide { isolation: isolate; overflow: hidden; }
-.ad-slide[hidden] { display: none; }
-.ad-visual { z-index: -2; overflow: hidden; background: #172233; }
+.ad-slides { position: absolute; inset: 0 auto 0 0; display: flex; width: max-content; height: 100%; animation: ad-billboard-scroll var(--ad-billboard-duration, 42s) linear infinite; will-change: transform; }
+.ad-billboard-group { display: flex; width: max-content; height: 100%; flex: 0 0 auto; gap: 10px; padding: 8px; }
+.ad-slide { position: relative; display: grid; grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr); isolation: isolate; flex: 0 0 clamp(280px, 38vw, 560px); height: 100%; overflow: hidden; border: 1px solid rgba(255,255,255,.2); border-radius: 12px; background: #111827; }
+.ad-visual { position: relative; z-index: 0; grid-column: 1; min-width: 0; height: 100%; overflow: hidden; background: #172233; }
+.is-partnership-promo .ad-visual::after { background: linear-gradient(100deg, rgba(4,25,27,.94), rgba(4,53,52,.52) 65%, rgba(3,14,23,.18)); }
+.is-green-promo .ad-visual::after { background: linear-gradient(100deg, rgba(2,42,32,.96), rgba(8,127,91,.58) 70%, rgba(8,35,34,.2)); }
+.is-gold-promo .ad-visual::after { background: linear-gradient(100deg, rgba(55,32,5,.96), rgba(171,105,19,.58) 70%, rgba(31,20,11,.2)); }
+.is-blue-promo .ad-visual::after { background: linear-gradient(100deg, rgba(7,28,52,.96), rgba(29,82,133,.58) 70%, rgba(13,25,40,.2)); }
+.is-red-promo .ad-visual::after { background: linear-gradient(100deg, rgba(55,10,26,.96), rgba(155,35,67,.58) 70%, rgba(28,12,24,.2)); }
+.is-paid-event-promo .ad-category { color: #ffe49a; }
 .is-organizer-promo .ad-visual::after { display: none; }
 .ad-poster, .ad-video { width: 100%; height: 100%; object-fit: cover; object-position: center 47%; transform: scale(1.04); animation: ad-drift 16s ease-in-out infinite alternate; }
 .ad-video { display: block; }
 .is-ticket-buyer-promo .ad-video { object-position: center; transform: none; animation: none; }
 .is-sponsored-video-promo .ad-visual { background: #10131b; }
-.is-sponsored-video-promo .ad-video { object-fit: contain; object-position: center; transform: none; animation: none; }
+.is-sponsored-video-promo .ad-video { object-fit: cover; object-position: center; transform: none; animation: none; }
 .is-sponsored-video-promo .ad-visual::after { background: linear-gradient(0deg, rgba(5,10,21,.78), transparent 58%); }
-.is-sponsored-video-promo .ad-category { display: none; }
-.is-sponsored-video-promo .ad-content { right: 14px; bottom: 12px; left: clamp(14px, 3vw, 28px); max-width: 300px; text-shadow: 0 2px 10px rgba(0,0,0,.62); }
-.is-sponsored-video-promo .ad-content h2 { margin-bottom: 3px; font-size: clamp(16px, 2vw, 24px); }
-.is-sponsored-video-promo .ad-description { margin-bottom: 8px; opacity: .85; }
 .ad-visual::after { position: absolute; inset: 0; content: ""; background: linear-gradient(90deg, rgba(7,12,25,.9), rgba(7,12,25,.52) 45%, rgba(7,12,25,.12) 100%), linear-gradient(0deg, rgba(5,10,21,.52), transparent 65%); }
 .ad-motion { position: absolute; z-index: 1; inset: -40%; pointer-events: none; background: linear-gradient(113deg, transparent 42%, rgba(255,255,255,.13) 48%, transparent 53%); animation: ad-light-sweep 9s ease-in-out infinite; }
-.ad-content { position: absolute; z-index: 2; right: 16px; bottom: 13px; left: clamp(16px, 3vw, 32px); max-width: 60%; }
-.ad-category { margin-bottom: 3px; color: #d6f3e5; font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-.ad-content h2 { display: -webkit-box; overflow: hidden; max-width: 460px; margin-bottom: 3px; font: 800 clamp(15px, 1.8vw, 22px)/1.1 Manrope, sans-serif; letter-spacing: -.03em; text-wrap: balance; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
-.ad-description { display: -webkit-box; overflow: hidden; margin-bottom: 8px; color: rgba(255,255,255,.85); font-size: 11px; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
+.ad-content { position: relative; z-index: 2; display: flex; grid-column: 2; min-width: 0; height: 100%; flex-direction: column; align-items: flex-start; justify-content: center; overflow: hidden; padding: 14px clamp(13px, 1.6vw, 22px); background: linear-gradient(145deg, #073b32, #0b6751); }
+.is-gold-promo .ad-content { background: linear-gradient(145deg, #67400c, #9a5d19); }
+.is-blue-promo .ad-content { background: linear-gradient(145deg, #102d4b, #1d5279); }
+.is-red-promo .ad-content { background: linear-gradient(145deg, #57182b, #8b2947); }
+.is-sponsored-video-promo .ad-content { background: linear-gradient(145deg, #101923, #1d3440); }
+.is-organizer-promo .ad-content { background: linear-gradient(145deg, #063a2f, #087354); }
+.is-ticket-buyer-promo .ad-content { background: linear-gradient(145deg, #112b46, #245583); }
+.ad-category { display: block; max-width: 100%; margin: 0 0 5px; overflow: hidden; color: #d6f3e5; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.ad-content h2 { display: -webkit-box; overflow: hidden; max-width: 100%; margin: 0 0 5px; font: 800 clamp(15px, 1.5vw, 20px)/1.12 Manrope, sans-serif; letter-spacing: -.025em; text-wrap: balance; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.ad-description { display: -webkit-box; max-width: 100%; overflow: hidden; margin: 0 0 9px; color: rgba(255,255,255,.9); font-size: 11px; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .ad-price { margin: -4px 0 8px; color: #fff; font-size: 11px; font-weight: 800; }
 .ad-ticket-cta { display: inline-flex; min-height: 32px; align-items: center; gap: 10px; padding: 0 13px; border: 0; border-radius: 999px; color: var(--green-dark); background: #fff; font-size: 11px; font-weight: 800; }
 .ad-ticket-cta:hover { color: #fff; background: var(--green); }
@@ -366,12 +374,14 @@ img { display: block; max-width: 100%; }
 .ad-play-toggle .play-icon, .ad-play-toggle.is-paused .pause-icon, .ad-sound-toggle .sound-on-icon, .ad-sound-toggle[aria-pressed="true"] .sound-off-icon { display: none; }
 .ad-play-toggle.is-paused .play-icon, .ad-sound-toggle[aria-pressed="true"] .sound-on-icon { display: block; }
 .ad-sound-toggle[hidden] { display: none; }
+.ad-stage:hover .ad-slides, .ad-stage:focus-within .ad-slides, .ad-stage.is-paused .ad-slides { animation-play-state: paused; }
 .ad-controls { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 12px; }
 .ad-dots { display: flex; align-items: center; gap: 7px; }
 .ad-dot { width: 9px; height: 9px; padding: 0; border: 0; border-radius: 999px; background: #cbd5e1; transition: width .2s ease, background .2s ease; }
 .ad-dot.is-active { width: 28px; background: var(--green); }
 .ad-control-actions { display: flex; align-items: center; gap: 8px; }
 .ad-note { margin-right: 8px; color: #8190a1; font-size: 11px; }
+@keyframes ad-billboard-scroll { to { transform: translateX(-50%); } }
 .partner-marquee { padding: 12px 0 18px; overflow: hidden; background: #f4f7fa; }
 .partner-marquee-window { overflow: hidden; border: 1px solid #e0e7ef; border-radius: 18px; background: rgba(255,255,255,.8); box-shadow: 0 5px 20px rgba(20,39,58,.05); }
 .partner-marquee-track, .partner-marquee-group { display: flex; width: max-content; align-items: center; }
@@ -889,18 +899,16 @@ img { display: block; max-width: 100%; }
   .ad-stage { height: clamp(135px, 40vw, 175px); border-radius: 13px; }
   .ad-stage.is-sponsored-video-stage { height: clamp(135px, 40vw, 175px); aspect-ratio: auto; }
   .is-sponsored-video-promo .ad-video { object-fit: cover; }
-  .is-sponsored-video-promo .ad-visual::after { background: linear-gradient(0deg, rgba(5,10,21,.88), transparent 55%); }
-  .is-sponsored-video-promo .ad-content { right: 10px; bottom: 10px; left: 12px; max-width: none; }
-  .is-sponsored-video-promo .ad-content h2 { margin-bottom: 3px; font-size: clamp(14px, 4vw, 18px); }
-  .is-sponsored-video-promo .ad-description { margin-bottom: 6px; font-size: 10px; }
-  .is-sponsored-video-promo .ad-ticket-cta { min-height: 30px; padding-inline: 11px; font-size: 10px; }
   .is-organizer-promo .ad-video { object-position: left center; transform: none; animation: none; }
   .ad-visual::after { background: linear-gradient(90deg, rgba(7,12,25,.7), rgba(7,12,25,.18) 100%), linear-gradient(0deg, rgba(5,10,21,.56), transparent 46%); }
-  .ad-content { right: 12px; bottom: 10px; left: 13px; }
-  .ad-content h2 { display: -webkit-box; overflow: hidden; font-size: clamp(14px, 4.4vw, 19px); -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
+  .ad-slide { grid-template-columns: minmax(88px, .75fr) minmax(0, 1.25fr); }
+  .ad-content { padding: 10px 12px; }
+  .ad-category { margin-bottom: 3px; font-size: 7px; letter-spacing: .07em; }
+  .ad-content h2 { margin-bottom: 4px; font-size: clamp(12px, 3.8vw, 16px); line-height: 1.08; -webkit-line-clamp: 2; }
   .ad-content:has(.ad-price) .ad-description { display: none; }
-  .ad-description { margin-bottom: 6px; font-size: 10px; }
-  .ad-price { margin: 0 0 6px; font-size: 10px; }
+  .ad-description { margin-bottom: 5px; font-size: 9px; line-height: 1.25; -webkit-line-clamp: 2; }
+  .ad-price { margin: 0 0 5px; font-size: 9px; }
+  .ad-ticket-cta { min-height: 29px; gap: 7px; padding-inline: 10px; font-size: 10px; }
   .sponsored-badge { top: 8px; left: 10px; font-size: 8px; padding: 4px 7px; }
   .ad-play-toggle, .ad-sound-toggle { top: 7px; width: 25px; height: 25px; }
   .ad-play-toggle { right: 9px; }

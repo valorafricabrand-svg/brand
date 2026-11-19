@@ -7,6 +7,63 @@
   if (!section || !track || !dotsWrap) return;
 
   const ACCENTS = ['accent-0', 'accent-1', 'accent-2', 'accent-3', 'accent-4'];
+  const LOCAL_VIDEO_SLIDES = [
+    {
+      id: 'valor-sponsored-video-promo',
+      title: 'Valor Events and Tickets',
+      category: 'Featured on Valor Africa',
+      description: 'Explore experiences and find your next event.',
+      mediaType: 'video',
+      mediaUrl: 'videos/valor-sponsored-video.mp4',
+      posterUrl: 'images/events/video-ad-poster.svg',
+      linkUrl: 'events.html',
+      ctaLabel: 'Get tickets now'
+    },
+    {
+      id: 'valor-ticket-buyer-promo',
+      title: 'Your next great experience starts here.',
+      category: 'For ticket buyers',
+      description: 'Discover concerts, festivals and experiences across Africa.',
+      mediaType: 'video',
+      mediaUrl: 'videos/valor-ticket-buyer.mp4',
+      posterUrl: 'images/events/valor-ticket-buyer-cover.jpg',
+      linkUrl: 'events.html',
+      ctaLabel: 'Explore events'
+    },
+    {
+      id: 'valor-organizer-promo',
+      title: 'Grow your event with Valor Africa',
+      category: 'For organizers',
+      description: 'Create your event listing, set ticket prices, and promote with Valor Ads.',
+      mediaType: 'video',
+      mediaUrl: 'videos/valor-ads-organizer-intro.mp4',
+      posterUrl: 'images/events/valor-ads-promo-poster.svg',
+      linkUrl: 'host.html',
+      ctaLabel: 'Host with Valor'
+    },
+    {
+      id: 'valor-featured-clip-002',
+      title: 'Discover Valor Africa',
+      category: 'Featured on Valor Africa',
+      description: 'Explore events and experiences across Africa.',
+      mediaType: 'video',
+      mediaUrl: 'videos/valor-featured-clip-002.mp4',
+      posterUrl: 'images/events/video-ad-poster.svg',
+      linkUrl: 'events.html',
+      ctaLabel: 'Explore events'
+    },
+    {
+      id: 'valor-featured-clip-001',
+      title: 'Discover Valor Africa',
+      category: 'Featured on Valor Africa',
+      description: 'Explore events and experiences across Africa.',
+      mediaType: 'video',
+      mediaUrl: 'videos/valor-featured-clip-001.mp4',
+      posterUrl: 'images/events/video-ad-poster.svg',
+      linkUrl: 'events.html',
+      ctaLabel: 'Explore events'
+    }
+  ];
   let slides = [];
   let active = 0;
   let timer = null;
@@ -26,12 +83,13 @@
     visual.className = 'hero-promo-visual';
     if (slideData.mediaType === 'video' && slideData.mediaUrl) {
       const video = document.createElement('video');
-      video.src = slideData.mediaUrl;
       if (slideData.posterUrl) video.poster = slideData.posterUrl;
+      video.dataset.src = slideData.mediaUrl;
       video.muted = true;
       video.loop = true;
       video.playsInline = true;
-      video.preload = index === 0 ? 'auto' : 'metadata';
+      video.preload = 'none';
+      video.setAttribute('muted', '');
       video.setAttribute('aria-label', `Highlight video: ${slideData.title}`);
       visual.appendChild(video);
     } else {
@@ -76,8 +134,16 @@
       slide.classList.toggle('is-active', isActive);
       const video = slide.querySelector('video');
       if (video) {
-        if (isActive) video.play().catch(() => {});
-        else video.pause();
+        video.autoplay = isActive;
+        video.preload = isActive ? 'auto' : 'none';
+        if (isActive) {
+          if (!video.src) video.src = video.dataset.src;
+          video.setAttribute('autoplay', '');
+          video.play().catch(() => {});
+        } else {
+          video.pause();
+          video.removeAttribute('autoplay');
+        }
       }
     });
     [...dotsWrap.children].forEach((dot, dotIndex) => dot.classList.toggle('is-active', dotIndex === active));
@@ -91,20 +157,41 @@
   function startRotation() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     stopRotation();
-    timer = window.setInterval(() => showSlide(active + 1), 7000);
+    timer = window.setInterval(() => showSlide(active + 1), 16000);
   }
 
   async function init() {
+    slides = LOCAL_VIDEO_SLIDES;
+    track.replaceChildren(...slides.map(createSlide));
+    dotsWrap.replaceChildren(...slides.map((_, index) => {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'hero-promo-dot';
+      dot.setAttribute('aria-label', `Go to highlight ${index + 1}`);
+      dot.addEventListener('click', () => { showSlide(index); startRotation(); });
+      return dot;
+    }));
+    showSlide(0);
+    section.hidden = false;
+    startRotation();
+    section.addEventListener('mouseenter', stopRotation);
+    section.addEventListener('mouseleave', startRotation);
+    section.addEventListener('focusin', stopRotation);
+    section.addEventListener('focusout', (event) => {
+      if (!section.contains(event.relatedTarget)) startRotation();
+    });
+
     try {
       const data = await window.valorEventsApi('/api/hero-highlights');
       const apiBase = data.apiBase;
-      slides = Array.isArray(data.slides) ? data.slides.map((slide) => ({
+      const remoteSlides = Array.isArray(data.slides) ? data.slides.map((slide) => ({
         ...slide,
         mediaUrl: resolveAsset(slide.mediaUrl, apiBase),
         posterUrl: resolveAsset(slide.posterUrl, apiBase)
-      })) : [];
-      if (!slides.length) return;
+      })).sort((left, right) => Number(right.mediaType === 'video') - Number(left.mediaType === 'video')) : [];
+      if (!remoteSlides.length) return;
 
+      slides = remoteSlides;
       track.replaceChildren(...slides.map(createSlide));
       dotsWrap.replaceChildren(...slides.map((_, index) => {
         const dot = document.createElement('button');
@@ -115,16 +202,9 @@
         return dot;
       }));
       showSlide(0);
-      section.hidden = false;
       startRotation();
-      section.addEventListener('mouseenter', stopRotation);
-      section.addEventListener('mouseleave', startRotation);
-      section.addEventListener('focusin', stopRotation);
-      section.addEventListener('focusout', (event) => {
-        if (!section.contains(event.relatedTarget)) startRotation();
-      });
     } catch (error) {
-      console.error('Could not load the homepage hero highlights:', error.message);
+      console.warn('Using the built-in homepage videos because the hero service is unavailable:', error.message);
     }
   }
 

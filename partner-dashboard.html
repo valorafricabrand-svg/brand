@@ -12,12 +12,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/events.css?v=real-reviews-1">
+  <link rel="stylesheet" href="styles/events.css?v=partner-auto-2">
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
-  <script src="scripts/partnership.js?v=partner-dashboard-1" defer></script>
+  <script src="scripts/partnership.js?v=partner-auto-2" defer></script>
   <script src="scripts/sponsorship.js?v=partner-dashboard-1" defer></script>
-  <script src="scripts/partner-dashboard.js?v=1" defer></script>
+  <script src="scripts/partner-dashboard.js?v=partner-auto-2" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
   <script src="scripts/nav-history.js?v=1" defer></script>
@@ -44,10 +44,19 @@
     <section class="wrap partnership-dashboard">
       <div class="partnership-dashboard-heading">
         <p class="eyebrow">ONE ONLINE PARTNER PORTAL</p>
-        <h1>Partner dashboard</h1>
-        <p>Sign in once to manage sponsorships, submit and track program inquiries, and explore investment. Routine steps happen online; no in-person meeting is required to apply or pay for a published sponsorship package.</p>
-        <p class="partnership-requirement">Sponsorships go live after payment is confirmed. Other programs and investment inquiries remain subject to review; an inquiry is not approval or a contract.</p>
+        <h1 id="partnerDashboardTitle">Partner dashboard</h1>
+        <p id="partnerDashboardIntro">Choose a program dashboard to apply, manage your activity, and get started online without waiting for application review.</p>
+        <p id="partnerDashboardAvailability" class="partnership-requirement">Published sponsorships activate after payment confirmation. Non-investment applications activate automatically after submission. Investment remains a non-binding inquiry.</p>
       </div>
+
+      <nav class="partner-dashboard-nav" aria-label="Choose a partner dashboard">
+        <a href="partner-dashboard.html?program=sponsor#sponsorship" data-program-link="sponsor">Sponsor</a>
+        <a href="organizer-dashboard.html" data-program-link="organizer">Organizer</a>
+        <a href="partner-dashboard.html?program=creator#creator-application" data-program-link="creator">Creator / affiliate</a>
+        <a href="partner-dashboard.html?program=artist#artist-application" data-program-link="artist">Artist / DJ</a>
+        <a href="partner-dashboard.html?program=branding#branding-application" data-program-link="branding">Event branding</a>
+        <a href="partner-dashboard.html?program=investment#investment" data-program-link="investment">Investment inquiry</a>
+      </nav>
 
       <section class="partnership-member-area" id="partnerDashboardSignedOut" aria-labelledby="partnerDashboardSignInTitle">
         <p class="eyebrow">ACCOUNT REQUIRED</p>
@@ -64,7 +73,7 @@
         <form class="partnership-application-form" id="partnerTermsForm">
           <label for="partnerTermsSignerName">Your full name</label>
           <input id="partnerTermsSignerName" name="signerName" maxlength="160" autocomplete="name" required>
-          <label class="account-wallet-note">
+          <label class="partner-terms-acknowledgement">
             <input id="partnerTermsAcknowledged" name="acknowledged" type="checkbox" required>
             I have read and acknowledge this draft for review. I understand this acknowledgement does not create a binding agreement or investment commitment.
           </label>
@@ -76,7 +85,7 @@
       <div id="partnerDashboardContent" hidden>
         <p class="page-feedback" id="partnerDashboardFeedback" role="status" aria-live="polite"></p>
 
-        <section class="partnership-member-area" id="sponsorship" aria-labelledby="sponsorshipDashboardTitle">
+        <section class="partnership-member-area" id="sponsorship" data-partner-program="sponsor" aria-labelledby="sponsorshipDashboardTitle">
           <p class="eyebrow">EVENT SPONSORSHIPS</p>
           <h2 id="sponsorshipDashboardTitle">Choose a package and track your campaign</h2>
           <p>Sign in is required. Your sponsor placement activates automatically after payment is confirmed and runs for the duration shown on the package.</p>
@@ -130,16 +139,16 @@
           </div>
         </section>
 
-        <section class="partnership-member-area business-partnership-applications" aria-labelledby="partnerApplicationsTitle">
+        <section class="partnership-member-area business-partnership-applications" id="businessPartnershipApplications" aria-labelledby="partnerApplicationsTitle">
           <p class="eyebrow">ONLINE APPLICATIONS</p>
           <h2 id="partnerApplicationsTitle">Apply and track partner programs</h2>
-          <p class="partnership-member-intro">Submit details and follow status here. Reviews and any custom pricing or commission terms are handled online; applications do not guarantee activation.</p>
+          <p class="partnership-member-intro" id="partnerApplicationsIntro">Apply online. Complete non-investment applications activate automatically; no manual application review is required.</p>
           <div id="businessPartnerSignedOut" hidden>
             <p>Sign in to submit an inquiry and track its status.</p>
             <a class="button button-primary" href="account.html?returnTo=%2Fpartner-dashboard.html">Sign in to continue</a>
           </div>
           <div class="business-partnership-grid">
-            <section class="business-partnership-form-card" id="organizer-application" aria-labelledby="organizer-application-title">
+            <section class="business-partnership-form-card" id="organizer-application" data-partner-program="organizer" aria-labelledby="organizer-application-title">
               <h3 id="organizer-application-title">Organizer partner</h3>
               <p>Tell us about your events and the support you are exploring.</p>
               <p id="organizerApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
@@ -156,7 +165,7 @@
                 <button class="button button-primary" type="submit">Submit organizer inquiry</button>
               </form>
             </section>
-            <section class="business-partnership-form-card" id="sponsor-application" aria-labelledby="sponsor-application-title">
+            <section class="business-partnership-form-card" id="sponsor-application" data-partner-program="sponsor" aria-labelledby="sponsor-application-title">
               <h3 id="sponsor-application-title">Custom sponsorship proposal</h3>
               <p>For campaigns outside the published packages, share your goals and timing for online follow-up.</p>
               <p id="sponsorApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
@@ -173,7 +182,7 @@
                 <button class="button button-primary" type="submit">Submit sponsor inquiry</button>
               </form>
             </section>
-            <section class="business-partnership-form-card" id="artist-application" aria-labelledby="artist-application-title">
+            <section class="business-partnership-form-card" id="artist-application" data-partner-program="artist" aria-labelledby="artist-application-title">
               <h3 id="artist-application-title">Artist or DJ profile</h3>
               <p>Request a profile or booking introduction. A profile does not guarantee a booking.</p>
               <p id="artistApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
@@ -190,7 +199,7 @@
                 <button class="button button-primary" type="submit">Submit artist inquiry</button>
               </form>
             </section>
-            <section class="business-partnership-form-card" id="branding-application" aria-labelledby="branding-application-title">
+            <section class="business-partnership-form-card" id="branding-application" data-partner-program="branding" aria-labelledby="branding-application-title">
               <h3 id="branding-application-title">Event branding</h3>
               <p>Request a quote for event branding and production. Work begins only after a written quote is accepted.</p>
               <p id="brandingApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
@@ -207,7 +216,7 @@
                 <button class="button button-primary" type="submit">Request a branding quote</button>
               </form>
             </section>
-            <section class="business-partnership-form-card" id="investment" aria-labelledby="investmentApplicationTitle">
+            <section class="business-partnership-form-card" id="investment" data-partner-program="investment" aria-labelledby="investmentApplicationTitle">
               <h3 id="investmentApplicationTitle">Investment interest</h3>
               <p>This is a non-binding inquiry only—not an offer, subscription, commitment, or promise of returns. Any investment requires separate due diligence and final documents.</p>
               <p id="investmentApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
@@ -228,10 +237,10 @@
           </div>
         </section>
 
-        <section class="partnership-member-area" id="creator-application" aria-labelledby="creator-application-title">
+        <section class="partnership-member-area" id="creator-application" data-partner-program="creator" aria-labelledby="creator-application-title">
           <p class="eyebrow">CREATOR &amp; AFFILIATE PROGRAM</p>
-          <h2 id="creator-application-title">Apply and track referrals</h2>
-          <p class="partnership-member-intro">We review applications online. Commission is agreed individually before activation and is credited only after attributed ticket orders are paid.</p>
+          <h2 id="creator-application-title">Get your referral link</h2>
+          <p class="partnership-member-intro">Creator accounts activate automatically. New accounts earn 5% of eligible paid ticket sales attributed to their link.</p>
           <p class="partnership-member-feedback" id="partnerFeedback" role="status" aria-live="polite"></p>
           <div id="partnerSignedOut" hidden>
             <p>Sign in to apply or view your creator partner account.</p>
@@ -248,7 +257,7 @@
             <input id="partnerProfileUrl" name="profileUrl" type="url" maxlength="2048" placeholder="https://..." required>
             <label for="partnerAudienceDescription">Tell us about your audience and how you would promote events</label>
             <textarea id="partnerAudienceDescription" name="audienceDescription" minlength="20" maxlength="1500" rows="4" required></textarea>
-            <button class="button button-primary" type="submit">Submit creator application</button>
+            <button class="button button-primary" type="submit">Activate my creator account</button>
           </form>
           <div class="partnership-member-dashboard" id="partnerDashboard" hidden>
             <h3 id="partnerStatusHeading"></h3>
@@ -257,12 +266,12 @@
             <div id="partnerApprovedDetails" hidden>
               <label for="partnerReferralUrl">Your referral link</label>
               <div class="partnership-referral-link"><input id="partnerReferralUrl" type="url" readonly><button class="button" id="copyPartnerLink" type="button">Copy link</button></div>
-              <p class="field-hint">The last valid click is attributed for 30 days. Commissions are calculated on paid ticket subtotal only.</p>
+              <p class="field-hint">The last valid click is attributed for 30 days. Earn 5% of the recorded total for each eligible paid ticket order.</p>
               <a class="partnership-share-whatsapp" id="sharePartnerWhatsapp" target="_blank" rel="noopener noreferrer">Share your link on WhatsApp</a>
               <dl class="partnership-partner-stats">
                 <div><dt>Link visits</dt><dd id="partnerClicks">0</dd></div>
                 <div><dt>Paid ticket orders</dt><dd id="partnerConversions">0</dd></div>
-                <div><dt>Agreed commission</dt><dd id="partnerRate">—</dd></div>
+                <div><dt>Commission rate</dt><dd id="partnerRate">—</dd></div>
                 <div><dt>Earned</dt><dd id="partnerEarned">KES 0</dd></div>
                 <div><dt>Paid out</dt><dd id="partnerPaid">KES 0</dd></div>
                 <div><dt>Balance due</dt><dd id="partnerDue">KES 0</dd></div>

@@ -480,6 +480,14 @@ test('homepage hero slides are public, ordered, editable, and admin protected', 
   assert.equal(initial.status, 200);
   assert.equal(initial.body.slides.length, 5);
   assert.equal(initial.body.slides[0].id, 'valor-sponsored-video-promo');
+  assert.ok(initial.body.slides.every((slide) => slide.mediaType === 'video'));
+  assert.deepEqual(initial.body.slides.map((slide) => slide.mediaUrl), [
+    'videos/valor-sponsored-video.mp4',
+    'videos/valor-ticket-buyer.mp4',
+    'videos/valor-ads-organizer-intro.mp4',
+    'videos/valor-featured-clip-002.mp4',
+    'videos/valor-featured-clip-001.mp4'
+  ]);
   const highlightsAlias = await request(app).get('/api/hero-highlights');
   assert.equal(highlightsAlias.status, 200);
   assert.deepEqual(highlightsAlias.body, initial.body);
@@ -1395,7 +1403,7 @@ test('partner terms acknowledgement is authenticated and required before partner
   assert.equal((await request(app).get('/api/sponsorships/me').set(auth)).status, 200);
 });
 
-test('creator partners earn attributable commissions only on paid ticket orders and admins record payouts', async () => {
+test('creator partners activate immediately at 5% and earn attributable commissions only on paid ticket orders', async () => {
   const creatorAuth = createTestAccountAuth('creator-partner@example.com');
   assert.equal((await request(app).post('/api/partners/apply').send({})).status, 401);
   const invalidApplication = await request(app).post('/api/partners/apply').set(creatorAuth).send({
@@ -1410,23 +1418,34 @@ test('creator partners earn attributable commissions only on paid ticket orders 
     audienceDescription: 'I share Nairobi music and community events with my local audience.'
   });
   assert.equal(application.status, 201);
-  assert.equal((await request(app).get('/api/partners/me').set(creatorAuth)).body.partner.status, 'pending');
+  assert.equal(application.body.status, 'approved');
+  assert.equal(application.body.commissionPercent, 5);
+  const creatorDashboardBeforePayment = await request(app).get('/api/partners/me').set(creatorAuth);
+  assert.equal(creatorDashboardBeforePayment.body.partner.status, 'approved');
+  assert.equal(creatorDashboardBeforePayment.body.partner.commissionPercent, 5);
   const partnerId = db.prepare('SELECT id FROM affiliate_partners WHERE account_id=?')
     .get(db.prepare('SELECT id FROM accounts WHERE email=?').get('creator-partner@example.com').id).id;
-  const missingRate = await request(app).patch(`/api/partners/admin/${partnerId}`).set(admin).send({ status: 'approved' });
-  assert.equal(missingRate.status, 400);
-  const approval = await request(app).patch(`/api/partners/admin/${partnerId}`).set(admin).send({
-    status: 'approved',
-    commissionPercent: 10
+  const referralCode = creatorDashboardBeforePayment.body.partner.referralCode;
+  assert.match(referralCode, /^[A-F0-9]{10}$/);
+  db.prepare("UPDATE affiliate_partners SET status='pending',commission_percent=NULL WHERE id=?").run(partnerId);
+  const legacyPartner = await request(app).get('/api/partners/me').set(creatorAuth);
+  assert.equal(legacyPartner.body.partner.status, 'approved');
+  assert.equal(legacyPartner.body.partner.commissionPercent, 5);
+  assert.equal(legacyPartner.body.partner.referralCode, referralCode);
+  const updatedCreator = await request(app).post('/api/partners/apply').set(creatorAuth).send({
+    socialPlatform: 'TikTok',
+    profileUrl: 'https://tiktok.example/creator',
+    audienceDescription: 'I share local music events and ticket offers with my TikTok community.'
   });
-  assert.equal(approval.status, 200);
-  assert.match(approval.body.referralCode, /^[A-F0-9]{10}$/);
+  assert.equal(updatedCreator.status, 200);
+  assert.equal(updatedCreator.body.referralCode, referralCode);
+  assert.equal(updatedCreator.body.commissionPercent, 5);
   assert.equal((await request(app).get('/api/partners/admin')).status, 401);
   const adminPartnerList = await request(app).get('/api/partners/admin').set(admin);
   assert.equal(adminPartnerList.status, 200);
-  assert.equal(adminPartnerList.body.partners.find((partner) => partner.id === partnerId).commissionPercent, 10);
+  assert.equal(adminPartnerList.body.partners.find((partner) => partner.id === partnerId).commissionPercent, 5);
 
-  const visit = await request(app).post('/api/partners/visit').send({ code: approval.body.referralCode });
+  const visit = await request(app).post('/api/partners/visit').send({ code: referralCode });
   assert.equal(visit.status, 201);
   const inactiveVisit = await request(app).post('/api/partners/visit').send({ code: '0000000000' });
   assert.equal(inactiveVisit.status, 404);
@@ -1446,23 +1465,18 @@ test('creator partners earn attributable commissions only on paid ticket orders 
   assert.equal(ticketOrder.status, 201);
   const order = db.prepare('SELECT * FROM orders WHERE id=?').get(ticketOrder.body.orderId);
   assert.equal(order.affiliate_partner_id, partnerId);
-  assert.equal(order.affiliate_commission_percent, 10);
+  assert.equal(order.affiliate_commission_percent, 5);
   assert.equal((await request(app).get('/api/partners/me').set(creatorAuth)).body.partner.earnedKes, 0);
-  const updatedRate = await request(app).patch(`/api/partners/admin/${partnerId}`).set(admin).send({
-    status: 'approved',
-    commissionPercent: 15
-  });
-  assert.equal(updatedRate.status, 200);
   const paid = await completePayment(order.checkout_request_id, order.merchant_request_id, 2400, 'AFFILIATE01');
   assert.equal(paid.status, 200);
   const creatorDashboard = await request(app).get('/api/partners/me').set(creatorAuth);
   assert.equal(creatorDashboard.body.partner.clicks, 1);
   assert.equal(creatorDashboard.body.partner.conversions, 1);
-  assert.equal(creatorDashboard.body.partner.earnedKes, 240);
-  assert.equal(creatorDashboard.body.partner.dueKes, 240);
+  assert.equal(creatorDashboard.body.partner.earnedKes, 120);
+  assert.equal(creatorDashboard.body.partner.dueKes, 120);
 
   const excessPayout = await request(app).post(`/api/partners/admin/${partnerId}/payout`).set(admin).send({
-    amountKes: 241,
+    amountKes: 121,
     reference: 'MPESA-REF-1'
   });
   assert.equal(excessPayout.status, 409);
@@ -1474,9 +1488,9 @@ test('creator partners earn attributable commissions only on paid ticket orders 
   assert.equal(payout.status, 201);
   const afterPayout = await request(app).get('/api/partners/me').set(creatorAuth);
   assert.equal(afterPayout.body.partner.paidKes, 100);
-  assert.equal(afterPayout.body.partner.dueKes, 140);
+  assert.equal(afterPayout.body.partner.dueKes, 20);
   const finalAdminPartner = await request(app).get('/api/partners/admin').set(admin);
-  assert.equal(finalAdminPartner.body.partners.find((partner) => partner.id === partnerId).dueKes, 140);
+  assert.equal(finalAdminPartner.body.partners.find((partner) => partner.id === partnerId).dueKes, 20);
   const duplicatePayout = await request(app).post(`/api/partners/admin/${partnerId}/payout`).set(admin).send({
     amountKes: 1,
     reference: 'mpesa-ref-1'
@@ -1521,6 +1535,7 @@ test('organizer and sponsor partnership applications support secure follow-up an
       applicationDetails: 'We want to discuss a bespoke sponsorship outside the standard packages.'
     });
   assert.equal(customProposal.status, 201);
+  assert.equal(customProposal.body.status, 'approved');
 
   const invalidTier = await request(app).post('/api/partnership-applications')
     .set(applicantAuth)
@@ -1544,8 +1559,8 @@ test('organizer and sponsor partnership applications support secure follow-up an
       requestedSupport: 'Event discovery and launch promotion.'
     });
   assert.equal(organizer.status, 201);
-  assert.equal(organizer.body.status, 'pending');
-  assert.match(organizer.body.message, /separate written confirmation/);
+  assert.equal(organizer.body.status, 'approved');
+  assert.match(organizer.body.message, /active immediately.*no manual application review/i);
   const duplicate = await request(app).post('/api/partnership-applications')
     .set(applicantAuth)
     .set('X-Forwarded-For', '198.51.100.50')
@@ -1554,7 +1569,8 @@ test('organizer and sponsor partnership applications support secure follow-up an
       organizationName: 'Nairobi Events Collective',
       applicationDetails: 'We organize regular community and music events in Nairobi and would like to discuss listing and promotion.'
     });
-  assert.equal(duplicate.status, 409);
+  assert.equal(duplicate.status, 200);
+  assert.equal(duplicate.body.status, 'approved');
 
   const sponsor = await request(app).post('/api/partnership-applications')
     .set(applicantAuth)
@@ -1567,6 +1583,7 @@ test('organizer and sponsor partnership applications support secure follow-up an
       requestedSupport: 'Nairobi event sponsorship and brand activations.'
     });
   assert.equal(sponsor.status, 201);
+  assert.equal(sponsor.body.status, 'approved');
     const artist = await request(app).post('/api/partnership-applications')
       .set(applicantAuth)
       .send({
@@ -1575,6 +1592,7 @@ test('organizer and sponsor partnership applications support secure follow-up an
         applicationDetails: 'I would like a profile to showcase my DJ work and event performance history.'
       });
     assert.equal(artist.status, 201);
+      assert.equal(artist.body.status, 'approved');
     const branding = await request(app).post('/api/partnership-applications')
       .set(applicantAuth)
       .send({
@@ -1583,6 +1601,7 @@ test('organizer and sponsor partnership applications support secure follow-up an
         applicationDetails: 'We need event branding materials and a quote for a December event in Nairobi.'
       });
     assert.equal(branding.status, 201);
+      assert.equal(branding.body.status, 'approved');
     const investment = await request(app).post('/api/partnership-applications')
       .set(applicantAuth)
       .send({
@@ -1591,7 +1610,10 @@ test('organizer and sponsor partnership applications support secure follow-up an
         applicationDetails: 'I would like to explore a non-binding investment discussion with the company.'
       });
     assert.equal(investment.status, 201);
+      assert.equal(investment.body.status, 'received');
     assert.match(investment.body.message, /not an investment offer or commitment/);
+      assert.match(investment.body.message, /without an application review/);
+  db.prepare("UPDATE partnership_applications SET status='pending' WHERE id=?").run(organizer.body.id);
   const mine = await request(app).get('/api/partnership-applications/me').set(applicantAuth);
   assert.equal(mine.status, 200);
     assert.deepEqual(mine.body.applications.map((application) => application.type), ['artist','branding','investment','organizer','sponsor']);
@@ -1599,6 +1621,8 @@ test('organizer and sponsor partnership applications support secure follow-up an
   assert.equal(mineSponsor.sponsorshipTier, 'premium');
   const mineOrganizer = mine.body.applications.find((application) => application.type === 'organizer');
   assert.equal(mineOrganizer.sponsorshipTier, '');
+  assert.equal(mineOrganizer.status, 'approved');
+  assert.equal(mine.body.applications.find((application) => application.type === 'investment').status, 'received');
 
   assert.equal((await request(app).get('/api/partnership-applications/admin')).status, 401);
   const adminList = await request(app).get('/api/partnership-applications/admin').set(admin);
@@ -1637,10 +1661,10 @@ test('organizer and sponsor partnership applications support secure follow-up an
       applicationDetails: 'We want to reach local event communities with a brand campaign and discuss possible activations.',
       requestedSupport: 'Nairobi event sponsorship and brand activations.'
     });
-  assert.equal(resubmittedSponsor.status, 201);
+  assert.equal(resubmittedSponsor.status, 200);
   const updatedSponsor = (await request(app).get('/api/partnership-applications/me')
     .set(applicantAuth)).body.applications.find((application) => application.type === 'sponsor');
-  assert.equal(updatedSponsor.status, 'pending');
+  assert.equal(updatedSponsor.status, 'approved');
   assert.equal(updatedSponsor.adminNote, '');
   assert.equal(updatedSponsor.sponsorshipTier, 'community');
 });

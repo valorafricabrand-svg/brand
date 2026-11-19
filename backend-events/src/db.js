@@ -266,7 +266,7 @@ db.exec(`
     application_details TEXT NOT NULL,
     requested_support TEXT NOT NULL DEFAULT '',
     sponsorship_tier TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','contacted','approved','rejected','closed')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','received','contacted','approved','rejected','closed')),
     admin_note TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -705,7 +705,7 @@ if (!partnershipApplicationColumns.some((column) => column.name === 'sponsorship
 const partnershipApplicationsSchema = db.prepare(`
   SELECT sql FROM sqlite_master WHERE type='table' AND name='partnership_applications'
 `).get().sql;
-if (!partnershipApplicationsSchema.includes("'investment'")) {
+if (!partnershipApplicationsSchema.includes("'investment'") || !partnershipApplicationsSchema.includes("'received'")) {
   db.exec('PRAGMA foreign_keys = OFF');
   try {
     db.exec(`
@@ -719,7 +719,7 @@ if (!partnershipApplicationsSchema.includes("'investment'")) {
         application_details TEXT NOT NULL,
         requested_support TEXT NOT NULL DEFAULT '',
         sponsorship_tier TEXT NOT NULL DEFAULT '',
-        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','contacted','approved','rejected','closed')),
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','received','contacted','approved','rejected','closed')),
         admin_note TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -731,7 +731,13 @@ if (!partnershipApplicationsSchema.includes("'investment'")) {
         requested_support,sponsorship_tier,status,admin_note,created_at,updated_at,reviewed_at
       )
       SELECT id,account_id,application_type,organization_name,website_url,application_details,
-        requested_support,sponsorship_tier,status,admin_note,created_at,updated_at,reviewed_at
+        requested_support,sponsorship_tier,
+        CASE
+          WHEN application_type='investment' AND status='pending' THEN 'received'
+          WHEN application_type!='investment' AND status IN ('pending','contacted') THEN 'approved'
+          ELSE status
+        END,
+        admin_note,created_at,updated_at,reviewed_at
       FROM partnership_applications;
       DROP TABLE partnership_applications;
       ALTER TABLE partnership_applications_new RENAME TO partnership_applications;

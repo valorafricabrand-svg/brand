@@ -44,7 +44,14 @@
     const note = document.getElementById('partnerAdminNote');
     const approvedDetails = document.getElementById('partnerApprovedDetails');
     const editButton = document.getElementById('editPartnerApplication');
-    editButton.hidden = partner.status !== 'rejected';
+    editButton.hidden = !['approved','rejected'].includes(partner.status);
+    editButton.textContent = partner.status === 'approved' ? 'Edit creator profile' : 'Update application';
+    editButton.onclick = () => {
+      const updateForm = document.getElementById('partnerUpdateForm');
+      fillForm(updateForm, partner);
+      updateForm.hidden = false;
+      updateForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
     document.getElementById('partnerUpdateForm').hidden = true;
     note.hidden = !partner.adminNote;
     note.textContent = partner.adminNote ? `Review note: ${partner.adminNote}` : '';
@@ -52,7 +59,7 @@
 
     if (partner.status === 'approved') {
       heading.textContent = 'Your creator partner account is active';
-      description.textContent = 'Share your unique link. Verified ticket purchases made within 30 days of the last referral click are tracked here.';
+      description.textContent = `Your account activated automatically with a ${Number(partner.commissionPercent)}% commission on eligible paid ticket sales. Share your unique link and track referrals here.`;
       document.getElementById('partnerReferralUrl').value = partner.referralUrl;
       document.getElementById('sharePartnerWhatsapp').href =
         `https://wa.me/?text=${encodeURIComponent(`Discover events on Valor Africa: ${partner.referralUrl}`)}`;
@@ -68,7 +75,7 @@
         ? 'Your application is awaiting review'
         : partner.status === 'suspended' ? 'Your creator partner account is paused' : 'Your application needs an update';
       description.textContent = partner.status === 'pending'
-        ? 'We will review your profile and contact you before activating a referral link or agreeing a commission rate.'
+        ? 'Your account is being activated automatically. Refresh this page to load your referral link.'
         : partner.status === 'suspended'
           ? 'Your referral link is paused. Contact Valor Africa if you have questions about your account.'
           : 'Review the note below, update your application, and resubmit it for review.';
@@ -124,9 +131,6 @@
       event.preventDefault();
       submitApplication(event.currentTarget);
     });
-    document.getElementById('editPartnerApplication').addEventListener('click', () => {
-      document.getElementById('partnerUpdateForm').hidden = false;
-    });
     document.getElementById('copyPartnerLink').addEventListener('click', async () => {
       const input = document.getElementById('partnerReferralUrl');
       try {
@@ -165,18 +169,22 @@
     const heading = document.createElement('strong');
     const copy = document.createElement('p');
     const note = document.createElement('p');
-    heading.textContent = `Application status: ${application.status}`;
-    copy.textContent = application.status === 'pending'
-      ? 'Your inquiry is in the review queue. We will follow up using your Valor Africa account email.'
-      : application.status === 'contacted'
-        ? 'Our team has started follow-up. Check the review note below or your account email.'
-        : application.status === 'approved'
-        ? entry.type === 'investment'
-          ? 'Your non-binding investment inquiry is approved for further discussion. It is not an investment offer or commitment; any investment requires separate due diligence and signed legal documents.'
-          : 'Your partnership inquiry is approved for follow-up. Confirm any fees, deliverables, budget, and agreement directly with Valor Africa before proceeding.'
-          : application.status === 'rejected'
-            ? 'Your inquiry needs an update. Review the note and edit your details below before resubmitting.'
-            : 'This inquiry is closed. Contact Valor Africa if you would like to start a new conversation.';
+    heading.textContent = entry.type === 'investment' && application.status === 'received'
+      ? 'Investment inquiry received'
+      : `Application status: ${application.status === 'approved' ? 'active' : application.status}`;
+    if (entry.type === 'investment') {
+      copy.textContent = 'This inquiry is recorded without an approval step. It is not an investment offer or commitment; any investment requires separate due diligence and final documents.';
+    } else if (application.status === 'approved') {
+      copy.textContent = 'Activated automatically. There is no manual application review. Custom prices, booking details, or production scope still need to be agreed online before work begins.';
+    } else if (application.status === 'pending') {
+      copy.textContent = 'Your request is being activated automatically. Refresh this dashboard to check its status.';
+    } else if (application.status === 'contacted') {
+      copy.textContent = 'Our team has started follow-up. Check the update below or your account email.';
+    } else if (application.status === 'rejected') {
+      copy.textContent = 'Your inquiry needs an update. Review the note and edit your details below before resubmitting.';
+    } else {
+      copy.textContent = 'This inquiry is closed. Contact Valor Africa if you would like to start a new conversation.';
+    }
     note.textContent = application.adminNote ? `Review note: ${application.adminNote}` : '';
     status.append(heading, copy);
     if (application.adminNote) status.appendChild(note);
@@ -193,7 +201,20 @@
       }
       entry.form.querySelector('[type="submit"]').textContent = 'Update and resubmit inquiry';
     } else {
-      entry.form.querySelector('[type="submit"]').textContent = `Submit ${entry.type} inquiry`;
+      entry.form.querySelector('[type="submit"]').textContent = `Save ${entry.type} details`;
+      const editButton = document.createElement('button');
+      editButton.type = 'button';
+      editButton.className = 'button secondary';
+      editButton.textContent = `Edit ${entry.type} details`;
+      editButton.addEventListener('click', () => {
+        entry.form.elements.organizationName.value = application.organizationName;
+        entry.form.elements.websiteUrl.value = application.websiteUrl;
+        entry.form.elements.applicationDetails.value = application.applicationDetails;
+        entry.form.elements.requestedSupport.value = application.requestedSupport;
+        entry.form.hidden = false;
+        entry.form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      status.appendChild(editButton);
     }
   }
 

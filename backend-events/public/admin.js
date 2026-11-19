@@ -4,6 +4,13 @@
   const loginPanel = document.getElementById('loginPanel');
   const dashboard = document.getElementById('dashboard');
   const feedback = document.getElementById('dashboardFeedback');
+  const heroVideoChoices = [
+    ['videos/valor-sponsored-video.mp4', 'Valor Events and Tickets'],
+    ['videos/valor-ticket-buyer.mp4', 'Ticket buyers'],
+    ['videos/valor-ads-organizer-intro.mp4', 'Event organizers'],
+    ['videos/valor-featured-clip-002.mp4', 'Discover Valor Africa 2'],
+    ['videos/valor-featured-clip-001.mp4', 'Discover Valor Africa 1']
+  ];
   const tokenStore = {
     get: () => window.sessionStorage.getItem(tokenKey),
     set: (token) => window.sessionStorage.setItem(tokenKey, token),
@@ -56,6 +63,26 @@
     element.textContent = value;
     parent.appendChild(element);
     return element;
+  }
+
+  function populateHeroVideoLibrary(select, selectedUrl = '') {
+    select.replaceChildren();
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Choose a video…';
+    select.appendChild(placeholder);
+    heroVideoChoices.forEach(([url, label]) => {
+      const option = document.createElement('option');
+      option.value = url;
+      option.textContent = label;
+      select.appendChild(option);
+    });
+    select.value = heroVideoChoices.some(([url]) => url === selectedUrl) ? selectedUrl : '';
+    return select;
+  }
+
+  function createHeroVideoLibrary(selectedUrl) {
+    return populateHeroVideoLibrary(document.createElement('select'), selectedUrl);
   }
 
   async function loadSubmissions() {
@@ -236,6 +263,18 @@
       videoUploadLabel.appendChild(videoFile);
       card.appendChild(videoUploadLabel);
 
+      const videoLibraryLabel = document.createElement('label');
+      videoLibraryLabel.textContent = 'Choose a saved video';
+      const videoLibrary = createHeroVideoLibrary(slide.mediaUrl);
+      videoLibrary.addEventListener('change', () => {
+        if (videoLibrary.value) card.querySelector('[name="mediaUrl"]').value = videoLibrary.value;
+      });
+      card.querySelector('[name="mediaUrl"]').addEventListener('input', () => {
+        if (card.querySelector('[name="mediaUrl"]').value !== videoLibrary.value) videoLibrary.value = '';
+      });
+      videoLibraryLabel.appendChild(videoLibrary);
+      card.appendChild(videoLibraryLabel);
+
       const imageUploadLabel = document.createElement('label');
       imageUploadLabel.textContent = 'Replace image (optional)';
       const imageFile = document.createElement('input');
@@ -248,6 +287,7 @@
       const updateHeroCardUploadVisibility = () => {
         const isVideo = mediaTypeSelect.value === 'video';
         videoUploadLabel.hidden = !isVideo;
+        videoLibraryLabel.hidden = !isVideo;
         imageUploadLabel.hidden = isVideo;
       };
       mediaTypeSelect.addEventListener('change', () => {
@@ -666,7 +706,7 @@
       label.textContent = 'Follow-up status';
       const status = document.createElement('select');
       status.dataset.applicationStatus = '';
-      ['pending','contacted','approved','rejected','closed'].forEach((value) => {
+      ['received','pending','contacted','approved','rejected','closed'].forEach((value) => {
         const option = new Option(value[0].toUpperCase() + value.slice(1), value);
         option.selected = value === application.status;
         status.appendChild(option);
@@ -827,12 +867,20 @@
   const heroImageFile = heroSlideForm.elements.imageFile;
   const heroVideoUploadLabel = heroSlideForm.querySelector('.hero-slide-upload');
   const heroImageUploadLabel = heroSlideForm.querySelector('.hero-slide-image-upload');
+  const heroVideoLibrary = populateHeroVideoLibrary(document.getElementById('heroVideoLibrary'));
+  heroVideoLibrary.addEventListener('change', () => {
+    if (heroVideoLibrary.value) heroMediaUrl.value = heroVideoLibrary.value;
+  });
+  heroMediaUrl.addEventListener('input', () => {
+    if (heroMediaUrl.value !== heroVideoLibrary.value) heroVideoLibrary.value = '';
+  });
   function updateHeroMediaFields() {
     const isVideo = heroMediaType.value === 'video';
     heroVideoUploadLabel.hidden = !isVideo;
     heroVideoFile.disabled = !isVideo;
     heroImageUploadLabel.hidden = isVideo;
     heroImageFile.disabled = isVideo;
+    heroSlideForm.querySelector('.hero-slide-video-library').hidden = !isVideo;
     const hasUpload = isVideo ? heroVideoFile.files.length : heroImageFile.files.length;
     heroMediaUrl.required = !hasUpload;
     heroMediaUrl.placeholder = isVideo ? 'videos/my-promo.mp4 or https://…' : 'images/my-promo.jpg or https://…';

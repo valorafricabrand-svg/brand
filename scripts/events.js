@@ -16,6 +16,29 @@
   };
   const featuredVideoPromos = [
     {
+      id: 'valor-sponsored-video-promo',
+      isSponsoredVideoPromo: true,
+      title: 'Valor Events and Tickets',
+      category: 'Featured on Valor Africa',
+      adVideo: 'videos/valor-sponsored-video.mp4',
+      adPoster: 'images/events/video-ad-poster.svg',
+      adDescription: 'Explore experiences and find your next event.',
+      adLink: 'events.html',
+      adCta: 'Get tickets now'
+    },
+    {
+      id: 'valor-organizer-promo',
+      isPlatformPromo: true,
+      title: 'Grow your event with Valor Africa',
+      category: 'For organizers',
+      adVideo: 'videos/valor-ads-organizer-intro.mp4',
+      adPoster: 'images/events/valor-ads-promo-poster.svg',
+      adDescription: 'Create your event listing, set ticket prices, and promote with Valor Ads.',
+      adLink: 'host.html',
+      adCta: 'Host with Valor'
+    },
+    ticketBuyerPromo,
+    {
       id: 'valor-featured-clip-002',
       isSponsoredVideoPromo: true,
       title: 'Discover Valor Africa',
@@ -38,7 +61,53 @@
       adCta: 'Explore events'
     }
   ];
-  let adEvents = [...featuredVideoPromos, ticketBuyerPromo, ...events.slice(0, 1)];
+  const billboardPromos = [
+    {
+      id: 'valor-brand-advertising-promo',
+      isPartnershipPromo: true,
+      title: 'Put your brand here',
+      category: 'Brand advertising',
+      adDescription: 'Feature your business on this billboard and reach live-event audiences.',
+      adLink: 'advertise.html',
+      adCta: 'Advertise your brand',
+      adPoster: 'images/events/video-ad-poster.svg',
+      accent: 'green'
+    },
+    {
+      id: 'valor-dj-artist-promo',
+      isPartnershipPromo: true,
+      title: 'DJs and artists: get discovered',
+      category: 'Artist & DJ partnerships',
+      adDescription: 'Create your artist profile and connect with event organizers.',
+      adLink: 'partner-dashboard.html?program=artist#artist-application',
+      adCta: 'Join as an artist',
+      adPoster: 'images/events/concert-crowd.svg',
+      accent: 'gold'
+    },
+    {
+      id: 'valor-sponsor-visibility-promo',
+      isPartnershipPromo: true,
+      title: 'Sponsor an event with Valor',
+      category: 'Paid sponsor visibility',
+      adDescription: 'Choose event sponsorship and put your brand in front of live audiences.',
+      adLink: 'partner-dashboard.html?program=sponsor#sponsorship',
+      adCta: 'Explore sponsorship',
+      adPoster: 'images/events/valor-ads-promo-poster.svg',
+      accent: 'blue'
+    },
+    {
+      id: 'valor-event-promotion-promo',
+      isPartnershipPromo: true,
+      title: 'Promote your next event',
+      category: 'Event promoters',
+      adDescription: 'Put your event in front of people looking for their next experience.',
+      adLink: 'advertise.html',
+      adCta: 'Promote an event',
+      adPoster: 'images/events/video-ad-poster.svg',
+      accent: 'red'
+    }
+  ];
+  let adEvents = [...featuredVideoPromos, ...billboardPromos];
   let checkoutEnabled = false;
   let mpesaCheckoutEnabled = false;
   let stripeCheckoutEnabled = false;
@@ -562,16 +631,13 @@
   renderSkeletonCards(allEvents, 6);
 
   const adSlides = document.getElementById('adSlides');
-  const adDots = document.getElementById('adDots');
   const adStage = document.getElementById('adStage');
   const adSoundToggle = document.getElementById('adSoundToggle');
   const adPlayToggle = document.getElementById('adPlayToggle');
-  let activeAdIndex = 0;
-  let adTimer = null;
+  let adObserver = null;
+  let adSoundEnabled = false;
   const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   let adPaused = reducedMotionQuery.matches;
-  let adPointerInside = false;
-  let adHasFocus = false;
 
   function createAdSlide(event, index) {
     const slide = document.createElement('article');
@@ -580,93 +646,40 @@
       slide.classList.add(event.isTicketBuyerPromo ? 'is-ticket-buyer-promo' : 'is-organizer-promo');
     }
     if (event.isSponsoredVideoPromo) slide.classList.add('is-sponsored-video-promo');
+    if (event.isPartnershipPromo) slide.classList.add('is-partnership-promo', `is-${event.accent || 'green'}-promo`);
+    if (!event.isPlatformPromo && !event.isSponsoredVideoPromo && !event.isPartnershipPromo) {
+      slide.classList.add('is-paid-event-promo');
+    }
     slide.dataset.adIndex = String(index);
     slide.dataset.eventId = event.id;
     slide.setAttribute('role', 'group');
     slide.setAttribute('aria-roledescription', 'slide');
     slide.setAttribute('aria-label', `${index + 1} of ${adEvents.length}: ${event.title}`);
-    slide.hidden = index !== 0;
 
     const visual = document.createElement('div');
     visual.className = 'ad-visual';
-    const adPoster = event.adPoster || 'images/events/concert-crowd.svg';
+    const adPoster = event.adPoster || event.poster || 'images/events/concert-crowd.svg';
 
-    if (event.isPlatformPromo) {
-      const video = document.createElement('video');
-      video.className = 'ad-video';
-      video.src = event.adVideo;
-      video.poster = adPoster;
-      video.autoplay = index === 0 && (!adPaused || event.isTicketBuyerPromo);
-      video.muted = true;
-      video.loop = true;
-      video.playsInline = true;
-      video.preload = 'metadata';
-      video.controls = Boolean(event.isTicketBuyerPromo);
-      video.setAttribute('aria-label', event.isTicketBuyerPromo
-        ? 'Valor Africa ticket buyer video'
-        : '15-second Valor Africa introduction for event organizers');
-      visual.appendChild(video);
-
-      if (event.isTicketBuyerPromo) {
-        const content = document.createElement('div');
-        content.className = 'ad-content';
-        const category = document.createElement('p');
-        category.className = 'ad-category';
-        category.textContent = event.category;
-        const title = document.createElement('h2');
-        title.textContent = event.title;
-        const details = document.createElement('p');
-        details.className = 'ad-description';
-        details.textContent = 'Discover concerts, festivals and experiences across Africa.';
-        const cta = document.createElement('a');
-        cta.className = 'ad-ticket-cta';
-        cta.href = 'events.html';
-        cta.innerHTML = '<span>Explore events</span><span aria-hidden="true">→</span>';
-        content.append(category, title, details, cta);
-
-        const playButton = document.createElement('button');
-        playButton.type = 'button';
-        playButton.className = 'buyer-video-play';
-        playButton.setAttribute('aria-label', 'Play ticket buyer video');
-        playButton.innerHTML = '<span aria-hidden="true">▶</span><span>Play video</span>';
-        video.addEventListener('playing', () => { playButton.hidden = true; });
-        video.addEventListener('pause', () => { playButton.hidden = false; });
-        playButton.addEventListener('click', () => {
-          video.muted = true;
-          video.play().catch((error) => {
-            console.error('Ticket buyer video could not be played', error);
-            video.controls = true;
-          });
-        });
-        slide.append(visual, content, playButton);
-        return slide;
+    if (event.isPartnershipPromo) {
+      if (event.adVideo) {
+        const video = document.createElement('video');
+        video.className = 'ad-video';
+        video.dataset.src = event.adVideo;
+        video.poster = adPoster;
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.preload = 'none';
+        video.setAttribute('aria-label', `Promotional video for ${event.title}`);
+        visual.appendChild(video);
+      } else {
+        const image = document.createElement('img');
+        image.className = 'ad-poster';
+        image.src = adPoster;
+        image.alt = '';
+        image.loading = 'lazy';
+        visual.appendChild(image);
       }
-
-      const hostLink = document.createElement('a');
-      hostLink.className = 'ad-ticket-cta promo-host-cta';
-      hostLink.href = 'host.html';
-      hostLink.innerHTML = '<span>Host with Valor</span><span aria-hidden="true">→</span>';
-
-      const transcript = document.createElement('p');
-      transcript.className = 'sr-only';
-      transcript.textContent = 'Turn your next event into a full house. Create your event listing, choose ticket types and prices, and promote your event with Valor Ads. Host with Valor Africa.';
-      slide.append(visual, hostLink, transcript);
-      return slide;
-    }
-
-    if (event.isSponsoredVideoPromo) {
-      const video = document.createElement('video');
-      video.className = 'ad-video';
-      video.src = event.adVideo;
-      video.poster = event.adPoster;
-      video.autoplay = index === 0 && !adPaused;
-      video.muted = true;
-      video.loop = true;
-      video.playsInline = true;
-      video.preload = 'metadata';
-      video.setAttribute('aria-label', `Sponsored video for ${event.title}`);
-      visual.appendChild(video);
-
       const content = document.createElement('div');
       content.className = 'ad-content';
       const category = document.createElement('p');
@@ -681,26 +694,23 @@
       cta.className = 'ad-ticket-cta';
       cta.href = event.adLink;
       cta.innerHTML = `<span>${event.adCta}</span><span aria-hidden="true">→</span>`;
-      const transcript = document.createElement('p');
-      transcript.className = 'sr-only';
-      transcript.textContent = 'Valor Events and Tickets. Explore experiences and find your next event. Get tickets now.';
-      content.append(category, title, details, cta, transcript);
+      content.append(category, title, details, cta);
       slide.append(visual, content);
       return slide;
     }
 
-    if (event.adVideo) {
+    if (event.isPlatformPromo || event.isSponsoredVideoPromo || event.adVideo) {
       const video = document.createElement('video');
       video.className = 'ad-video';
-      video.src = event.adVideo;
+      video.dataset.src = event.adVideo;
       video.poster = adPoster;
-      video.autoplay = index === 0 && !adPaused;
       video.muted = true;
       video.loop = true;
       video.playsInline = true;
-      video.preload = 'metadata';
+      video.preload = 'none';
       video.setAttribute('aria-label', `Promotional video for ${event.title}`);
       visual.appendChild(video);
+
     } else {
       const image = document.createElement('img');
       image.className = 'ad-poster';
@@ -718,190 +728,143 @@
     content.className = 'ad-content';
     const category = document.createElement('p');
     category.className = 'ad-category';
-    category.textContent = `${event.category} · ${new Intl.DateTimeFormat('en-KE', { month: 'short', day: 'numeric' }).format(new Date(event.startsAt))}`;
+    category.textContent = event.isPlatformPromo || event.isSponsoredVideoPromo
+      ? event.category
+      : `${event.adPlacement === 'premium' ? '★ PREMIUM PROMOTION' : 'PAID EVENT PROMOTION'} · ${event.category}`;
     const title = document.createElement('h2');
     title.textContent = event.title;
     const details = document.createElement('p');
     details.className = 'ad-description';
-    details.textContent = `${event.location} · ${dateLine(event.startsAt)}`;
-    const ticket = event.tickets[0];
-    const saleActive = ticket.regularPrice && ticket.saleEnds && new Date(ticket.saleEnds).getTime() > Date.now();
-    const price = document.createElement('p');
-    price.className = 'ad-price';
-    price.textContent = `Tickets from ${formatMoney(saleActive ? ticket.price : ticket.regularPrice || ticket.price, ticket.currency)}`;
+    details.textContent = event.isPlatformPromo
+      ? 'Discover concerts, festivals and experiences across Africa.'
+      : event.isSponsoredVideoPromo
+        ? event.adDescription
+        : `${event.location} · ${dateLine(event.startsAt)}`;
     const cta = document.createElement('a');
     cta.href = event.isPlatformPromo
       ? event.isTicketBuyerPromo ? 'events.html' : 'host.html'
-      : '#';
-    if (!event.isPlatformPromo) setEventDetailsLink(cta, event);
+      : event.isSponsoredVideoPromo ? event.adLink : '#';
+    if (!event.isPlatformPromo && !event.isSponsoredVideoPromo) setEventDetailsLink(cta, event);
     cta.className = 'ad-ticket-cta';
-    cta.innerHTML = event.isPlatformPromo
-      ? `<span>${event.isTicketBuyerPromo ? 'Browse events' : 'Host an event'}</span><span aria-hidden="true">→</span>`
-      : '<span>Get tickets</span><span aria-hidden="true">→</span>';
-    content.append(category, title, details, price, cta);
+    cta.innerHTML = `<span>${event.isPlatformPromo
+      ? event.isTicketBuyerPromo ? 'Browse events' : 'Host an event'
+      : event.isSponsoredVideoPromo ? event.adCta
+        : 'Get tickets'}</span><span aria-hidden="true">→</span>`;
+    content.append(category, title, details, cta);
+    if (!event.isPlatformPromo && !event.isSponsoredVideoPromo) {
+      const ticket = event.tickets?.[0];
+      if (ticket) {
+        const saleActive = ticket.regularPrice && ticket.saleEnds && new Date(ticket.saleEnds).getTime() > Date.now();
+        const price = document.createElement('p');
+        price.className = 'ad-price';
+        price.textContent = `Tickets from ${formatMoney(saleActive ? ticket.price : ticket.regularPrice || ticket.price, ticket.currency)}`;
+        content.insertBefore(price, cta);
+      }
+    }
     slide.append(visual, content);
     slide.style.setProperty('--ad-index', String(index));
     return slide;
   }
 
-  function showAd(index) {
-    if (!adSlides || !adDots || !adEvents.length) return;
-    activeAdIndex = (index + adEvents.length) % adEvents.length;
-    adStage.classList.toggle('is-sponsored-video-stage', Boolean(adEvents[activeAdIndex].isSponsoredVideoPromo));
-    adSlides.querySelectorAll('.ad-slide').forEach((slide, slideIndex) => {
-      const active = slideIndex === activeAdIndex;
-      slide.hidden = !active;
-      const video = slide.querySelector('video');
-      if (video) {
-        if (active) {
-          video.muted = true;
-          if (document.hidden) {
-            video.pause();
-          } else {
-            video.play().catch(() => {
-              const activeEvent = adEvents[activeAdIndex];
-              if (!activeEvent.isPlatformPromo || activeEvent.isTicketBuyerPromo) video.controls = true;
-            });
-          }
-        } else {
-          video.pause();
-          video.currentTime = 0;
-        }
-      }
+  function getCurrentBillboardVideo() {
+    const stage = adStage.getBoundingClientRect();
+    const center = stage.left + stage.width / 2;
+    return [...adSlides.querySelectorAll('.ad-slide video')]
+      .filter((video) => video.dataset.inBillboard === 'true')
+      .sort((left, right) => (
+        Math.abs(left.getBoundingClientRect().left + left.getBoundingClientRect().width / 2 - center)
+        - Math.abs(right.getBoundingClientRect().left + right.getBoundingClientRect().width / 2 - center)
+      ))[0] || null;
+  }
+
+  function updateBillboardAudio() {
+    const currentVideo = getCurrentBillboardVideo();
+    const targetVideo = adSoundEnabled ? currentVideo : null;
+    adSlides.querySelectorAll('video').forEach((video) => {
+      video.muted = video !== targetVideo;
     });
-    adDots.querySelectorAll('button').forEach((dot, dotIndex) => {
-      const active = dotIndex === activeAdIndex;
-      dot.classList.toggle('is-active', active);
-      dot.setAttribute('aria-current', active ? 'true' : 'false');
-      dot.setAttribute('aria-label', `Show advertisement ${dotIndex + 1}: ${adEvents[dotIndex].title}`);
-    });
-    const sponsoredBadge = document.querySelector('.sponsored-badge');
-    if (sponsoredBadge) {
-      const activeEvent = adEvents[activeAdIndex];
-      const isOrganizerPromo = activeEvent.isPlatformPromo && !activeEvent.isTicketBuyerPromo;
-      sponsoredBadge.hidden = isOrganizerPromo;
-      if (activeEvent.isTicketBuyerPromo) sponsoredBadge.textContent = 'TICKET BUYER VIDEO';
-      else if (!isOrganizerPromo) sponsoredBadge.textContent = '✦ PAID PROMOTION';
-    }
     if (adSoundToggle) {
-      const video = adSlides.querySelector('.ad-slide:not([hidden]) video');
-      adSoundToggle.hidden = !video || Boolean(
-        adEvents[activeAdIndex].isPlatformPromo && !adEvents[activeAdIndex].isTicketBuyerPromo
-      );
-      if (video) {
-        adSoundToggle.setAttribute('aria-pressed', String(!video.muted));
-        adSoundToggle.setAttribute('aria-label', video.muted ? 'Turn sound on' : 'Turn sound off');
-      }
+      adSoundToggle.hidden = !currentVideo;
+      adSoundToggle.setAttribute('aria-pressed', String(adSoundEnabled));
+      adSoundToggle.setAttribute('aria-label', adSoundEnabled ? 'Turn sound off' : 'Turn sound on');
     }
   }
 
-  function stopAdRotation() {
-    if (adTimer) window.clearTimeout(adTimer);
-    adTimer = null;
-  }
-
-  function startAdRotation() {
-    stopAdRotation();
-    if (!adPaused && !adPointerInside && !adHasFocus && adEvents.length > 1) {
-      const activeEvent = adEvents[activeAdIndex];
-      const delay = activeEvent.isTicketBuyerPromo ? 30000
-        : activeEvent.isPlatformPromo || activeEvent.isSponsoredVideoPromo ? 16000
-          : 7000;
-      adTimer = window.setTimeout(() => {
-        showAd(activeAdIndex + 1);
-        startAdRotation();
-      }, delay);
-    }
+  function setBillboardMotion(paused) {
+    adPaused = paused;
+    adStage.classList.toggle('is-paused', adPaused);
+    adPlayToggle?.setAttribute('aria-pressed', String(adPaused));
+    adPlayToggle?.setAttribute('aria-label', adPaused ? 'Resume billboard movement' : 'Pause billboard movement');
+    adPlayToggle?.classList.toggle('is-paused', adPaused);
+    if (adPlayToggle) adPlayToggle.title = adPaused ? 'Resume billboard movement' : 'Pause billboard movement';
+    if (adPaused) adSlides.querySelectorAll('video').forEach((video) => video.pause());
+    else adSlides.querySelectorAll('video[data-in-billboard="true"]').forEach((video) => {
+      video.play().catch(() => {});
+    });
   }
 
   function renderAdSlides() {
-    if (!adSlides || !adDots || !adStage) return;
-    stopAdRotation();
-    activeAdIndex = 0;
+    if (!adSlides || !adStage) return;
+    if (adObserver) adObserver.disconnect();
     adSlides.replaceChildren();
-    adDots.replaceChildren();
+    const group = document.createElement('div');
+    group.className = 'ad-billboard-group';
+    group.setAttribute('role', 'list');
+    group.setAttribute('aria-label', 'Valor Africa promotions, partners and promoted events');
     adEvents.forEach((event, index) => {
-      adSlides.appendChild(createAdSlide(event, index));
-      const dot = document.createElement('button');
-      dot.type = 'button';
-      dot.className = 'ad-dot';
-      dot.setAttribute('aria-current', 'false');
-      dot.addEventListener('click', () => {
-        showAd(index);
-        startAdRotation();
-      });
-      adDots.appendChild(dot);
+      const slide = createAdSlide(event, index);
+      slide.setAttribute('role', 'listitem');
+      group.appendChild(slide);
     });
-    showAd(0);
-    startAdRotation();
+    const duplicate = group.cloneNode(true);
+    duplicate.setAttribute('aria-hidden', 'true');
+    duplicate.removeAttribute('aria-label');
+    duplicate.querySelectorAll('a,button').forEach((control) => control.setAttribute('tabindex', '-1'));
+    adSlides.replaceChildren(group, duplicate);
+    adSlides.style.setProperty('--ad-billboard-duration', `${Math.max(30, group.scrollWidth / 44)}s`);
+    if ('IntersectionObserver' in window) {
+      adObserver = new IntersectionObserver((entries) => {
+        entries.forEach(({ target: video, isIntersecting }) => {
+          video.dataset.inBillboard = String(isIntersecting);
+          if (isIntersecting && !adPaused && !document.hidden) {
+            if (!video.src) video.src = video.dataset.src;
+            video.play().catch(() => {});
+          } else {
+            video.pause();
+          }
+        });
+        updateBillboardAudio();
+      });
+      adSlides.querySelectorAll('video').forEach((video) => adObserver.observe(video));
+    } else {
+      adSlides.querySelectorAll('video').forEach((video) => {
+        video.dataset.inBillboard = 'true';
+        video.src = video.dataset.src;
+        if (!adPaused) video.play().catch(() => {});
+      });
+      updateBillboardAudio();
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) setBillboardMotion(true);
+    else setBillboardMotion(adPaused);
+    updateBillboardAudio();
   }
 
-  if (adSlides && adDots && adStage) {
+  if (adSlides && adStage) {
     renderAdSlides();
     if (adPlayToggle) {
-      adPlayToggle.setAttribute('aria-pressed', String(adPaused));
-      adPlayToggle.setAttribute('aria-label', adPaused ? 'Play advertisement rotation' : 'Pause advertisement rotation');
-      adPlayToggle.classList.toggle('is-paused', adPaused);
+      adPlayToggle.addEventListener('click', () => setBillboardMotion(!adPaused));
     }
-
-    document.getElementById('adPrevious')?.addEventListener('click', () => {
-      showAd(activeAdIndex - 1);
-      startAdRotation();
-    });
-    document.getElementById('adNext')?.addEventListener('click', () => {
-      showAd(activeAdIndex + 1);
-      startAdRotation();
-    });
-    adPlayToggle?.addEventListener('click', () => {
-      adPaused = !adPaused;
-      adPlayToggle.setAttribute('aria-pressed', String(adPaused));
-      adPlayToggle.setAttribute('aria-label', adPaused ? 'Play advertisement rotation' : 'Pause advertisement rotation');
-      adPlayToggle.classList.toggle('is-paused', adPaused);
-      if (adPaused) stopAdRotation();
-      else startAdRotation();
-      showAd(activeAdIndex);
-    });
     adSoundToggle?.addEventListener('click', () => {
-      const video = adSlides.querySelector('.ad-slide:not([hidden]) video');
-      if (!video) return;
-      video.muted = !video.muted;
-      adSoundToggle.setAttribute('aria-pressed', String(!video.muted));
-      adSoundToggle.setAttribute('aria-label', video.muted ? 'Turn sound on' : 'Turn sound off');
-    });
-    adStage.addEventListener('mouseenter', () => {
-      adPointerInside = true;
-      stopAdRotation();
-    });
-    adStage.addEventListener('mouseleave', () => {
-      adPointerInside = false;
-      startAdRotation();
-    });
-    adStage.addEventListener('focusin', () => {
-      adHasFocus = true;
-      stopAdRotation();
-    });
-    adStage.addEventListener('focusout', (event) => {
-      if (!adStage.contains(event.relatedTarget)) {
-        adHasFocus = false;
-        startAdRotation();
-      }
+      adSoundEnabled = !adSoundEnabled;
+      updateBillboardAudio();
     });
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) stopAdRotation();
-      else startAdRotation();
+      if (document.hidden) adSlides.querySelectorAll('video').forEach((video) => video.pause());
+      else if (!adPaused) adSlides.querySelectorAll('video[data-in-billboard="true"]').forEach((video) => {
+        video.play().catch(() => {});
+      });
     });
-    reducedMotionQuery.addEventListener('change', (event) => {
-      adPaused = event.matches;
-      if (adPlayToggle) {
-        adPlayToggle.setAttribute('aria-pressed', String(adPaused));
-        adPlayToggle.setAttribute('aria-label', adPaused ? 'Play advertisement rotation' : 'Pause advertisement rotation');
-        adPlayToggle.classList.toggle('is-paused', adPaused);
-      }
-      if (adPaused) stopAdRotation();
-      else startAdRotation();
-      showAd(activeAdIndex);
-    });
-    document.addEventListener('visibilitychange', () => showAd(activeAdIndex));
+    reducedMotionQuery.addEventListener('change', (event) => setBillboardMotion(event.matches));
   }
 
   const nextCountdown = document.getElementById('nextEventCountdown');
@@ -1057,7 +1020,8 @@
   function refreshPromotionalCarousel() {
     adEvents = [
       ...featuredVideoPromos,
-      ...(homepagePromotedEvents.length ? homepagePromotedEvents : events.slice(0, 1))
+      ...billboardPromos,
+      ...homepagePromotedEvents
     ];
     renderAdSlides();
     const adNote = document.querySelector('.ad-note');

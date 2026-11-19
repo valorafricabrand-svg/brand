@@ -11,6 +11,64 @@
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   signedOut.querySelector('a').href = `account.html?returnTo=${encodeURIComponent(returnTo)}`;
+  const partnerPrograms = {
+    sponsor: {
+      title: 'Sponsor dashboard',
+      intro: 'Choose a published package, pay online, and track your campaign here. Placement activates after payment is confirmed.',
+      sectionsTitle: 'Sponsor applications',
+      sectionsIntro: 'Published packages go live after payment. Custom campaign proposals are received online without an application review.'
+    },
+    organizer: {
+      title: 'Organizer dashboard',
+      intro: 'Create and manage events, track ticket sales, and make changes from your organizer dashboard. Valid event submissions publish automatically.',
+      sectionsTitle: 'Organizer support',
+      sectionsIntro: 'Submit an organizer support request here, or manage event listings directly in the organizer dashboard.'
+    },
+    creator: {
+      title: 'Creator partner dashboard',
+      intro: 'Get your referral link immediately, share it with your audience, and track visits, paid ticket sales, and earnings.',
+      sectionsTitle: 'Creator dashboard',
+      sectionsIntro: 'Creator accounts activate automatically. New accounts start at a 5% commission on eligible paid ticket sales.'
+    },
+    artist: {
+      title: 'Artist / DJ dashboard',
+      intro: 'Submit your profile details and manage your artist or DJ partnership request online without waiting for application review.',
+      sectionsTitle: 'Artist / DJ profile',
+      sectionsIntro: 'Your application activates automatically. Bookings and performance details are arranged separately.'
+    },
+    branding: {
+      title: 'Event branding dashboard',
+      intro: 'Send your event date, quantities, and production requirements online and track your branding request here.',
+      sectionsTitle: 'Branding request',
+      sectionsIntro: 'Requests are received automatically without an application review. Confirm scope and pricing online before production.'
+    },
+    investment: {
+      title: 'Investment inquiry dashboard',
+      intro: 'Send and track a non-binding investment inquiry online. No meeting is needed to submit it.',
+      sectionsTitle: 'Non-binding investment inquiry',
+      sectionsIntro: 'An inquiry is received without an approval step. It is not an offer, commitment, or promise of returns.'
+    }
+  };
+  const selectedProgram = new URLSearchParams(window.location.search).get('program');
+  const programConfig = partnerPrograms[selectedProgram];
+
+  if (programConfig) {
+    document.title = `${programConfig.title} | Valor Africa`;
+    document.getElementById('partnerDashboardTitle').textContent = programConfig.title;
+    document.getElementById('partnerDashboardIntro').textContent = programConfig.intro;
+    document.getElementById('partnerDashboardAvailability').hidden = true;
+    document.getElementById('partnerApplicationsTitle').textContent = programConfig.sectionsTitle;
+    document.getElementById('partnerApplicationsIntro').textContent = programConfig.sectionsIntro;
+
+    document.querySelectorAll('[data-partner-program]').forEach((section) => {
+      section.hidden = section.dataset.partnerProgram !== selectedProgram;
+    });
+    document.getElementById('businessPartnershipApplications').hidden =
+      selectedProgram === 'creator';
+    document.querySelectorAll('[data-program-link]').forEach((link) => {
+      if (link.dataset.programLink === selectedProgram) link.setAttribute('aria-current', 'page');
+    });
+  }
 
   function setFeedback(element, message, isError = false) {
     element.textContent = message;

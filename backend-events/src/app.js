@@ -18,6 +18,7 @@ const accountEmail = require('./account-email');
 const { normalizeKenyanPhone } = require('./kenyan-phone');
 const { PARTNER_APPLICATION_TYPES, PARTNER_TERMS_VERSION } = require('./partner-terms');
 
+const CREATOR_COMMISSION_PERCENT = 5;
 const allowedCategories = new Set(['Movies & Cinema','Concerts','Festivals','Community','Food & Drink','Arts & Culture','Sports','Business','Comedy','Nightlife','Workshops & Classes','Conferences & Networking','Religious & Faith','Other']);
 const allowedTimezones = new Set(['Africa/Nairobi','UTC','Africa/Lagos','Africa/Accra']);
 const allowedFormats = new Set(['Physical','Virtual','Hybrid']);
@@ -2482,6 +2483,24 @@ function createApp(options = {}) {
     return { earnedKes, paidKes, dueKes: Math.max(0, earnedKes - paidKes) };
   }
 
+  function allocateAffiliateReferralCode() {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const candidate = crypto.randomBytes(5).toString('hex').toUpperCase();
+      if (!db.prepare('SELECT 1 FROM affiliate_partners WHERE referral_code=?').get(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  db.prepare("SELECT id,referral_code AS referralCode FROM affiliate_partners WHERE status='pending'").all()
+    .forEach((partner) => {
+      const referralCode = partner.referralCode || allocateAffiliateReferralCode();
+      if (!referralCode) throw new Error('Could not allocate a unique referral code for an existing creator application.');
+      db.prepare(`
+        UPDATE affiliate_partners SET status='approved',commission_percent=?,referral_code=?,
+          admin_note='',reviewed_at=NULL WHERE id=? AND status='pending'
+      `).run(CREATOR_COMMISSION_PERCENT, referralCode, partner.id);
+    });
+
   app.post('/api/partners/visit', partnerReferralLimiter, (req, res) => {
     const code = typeof req.body?.code === 'string' ? req.body.code.trim().toUpperCase() : '';
     if (!/^[A-F0-9]{10}$/.test(code)) return res.status(400).json({ error: 'Enter a valid partner referral link.' });
@@ -2500,7 +2519,7 @@ function createApp(options = {}) {
   });
 
   app.get('/api/partners/me', requireAccount, (req, res) => {
-    const partner = db.prepare(`
+    let partner = db.prepare(`
       SELECT id,social_platform AS socialPlatform,profile_url AS profileUrl,
         audience_description AS audienceDescription,status,referral_code AS referralCode,
         commission_percent AS commissionPercent,admin_note AS adminNote,
@@ -2508,6 +2527,21 @@ function createApp(options = {}) {
       FROM affiliate_partners WHERE account_id=?
     `).get(req.account.id);
     if (!partner) return res.json({ partner: null });
+    if (partner.status === 'pending') {
+      const referralCode = partner.referralCode || allocateAffiliateReferralCode();
+      if (!referralCode) return res.status(503).json({ error: 'Could not allocate a unique referral code. Please refresh and retry.' });
+      db.prepare(`
+        UPDATE affiliate_partners SET status='approved',commission_percent=?,referral_code=?,
+          admin_note='',reviewed_at=NULL WHERE id=? AND status='pending'
+      `).run(CREATOR_COMMISSION_PERCENT, referralCode, partner.id);
+      partner = db.prepare(`
+        SELECT id,social_platform AS socialPlatform,profile_url AS profileUrl,
+          audience_description AS audienceDescription,status,referral_code AS referralCode,
+          commission_percent AS commissionPercent,admin_note AS adminNote,
+          created_at AS createdAt,reviewed_at AS reviewedAt
+        FROM affiliate_partners WHERE id=?
+      `).get(partner.id);
+    }
     const totals = affiliateEarnings(partner.id);
     const clicks = db.prepare('SELECT COUNT(*) AS count FROM affiliate_referral_visits WHERE partner_id=?')
       .get(partner.id).count;
@@ -2548,23 +2582,37 @@ function createApp(options = {}) {
     if (audienceDescription.length < 20 || audienceDescription.length > 1500) {
       return res.status(400).json({ error: 'Describe your audience and how you would promote events (20–1,500 characters).' });
     }
-    const existing = db.prepare('SELECT id,status FROM affiliate_partners WHERE account_id=?').get(req.account.id);
-    if (existing && existing.status !== 'rejected') {
-      return res.status(409).json({ error: 'You already have a creator partnership application or account.' });
+    const existing = db.prepare(`
+      SELECT id,status,referral_code AS referralCode,commission_percent AS commissionPercent
+      FROM affiliate_partners WHERE account_id=?
+    `).get(req.account.id);
+    if (existing && existing.status === 'suspended') {
+      return res.status(409).json({ error: 'Your creator account is paused. Contact Valor Africa if you need help.' });
     }
     const id = existing ? existing.id : crypto.randomUUID();
+    const referralCode = existing?.referralCode || allocateAffiliateReferralCode();
+    if (!referralCode) return res.status(503).json({ error: 'Could not allocate a unique referral code. Please retry.' });
+    const commissionPercent = existing?.status === 'approved' && existing.commissionPercent
+      ? existing.commissionPercent
+      : CREATOR_COMMISSION_PERCENT;
     if (existing) {
       db.prepare(`
         UPDATE affiliate_partners SET social_platform=?,profile_url=?,audience_description=?,
-          status='pending',admin_note='',reviewed_at=NULL WHERE id=?
-      `).run(socialPlatform, profileUrl, audienceDescription, id);
+          status='approved',referral_code=?,commission_percent=?,admin_note='',reviewed_at=NULL WHERE id=?
+      `).run(socialPlatform, profileUrl, audienceDescription, referralCode, commissionPercent, id);
     } else {
       db.prepare(`
-        INSERT INTO affiliate_partners (id,account_id,social_platform,profile_url,audience_description)
-        VALUES (?,?,?,?,?)
-      `).run(id, req.account.id, socialPlatform, profileUrl, audienceDescription);
+        INSERT INTO affiliate_partners
+          (id,account_id,social_platform,profile_url,audience_description,status,referral_code,commission_percent)
+        VALUES (?,?,?,?,?,'approved',?,?)
+      `).run(id, req.account.id, socialPlatform, profileUrl, audienceDescription, referralCode, CREATOR_COMMISSION_PERCENT);
     }
-    res.status(201).json({ message: 'Your creator partnership application was received. We will review it and agree any commission terms before activation.' });
+    res.status(existing && existing.status === 'approved' ? 200 : 201).json({
+      status: 'approved',
+      referralCode,
+      commissionPercent,
+      message: `Your creator account is active. Your referral link is ready, with a ${commissionPercent}% commission on eligible paid ticket sales.`
+    });
   });
 
   const sponsorshipTiers = {
@@ -2613,6 +2661,14 @@ function createApp(options = {}) {
   });
 
   app.get('/api/partnership-applications/me', requireAccount, (req, res) => {
+    db.prepare(`
+      UPDATE partnership_applications SET status='approved',updated_at=datetime('now')
+      WHERE account_id=? AND application_type!='investment' AND status='pending'
+    `).run(req.account.id);
+    db.prepare(`
+      UPDATE partnership_applications SET status='received',updated_at=datetime('now')
+      WHERE account_id=? AND application_type='investment' AND status='pending'
+    `).run(req.account.id);
     const applications = db.prepare(`
       SELECT id,application_type AS type,organization_name AS organizationName,
         website_url AS websiteUrl,application_details AS applicationDetails,
@@ -2657,30 +2713,28 @@ function createApp(options = {}) {
     const existing = db.prepare(`
       SELECT id,status FROM partnership_applications WHERE account_id=? AND application_type=?
     `).get(req.account.id, type);
-    if (existing && existing.status !== 'rejected') {
-      return res.status(409).json({ error: `You already have a ${type} partnership inquiry in progress.` });
-    }
     const id = existing ? existing.id : crypto.randomUUID();
     const tierToStore = type === 'sponsor' ? sponsorshipTier : '';
+    const status = type === 'investment' ? 'received' : 'approved';
     if (existing) {
       db.prepare(`
         UPDATE partnership_applications SET organization_name=?,website_url=?,application_details=?,
-          requested_support=?,sponsorship_tier=?,status='pending',admin_note='',updated_at=datetime('now'),
+          requested_support=?,sponsorship_tier=?,status=?,admin_note='',updated_at=datetime('now'),
           reviewed_at=NULL WHERE id=?
-      `).run(organizationName, websiteUrl, applicationDetails, requestedSupport, tierToStore, id);
+      `).run(organizationName, websiteUrl, applicationDetails, requestedSupport, tierToStore, status, id);
     } else {
       db.prepare(`
         INSERT INTO partnership_applications
-          (id,account_id,application_type,organization_name,website_url,application_details,requested_support,sponsorship_tier)
-        VALUES (?,?,?,?,?,?,?,?)
-      `).run(id, req.account.id, type, organizationName, websiteUrl, applicationDetails, requestedSupport, tierToStore);
+          (id,account_id,application_type,organization_name,website_url,application_details,requested_support,sponsorship_tier,status)
+        VALUES (?,?,?,?,?,?,?,?,?)
+      `).run(id, req.account.id, type, organizationName, websiteUrl, applicationDetails, requestedSupport, tierToStore, status);
     }
-    res.status(201).json({
+    res.status(existing ? 200 : 201).json({
       id,
-      status: 'pending',
+      status,
       message: type === 'investment'
-        ? 'Your non-binding investment inquiry was received. It is not an investment offer or commitment; any investment would require separate due diligence and signed legal documents.'
-        : `Your ${type} inquiry was received. We will follow up through your account; activation and any commercial terms require internal review and separate written confirmation. No meeting is required to submit or track an inquiry.`
+        ? 'Your non-binding investment inquiry is recorded without an application review. It is not an investment offer or commitment; any investment would require separate due diligence and signed legal documents.'
+        : `Your ${type} application is active immediately. No manual application review is required. Any custom service scope or price will be shown online before you purchase.`
     });
   });
 
@@ -2703,7 +2757,7 @@ function createApp(options = {}) {
             p.requested_support AS requestedSupport,p.sponsorship_tier AS sponsorshipTier,p.status,p.admin_note AS adminNote,
             p.created_at AS createdAt,p.updated_at AS updatedAt
           FROM partnership_applications p JOIN accounts a ON a.id=p.account_id
-          ORDER BY CASE p.status WHEN 'pending' THEN 0 WHEN 'contacted' THEN 1 ELSE 2 END,p.created_at DESC
+          ORDER BY CASE p.status WHEN 'received' THEN 0 WHEN 'pending' THEN 1 WHEN 'contacted' THEN 2 ELSE 3 END,p.created_at DESC
           LIMIT 500
         `).all());
     res.json({ applications });
@@ -2713,8 +2767,8 @@ function createApp(options = {}) {
     const existing = db.prepare('SELECT id FROM partnership_applications WHERE id=?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Partnership application not found.' });
     const { status, adminNote = '' } = req.body || {};
-    if (!['contacted','approved','rejected','closed'].includes(status)) {
-      return res.status(400).json({ error: 'Choose contacted, approved, rejected, or closed status.' });
+    if (!['received','contacted','approved','rejected','closed'].includes(status)) {
+      return res.status(400).json({ error: 'Choose received, contacted, approved, rejected, or closed status.' });
     }
     if (typeof adminNote !== 'string' || adminNote.length > 1000) {
       return res.status(400).json({ error: 'Admin note must be 1,000 characters or fewer.' });
