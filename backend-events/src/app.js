@@ -2931,10 +2931,7 @@ function createApp(options = {}) {
         JOIN accounts a ON a.id = f.account_id
         WHERE e.status='approved' AND e.deleted_at IS NULL
           AND f.rating IS NOT NULL AND TRIM(f.review) <> ''
-          AND e.capacity IS NOT NULL
-          AND (SELECT COALESCE(SUM(o.quantity),0) FROM orders o
-            WHERE o.event_id=e.id AND o.order_type='ticket' AND o.status IN ('paid','confirmed')) >= e.capacity
-        ORDER BY f.rating DESC, datetime(f.updated_at) DESC
+        ORDER BY datetime(f.updated_at) DESC
         LIMIT 9
       `).all();
       res.json({

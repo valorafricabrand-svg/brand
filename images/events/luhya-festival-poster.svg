@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <defs>
+    <linearGradient id="night" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#241947"/>
+      <stop offset=".5" stop-color="#8f344d"/>
+      <stop offset="1" stop-color="#d18b36"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop stop-color="#ffd87c" stop-opacity=".88"/>
+      <stop offset="1" stop-color="#ffd87c" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="lines" width="96" height="96" patternTransform="rotate(35)" patternUnits="userSpaceOnUse">
+      <path d="M0 0v96" stroke="#fff" stroke-opacity=".1" stroke-width="16"/>
+      <path d="M50 0v96" stroke="#ffd87c" stroke-opacity=".13" stroke-width="6"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="760" fill="url(#night)"/>
+  <circle cx="305" cy="195" r="330" fill="url(#glow)"/>
+  <circle cx="955" cy="225" r="280" fill="url(#glow)" opacity=".72"/>
+  <path d="M0 560q110-105 220 0 106-154 213 0 110-180 220 0 107-138 214 0 108-151 216 0 62-72 117-30v230H0z" fill="#171526" fill-opacity=".94"/>
+  <g fill="#171526">
+    <circle cx="130" cy="520" r="29"/><path d="M91 558q39-28 78 0l27 152H65z"/>
+    <circle cx="345" cy="492" r="33"/><path d="M300 534q45-32 90 0l31 176H268z"/>
+    <circle cx="584" cy="519" r="28"/><path d="M546 556q38-28 76 0l27 154H519z"/>
+    <circle cx="817" cy="490" r="34"/><path d="M771 533q46-33 92 0l33 177H738z"/>
+    <circle cx="1055" cy="520" r="28"/><path d="M1017 557q38-28 76 0l27 153H990z"/>
+  </g>
+  <rect width="1200" height="760" fill="url(#lines)"/>
+</svg>

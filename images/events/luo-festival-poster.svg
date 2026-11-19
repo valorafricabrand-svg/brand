@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#081d43"/>
+      <stop offset=".52" stop-color="#087b78"/>
+      <stop offset="1" stop-color="#d89c3b"/>
+    </linearGradient>
+    <radialGradient id="light">
+      <stop stop-color="#ffdc84" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#ffdc84" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="dots" width="72" height="72" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="12" r="2" fill="#fff" fill-opacity=".23"/>
+      <circle cx="50" cy="46" r="1.5" fill="#fff" fill-opacity=".18"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="760" fill="url(#sky)"/>
+  <circle cx="850" cy="185" r="340" fill="url(#light)"/>
+  <path d="M75 0h110L66 445H0zm1030 0h95L977 445h-97zM540 0h55L355 450h-55z" fill="#fff" fill-opacity=".12"/>
+  <path d="M0 525q105-108 205 0 103-138 209 0 108-168 216 0 103-126 207 0 111-154 221 0 72-91 142-35v270H0z" fill="#071624" fill-opacity=".92"/>
+  <g fill="#071624">
+    <circle cx="145" cy="485" r="28"/><path d="M107 522q38-27 76 0l24 188h-124z"/>
+    <circle cx="360" cy="452" r="31"/><path d="M318 493q42-31 84 0l30 217H285z"/>
+    <circle cx="595" cy="483" r="27"/><path d="M558 519q37-26 74 0l26 191H532z"/>
+    <circle cx="842" cy="450" r="32"/><path d="M798 492q44-31 88 0l32 218H765z"/>
+    <circle cx="1065" cy="478" r="28"/><path d="M1026 515q39-27 78 0l28 195h-134z"/>
+  </g>
+  <rect width="1200" height="760" fill="url(#dots)"/>
+</svg>

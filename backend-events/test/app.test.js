@@ -2480,7 +2480,7 @@ test('signed-in sponsors can pay directly for packages and manage their own spon
   assert.equal(doubleCancel.status, 409);
 });
 
-test('event pages report sold-out status and only sold-out events surface in homepage review highlights', async () => {
+test('event pages report sold-out status and homepage review highlights include other reviewed events', async () => {
   const soldOutAuth = createTestAccountAuth(`sold-out-attendee-${crypto.randomUUID()}@example.com`);
   const soldOutEvent = createStoredTestEvent('Sold Out Showcase', soldOutAuth);
   db.prepare(`
@@ -2527,8 +2527,9 @@ test('event pages report sold-out status and only sold-out events surface in hom
   const highlights = await request(app).get('/api/reviews/highlights');
   assert.equal(highlights.status, 200);
   assert.ok(highlights.body.highlights.some((item) => item.review === 'Packed house, incredible energy all night.'
-    && item.eventSlug === soldOutEvent.slug));
-  assert.ok(!highlights.body.highlights.some((item) => item.review === 'Good event but not sold out.'));
+    && item.rating === 5 && item.eventSlug === soldOutEvent.slug));
+  assert.ok(highlights.body.highlights.some((item) => item.review === 'Good event but not sold out.'
+    && item.rating === 5 && item.eventSlug === openEvent.slug));
 });
 
 after(() => {

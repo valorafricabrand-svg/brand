@@ -41,7 +41,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/events.css?v=ad-billboard-copy-3">
+  <link rel="stylesheet" href="styles/events.css?v=homepage-review-feed-2">
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=local-live-read-fallback-1" defer></script>
@@ -49,8 +49,9 @@
   <script src="scripts/hero-promo.js?v=hero-carousel-preserve-slide-order-6" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/branding-marquee.js?v=branding-perf-1" defer></script>
+  <script src="scripts/community-events.js?v=past-events-marquee-1" defer></script>
   <script src="scripts/sponsors.js?v=1" defer></script>
-  <script src="scripts/testimonials.js?v=1" defer></script>
+  <script src="scripts/testimonials.js?v=homepage-review-feed-2" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
   <script src="scripts/nav-history.js?v=1" defer></script>
 </head>
@@ -228,7 +229,7 @@
     <section class="testimonials-section" aria-labelledby="testimonialsTitle">
       <div class="wrap">
         <div class="testimonials-heading">
-          <p class="section-kicker">REAL ATTENDEES, SOLD-OUT EVENTS</p>
+          <p class="section-kicker">RATINGS &amp; REVIEWS FROM TICKET HOLDERS</p>
           <h2 id="testimonialsTitle">What people are saying</h2>
         </div>
         <div class="testimonials-grid" id="testimonialsGrid" aria-live="polite"></div>
@@ -239,34 +240,71 @@
       <div class="wrap">
         <div class="community-events-heading">
           <div>
-            <p class="section-kicker">CULTURE. COMMUNITY. CONNECTION.</p>
-            <h2 id="communityEventsTitle">The moments that bring us together</h2>
+            <p class="section-kicker">FROM THE ARCHIVE</p>
+            <h2 id="communityEventsTitle">Past moments. Lasting energy.</h2>
           </div>
-          <p>Every event starts with people and a reason to gather. Here are three community celebrations we’re proud to spotlight; organizer testimonials and verified ticket results will be added when shared.</p>
+          <p>Revisit Luo Festival, Luhya Festival and Baminto Festival, with a glimpse of the live experiences that bring us together.</p>
         </div>
-        <ul class="community-event-list">
-          <li>
-            <article class="community-event-story">
-              <div class="community-event-story-heading"><span class="community-event-number" aria-hidden="true">01</span><span class="community-event-category">CULTURE &amp; COMMUNITY</span></div>
-              <h3>Luo Festival</h3>
-              <p>A celebration of Luo culture and community. Festivals create room to share heritage, meet across generations and make new memories together.</p>
-            </article>
-          </li>
-          <li>
-            <article class="community-event-story">
-              <div class="community-event-story-heading"><span class="community-event-number" aria-hidden="true">02</span><span class="community-event-category">CULTURE &amp; COMMUNITY</span></div>
-              <h3>Luhya Festival</h3>
-              <p>A gathering that puts culture and connection at its heart—a chance for people to come together, celebrate their roots and welcome others into the experience.</p>
-            </article>
-          </li>
-          <li>
-            <article class="community-event-story">
-              <div class="community-event-story-heading"><span class="community-event-number" aria-hidden="true">03</span><span class="community-event-category">FESTIVAL</span></div>
-              <h3>Baminto Festival</h3>
-              <p>Big event memories begin with a simple thing: showing up together. Baminto Festival is part of the growing mix of experiences bringing communities into one place.</p>
-            </article>
-          </li>
-        </ul>
+        <div class="community-events-marquee" id="communityEventsMarquee">
+          <div class="community-events-window">
+            <div class="community-events-track" id="communityEventsTrack">
+              <ul class="community-event-group" id="communityEventGroup" aria-label="Past event and experience highlights">
+                <li>
+                  <article class="community-event-card">
+                    <div class="community-event-media">
+                      <img src="images/events/luo-festival-poster.svg" alt="" loading="lazy" decoding="async">
+                    </div>
+                    <div class="community-event-copy">
+                      <span class="community-event-category">CULTURE &amp; COMMUNITY</span>
+                      <h3>Luo Festival</h3>
+                      <p>A celebration of Luo culture, music and community.</p>
+                    </div>
+                  </article>
+                </li>
+                <li>
+                  <article class="community-event-card">
+                    <div class="community-event-media">
+                      <img src="images/events/luhya-festival-poster.svg" alt="" loading="lazy" decoding="async">
+                    </div>
+                    <div class="community-event-copy">
+                      <span class="community-event-category">CULTURE &amp; COMMUNITY</span>
+                      <h3>Luhya Festival</h3>
+                      <p>Culture, connection and shared moments with the community.</p>
+                    </div>
+                  </article>
+                </li>
+                <li>
+                  <article class="community-event-card">
+                    <div class="community-event-media">
+                      <img src="images/events/baminto-festival.svg" alt="" loading="lazy" decoding="async">
+                    </div>
+                    <div class="community-event-copy">
+                      <span class="community-event-category">FESTIVAL HIGHLIGHT</span>
+                      <h3>Baminto Festival</h3>
+                      <p>Live music, culture and good energy.</p>
+                    </div>
+                  </article>
+                </li>
+                <li>
+                  <article class="community-event-card community-event-video-card">
+                    <div class="community-event-media">
+                      <video data-src="videos/valor-featured-clip-001.mp4" poster="images/events/concert-crowd.svg" muted loop playsinline preload="none" aria-label="Valor Africa brand and platform promo"></video>
+                    </div>
+                    <div class="community-event-copy">
+                      <span class="community-event-category">VALOR AFRICA PROMO</span>
+                      <h3>Discover Valor Africa</h3>
+                      <p>Explore experiences and connect with events on Valor.</p>
+                    </div>
+                  </article>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div class="community-events-controls">
+            <p>Festivals · community · live experiences</p>
+            <button class="community-events-toggle" id="communityEventsToggle" type="button" aria-pressed="false">Pause movement</button>
+          </div>
+        </div>
         <p class="community-events-cta">Organized an event with Valor Africa? <a href="mailto:hello@valorafrica.co.ke?subject=Valor%20Africa%20event%20story">Share your experience with us <span aria-hidden="true">→</span></a></p>
       </div>
     </section>
