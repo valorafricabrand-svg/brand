@@ -553,47 +553,6 @@
     return rail;
   }
 
-  function createPartnershipBrandsRail() {
-    const rail = document.createElement('aside');
-    rail.className = 'sponsored-ticket-rail partnership-brands-rail';
-    rail.setAttribute('aria-label', 'Partnership brands');
-
-    const header = document.createElement('div');
-    header.className = 'sponsored-ticket-heading';
-    header.innerHTML = '<div><span>◆</span><strong>Partnership brands</strong></div><a href="partnership.html">Become a partner <span aria-hidden="true">→</span></a>';
-
-    const windowEl = document.createElement('div');
-    windowEl.className = 'sponsored-ticket-window';
-    const track = document.createElement('div');
-    track.className = 'partnership-brands-track';
-    const brands = [
-      { name: 'M-Pesa', note: 'Mobile payments', style: 'mpesa', logo: 'images/partners/mpesa.svg' },
-      { name: 'PayPal', note: 'Digital payments', style: 'paypal', logo: 'images/partners/paypal.svg' },
-      { name: 'Bitcoin', note: 'Crypto payments', style: 'bitcoin', logo: 'images/partners/bitcoin.svg' },
-      { name: 'Toyota', note: 'Mobility partner', style: 'toyota', logo: 'images/partners/toyota.svg' },
-      { name: 'Paystack', note: 'Online payments', style: 'paystack', logo: 'images/partners/paystack.svg' },
-      { name: 'Airtel Money', note: 'Mobile payments', style: 'airtel', logo: 'images/partners/airtel.svg' }
-    ];
-
-    brands.forEach((brand) => {
-      const card = document.createElement('a');
-      card.className = `partnership-brand-card brand-${brand.style}`;
-      card.href = 'partnership.html';
-      card.setAttribute('aria-label', `${brand.name} partnership — learn more`);
-      card.innerHTML = `<span class="partnership-brand-logo"><img src="${brand.logo}" alt="${brand.name} logo" loading="lazy"></span><span><strong>${brand.name}</strong><small>${brand.note}</small></span>`;
-      track.appendChild(card);
-    });
-    [...track.children].forEach((card) => track.appendChild(card.cloneNode(true)));
-
-    windowEl.appendChild(track);
-    rail.append(header, windowEl);
-    rail.addEventListener('mouseenter', () => track.classList.add('is-paused'));
-    rail.addEventListener('mouseleave', () => track.classList.remove('is-paused'));
-    rail.addEventListener('focusin', () => track.classList.add('is-paused'));
-    rail.addEventListener('focusout', () => track.classList.remove('is-paused'));
-    return rail;
-  }
-
   function createSkeletonCard() {
     const card = document.createElement('div');
     card.className = 'event-card is-skeleton';
