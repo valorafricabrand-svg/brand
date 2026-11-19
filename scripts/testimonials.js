@@ -35,7 +35,15 @@
     return card;
   }
 
-  function createExampleCard() {
+  const EXAMPLE_CARDS = [
+    { rating: 5, quote: 'This is what a genuine attendee review looks like once someone shares one from a sold-out event.' },
+    { rating: 4, quote: 'A real review shows the attendee’s own star rating, their comment, and a link to the sold-out event they actually attended.' },
+    { rating: 5, quote: 'Only people who held a confirmed ticket and attended can leave one of these — nothing here is written for them.' },
+    { rating: 5, quote: 'Each real review links straight back to the exact event it was written about.' },
+    { rating: 4, quote: 'This row fills in naturally as more sold-out events wrap up and attendees choose to share feedback.' }
+  ];
+
+  function createExampleCard(index) {
     const card = document.createElement('article');
     card.className = 'testimonial-card is-example';
 
@@ -45,12 +53,12 @@
 
     const stars = document.createElement('span');
     stars.className = 'testimonial-stars is-example';
-    stars.setAttribute('aria-label', '5 out of 5 stars (example)');
-    stars.textContent = starText(5);
+    stars.setAttribute('aria-label', `${index.rating} out of 5 stars (example)`);
+    stars.textContent = starText(index.rating);
 
     const quote = document.createElement('p');
     quote.className = 'testimonial-quote';
-    quote.textContent = '“This is what a genuine attendee review looks like once someone shares one from a sold-out event.”';
+    quote.textContent = `“${index.quote}”`;
 
     const meta = document.createElement('div');
     meta.className = 'testimonial-meta';
@@ -65,6 +73,24 @@
     return card;
   }
 
+  function createExampleMarquee() {
+    const window_ = document.createElement('div');
+    window_.className = 'testimonials-marquee-window';
+    const track = document.createElement('div');
+    track.className = 'testimonials-marquee-track';
+    for (let pass = 0; pass < 2; pass += 1) {
+      const group = document.createElement('div');
+      group.className = 'testimonials-marquee-group';
+      if (pass === 1) group.setAttribute('aria-hidden', 'true');
+      EXAMPLE_CARDS.forEach((example) => group.appendChild(createExampleCard(example)));
+      track.appendChild(group);
+    }
+    window_.appendChild(track);
+    window_.addEventListener('mouseenter', () => track.classList.add('is-paused'));
+    window_.addEventListener('mouseleave', () => track.classList.remove('is-paused'));
+    return window_;
+  }
+
   async function loadTestimonials() {
     const root = document.getElementById('testimonialsGrid');
     if (!root) return;
@@ -75,8 +101,8 @@
         root.classList.add('is-example-state');
         const empty = document.createElement('p');
         empty.className = 'testimonials-empty';
-        empty.textContent = 'Reviews from sold-out events will appear here as attendees share them. Here is an example of what one will look like:';
-        root.replaceChildren(empty, createExampleCard());
+        empty.textContent = 'Reviews from sold-out events will appear here as attendees share them. Here are examples of what they will look like:';
+        root.replaceChildren(empty, createExampleMarquee());
         return;
       }
       root.classList.remove('is-example-state');

@@ -981,6 +981,9 @@ img { display: block; max-width: 100%; }
   .branding-marquee-track { animation: none; }
   .branding-marquee-group[aria-hidden="true"] { display: none; }
   .branding-marquee-toggle { display: none; }
+  .testimonials-marquee-window { overflow-x: auto; scrollbar-width: thin; }
+  .testimonials-marquee-track { animation: none; }
+  .testimonials-marquee-group[aria-hidden="true"] { display: none; }
 }
 @keyframes ad-drift {
   from { transform: scale(1.04) translateX(-.4%); }
@@ -1303,11 +1306,16 @@ img { display: block; max-width: 100%; }
 .testimonial-event-link { color: var(--green); font-size: 12.5px; font-weight: 800; }
 .testimonial-sold-out-tag { padding: 3px 9px; border-radius: 999px; color: #fff; background: #c51636; font-size: 10px; font-weight: 800; letter-spacing: .05em; }
 .testimonial-sold-out-tag.is-example { background: #64748b; }
-.testimonials-grid.is-example-state { grid-template-columns: 1fr; justify-items: center; }
-.testimonials-empty { max-width: 560px; margin: 0; color: var(--muted); text-align: center; font-size: 14px; }
-.testimonial-card.is-example { max-width: 380px; border-style: dashed; border-color: #c9d3de; background: #f8fafc; }
+.testimonials-grid.is-example-state { display: block; }
+.testimonials-empty { max-width: 640px; margin: 0 auto 18px; color: var(--muted); text-align: center; font-size: 14px; }
+.testimonials-marquee-window { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+.testimonials-marquee-track { display: flex; width: max-content; animation: testimonials-marquee-scroll 32s linear infinite; }
+.testimonials-marquee-track.is-paused { animation-play-state: paused; }
+.testimonials-marquee-group { display: flex; flex: 0 0 auto; gap: 16px; padding: 4px 8px; }
+.testimonial-card.is-example { width: 320px; flex: 0 0 auto; border-style: dashed; border-color: #c9d3de; background: #f8fafc; }
 .testimonial-example-badge { justify-self: start; padding: 3px 9px; border-radius: 999px; color: #fff; background: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .05em; }
 .testimonial-stars.is-example { color: #9aa5b1; }
+@keyframes testimonials-marquee-scroll { to { transform: translateX(-50%); } }
 
 @media (max-width: 900px) {
   .testimonials-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
