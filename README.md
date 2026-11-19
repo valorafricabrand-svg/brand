@@ -4,13 +4,14 @@ Valor Africa is an event discovery, publishing, ticketing, and event-promotion p
 
 ## Website
 
-- `index.html` — event discovery, approved event listings, the paid Valor Ads carousel, and a pausable right-to-left showcase of branding examples.
+- `index.html` — event discovery, approved event listings, the paid Valor Ads carousel, a "What people are saying" strip of real reviews from sold-out events, and a pausable right-to-left showcase of branding examples.
 - `events.html` — searchable and filterable event listings with M-Pesa and wallet checkout, alongside the same branding showcase.
 - `account.html` — Google/email account sign-in, account session management, and sign-out. Sign-in links return users to the page they came from; the account session is maintained for the current browser tab.
 - `my-tickets.html`, `event.html`, and `organizer-dashboard.html` — account-linked ticket QR passes with event love/review feedback on ticket and event pages, organizer sales summaries, and event editing/removal when there are no active ticket orders or promotions.
 - `wallet.html` — one-time phone-wallet linking, M-Pesa deposits, and transaction history.
 - `host.html` — organizer event submission and local draft saving.
 - `partnership.html` — creator applications and tracking, plus signed-in organizer and sponsor inquiries with follow-up status alongside investor information.
+- `partners.html` — a showcase landing page listing all five partnership programs (event sponsors, event organizers, affiliates, artists & DJs, branding services) as independently expandable cards, each linking into its real flow.
 - `gifts.html` — Valor gift credit redeemable to a linked wallet and approved merchants' one-time voucher offers, with buyer and merchant tools.
 - `branding.html` — event branding and merchandise examples for organizers, vendors and sponsors, with an inquiry link and a separate path to the official Valor Africa shop.
 - `event.html`, `order.html`, `ticket.html`, and `advertise.html` — public event details, payment status and ticket confirmations, ticket verification, and paid ad booking.
@@ -23,7 +24,9 @@ The public site is currently focused on discoverable events in Kenya. The home a
 
 Meta Pixel uses the configured ID in `scripts/privacy-consent.js` and loads only after a visitor accepts optional cookies. Public discovery, event, organizer, and marketing pages record page views, published event views, and clicks to start ticket checkout. The order-status page can send a Purchase event only after payment is confirmed and only with consent; it does not send a PageView. Account, wallet, ticket, and organizer-dashboard pages remain excluded. Purchase events are deduplicated in the browser by order ID. Visitors can reject or withdraw consent using the persistent Cookie settings control. Review `privacy-policy.html` against your actual data practices and legal obligations for the countries you serve.
 
-Signed-in buyers with confirmed or paid tickets can save one loved state, an optional 1–5 star rating, and a review of up to 1,200 characters per event from `my-tickets.html` or that event's published detail page. Feedback is private to the buyer's account; it is not published publicly. Older paid/confirmed tickets that predate account linking are also shown after the buyer verifies and links the same phone number used for the ticket order.
+Any signed-in visitor can bookmark an event with one tap from its published detail page (`POST /api/account/events/:id/feedback` with no rating or review attached) — this is a private favorite, not a public review. Writing an actual star rating and comment is reserved for real attendees: from `my-tickets.html`, buyers with a confirmed or paid ticket get an interactive 1–5 star picker and a review of up to 1,200 characters per event, but the backend only accepts a rating or review once that specific event's end time has passed — the API rejects both an attempt from an account with no ticket for the event (`403`, "You can only rate and review events you attended") and an attempt before the event has ended (`403`, "You can rate and review this event once it has ended"). Older paid/confirmed tickets that predate account linking are also shown after the buyer verifies and links the same phone number used for the ticket order.
+
+Published reviews are public: `GET /api/events/:id/reviews` returns the average rating and every written review for an event, rendered as a "What people say" section on that event's own page. Each event's detail page also reports whether it sold out (`ticketsSold` reaching its `capacity`) with a SOLD OUT badge. The homepage's "What people are saying" section (`GET /api/reviews/highlights`, rendered by `scripts/testimonials.js`) curates the highest-rated written reviews, but only from events that actually sold out — it is empty until real attendees of a sold-out event leave one; nothing is pre-populated or fabricated.
 
 ## Run locally
 

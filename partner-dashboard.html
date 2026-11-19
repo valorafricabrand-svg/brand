@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Partner Dashboard | Valor Africa</title>
+  <meta name="description" content="Manage Valor Africa sponsorships, partnership applications, and investment inquiries online.">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#033d32">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/events.css?v=real-reviews-1">
+  <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
+  <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
+  <script src="scripts/partnership.js?v=partner-dashboard-1" defer></script>
+  <script src="scripts/sponsorship.js?v=partner-dashboard-1" defer></script>
+  <script src="scripts/partner-dashboard.js?v=1" defer></script>
+  <script src="scripts/nav-toggle.js?v=1" defer></script>
+  <script src="scripts/privacy-consent.js" defer></script>
+  <script src="scripts/nav-history.js?v=1" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <nav class="nav wrap" aria-label="Main navigation">
+      <a href="index.html" class="brand" aria-label="Valor Africa Events home"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a>
+      <button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Open navigation">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="nav-links" id="navLinks">
+        <a href="events.html">Events</a>
+        <a href="host.html">For organizers</a>
+        <a href="wallet.html">Wallet</a>
+        <a href="account.html">Account</a>
+        <a href="contact.html">Help</a>
+        <a class="nav-host" href="partner-dashboard.html" aria-current="page">Partner dashboard</a>
+      </div>
+    </nav>
+  </header>
+  <main id="main" class="partnership-page">
+    <section class="wrap partnership-dashboard">
+      <div class="partnership-dashboard-heading">
+        <p class="eyebrow">ONE ONLINE PARTNER PORTAL</p>
+        <h1>Partner dashboard</h1>
+        <p>Sign in once to manage sponsorships, submit and track program inquiries, and explore investment. Routine steps happen online; no in-person meeting is required to apply or pay for a published sponsorship package.</p>
+        <p class="partnership-requirement">Sponsorships go live after payment is confirmed. Other programs and investment inquiries remain subject to review; an inquiry is not approval or a contract.</p>
+      </div>
+
+      <section class="partnership-member-area" id="partnerDashboardSignedOut" aria-labelledby="partnerDashboardSignInTitle">
+        <p class="eyebrow">ACCOUNT REQUIRED</p>
+        <h2 id="partnerDashboardSignInTitle">Sign in to continue</h2>
+        <p>Use your Valor Africa account to submit an inquiry, acknowledge the partner terms draft, pay for sponsorship, and track your activity.</p>
+        <a class="button button-primary" href="account.html?returnTo=%2Fpartner-dashboard.html">Sign in or create an account</a>
+      </section>
+
+      <section class="partnership-member-area" id="partnerTermsGate" aria-labelledby="partnerTermsGateTitle" hidden>
+        <p class="eyebrow">REVIEW BEFORE CONTINUING</p>
+        <h2 id="partnerTermsGateTitle">Acknowledge the partner terms draft</h2>
+        <p>This draft is provided for legal review and is not yet a binding agreement. We will not represent it as an official contract until the registered legal entity and final terms have been confirmed and reviewed by qualified counsel.</p>
+        <p><a href="partner-terms.html" target="_blank" rel="noopener">Read the full draft participation terms</a></p>
+        <form class="partnership-application-form" id="partnerTermsForm">
+          <label for="partnerTermsSignerName">Your full name</label>
+          <input id="partnerTermsSignerName" name="signerName" maxlength="160" autocomplete="name" required>
+          <label class="account-wallet-note">
+            <input id="partnerTermsAcknowledged" name="acknowledged" type="checkbox" required>
+            I have read and acknowledge this draft for review. I understand this acknowledgement does not create a binding agreement or investment commitment.
+          </label>
+          <button class="button button-primary" type="submit">Acknowledge draft and continue</button>
+          <p class="page-feedback" id="partnerTermsFeedback" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <div id="partnerDashboardContent" hidden>
+        <p class="page-feedback" id="partnerDashboardFeedback" role="status" aria-live="polite"></p>
+
+        <section class="partnership-member-area" id="sponsorship" aria-labelledby="sponsorshipDashboardTitle">
+          <p class="eyebrow">EVENT SPONSORSHIPS</p>
+          <h2 id="sponsorshipDashboardTitle">Choose a package and track your campaign</h2>
+          <p>Sign in is required. Your sponsor placement activates automatically after payment is confirmed and runs for the duration shown on the package.</p>
+          <form class="service-card service-form" id="sponsorCheckoutForm">
+            <label>Brand or organization name<input name="brandName" maxlength="160" required></label>
+            <fieldset class="ad-tier-fieldset">
+              <legend>Sponsorship package</legend>
+              <div class="sponsorship-tier-grid" id="checkoutTierGrid" role="radiogroup" aria-label="Sponsorship package">
+                <label class="ad-tier-card">
+                  <input type="radio" name="tier" value="community" required>
+                  <span class="ad-tier-card-badge ad-tier-card-badge-listing">KES 25,000 · 14 days</span>
+                  <strong class="ad-tier-card-name">Community Sponsor</strong>
+                  <p class="ad-tier-card-desc">Logo placement, a social shoutout, and a sponsor mention at one event of your choice.</p>
+                </label>
+                <label class="ad-tier-card">
+                  <input type="radio" name="tier" value="city">
+                  <span class="ad-tier-card-badge ad-tier-card-badge-category">KES 75,000 · 30 days</span>
+                  <strong class="ad-tier-card-name">City Sponsor</strong>
+                  <p class="ad-tier-card-desc">Everything in Community, plus a place in the sponsor strip shown across the events page.</p>
+                </label>
+                <label class="ad-tier-card">
+                  <input type="radio" name="tier" value="premium">
+                  <span class="ad-tier-card-badge ad-tier-card-badge-premium">KES 200,000 · 60 days</span>
+                  <strong class="ad-tier-card-name">Premium Partner</strong>
+                  <p class="ad-tier-card-desc">Everything in City, plus top billing in the sponsor strip on the homepage too.</p>
+                </label>
+              </div>
+            </fieldset>
+            <label>Website (optional)<input name="websiteUrl" type="url" maxlength="2048" placeholder="https://..."></label>
+            <label>Logo image link (optional, HTTPS)<input name="logoUrl" type="url" maxlength="2048" placeholder="https://..."></label>
+            <label>Your name<input name="buyerName" maxlength="120" autocomplete="name" required></label>
+            <label>Payment method
+              <select name="paymentMethod" id="sponsorPaymentMethod">
+                <option value="mpesa">M-Pesa</option>
+                <option value="wallet">Valor Wallet</option>
+                <option value="nowpayments">Crypto (NOWPayments)</option>
+                <option value="paypal">PayPal</option>
+              </select>
+            </label>
+            <label>Safaricom M-Pesa number<input name="phone" id="sponsorPhone" type="tel" autocomplete="tel" placeholder="07…, 011…, or +254…"></label>
+            <p class="checkout-note">Sponsorship starts after payment confirmation. Review the <a href="refund-policy.html">refund policy</a> before you pay.</p>
+            <button class="button button-primary" type="submit" id="sponsorCheckoutSubmit">Pay with M-Pesa</button>
+            <p class="page-feedback" id="sponsorCheckoutFeedback" aria-live="polite"></p>
+          </form>
+          <div class="partnership-member-area">
+            <div class="section-heading">
+              <div><h3>Your sponsorships</h3><p>Payment and campaign status for purchases linked to this account.</p></div>
+              <button class="button secondary" id="refreshSponsorships" type="button">Refresh</button>
+            </div>
+            <div id="mySponsorships" aria-live="polite"><p>Loading your sponsorships…</p></div>
+          </div>
+        </section>
+
+        <section class="partnership-member-area business-partnership-applications" aria-labelledby="partnerApplicationsTitle">
+          <p class="eyebrow">ONLINE APPLICATIONS</p>
+          <h2 id="partnerApplicationsTitle">Apply and track partner programs</h2>
+          <p class="partnership-member-intro">Submit details and follow status here. Reviews and any custom pricing or commission terms are handled online; applications do not guarantee activation.</p>
+          <div id="businessPartnerSignedOut" hidden>
+            <p>Sign in to submit an inquiry and track its status.</p>
+            <a class="button button-primary" href="account.html?returnTo=%2Fpartner-dashboard.html">Sign in to continue</a>
+          </div>
+          <div class="business-partnership-grid">
+            <section class="business-partnership-form-card" id="organizer-application" aria-labelledby="organizer-application-title">
+              <h3 id="organizer-application-title">Organizer partner</h3>
+              <p>Tell us about your events and the support you are exploring.</p>
+              <p id="organizerApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
+              <div id="organizerApplicationStatus" class="partnership-application-status" hidden></div>
+              <form class="partnership-application-form business-partnership-form" id="organizerPartnerApplication" hidden>
+                <label for="organizerOrganizationName">Organization or organizer name</label>
+                <input id="organizerOrganizationName" name="organizationName" maxlength="160" required>
+                <label for="organizerWebsite">Website or event profile (optional)</label>
+                <input id="organizerWebsite" name="websiteUrl" type="url" maxlength="2048" placeholder="https://...">
+                <label for="organizerDetails">Tell us about your events, audience, and partnership idea</label>
+                <textarea id="organizerDetails" name="applicationDetails" minlength="30" maxlength="3000" rows="4" required></textarea>
+                <label for="organizerSupport">Support you are interested in (optional)</label>
+                <textarea id="organizerSupport" name="requestedSupport" maxlength="1000" rows="2"></textarea>
+                <button class="button button-primary" type="submit">Submit organizer inquiry</button>
+              </form>
+            </section>
+            <section class="business-partnership-form-card" id="sponsor-application" aria-labelledby="sponsor-application-title">
+              <h3 id="sponsor-application-title">Custom sponsorship proposal</h3>
+              <p>For campaigns outside the published packages, share your goals and timing for online follow-up.</p>
+              <p id="sponsorApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
+              <div id="sponsorApplicationStatus" class="partnership-application-status" hidden></div>
+              <form class="partnership-application-form business-partnership-form" id="sponsorPartnerApplication" hidden>
+                <label for="sponsorOrganizationName">Brand or organization name</label>
+                <input id="sponsorOrganizationName" name="organizationName" maxlength="160" required>
+                <label for="sponsorWebsite">Website (optional)</label>
+                <input id="sponsorWebsite" name="websiteUrl" type="url" maxlength="2048" placeholder="https://...">
+                <label for="sponsorDetails">Describe your audience, campaign goals, and ideal timing</label>
+                <textarea id="sponsorDetails" name="applicationDetails" minlength="30" maxlength="3000" rows="4" required></textarea>
+                <label for="sponsorSupport">Events, locations, or activations (optional)</label>
+                <textarea id="sponsorSupport" name="requestedSupport" maxlength="1000" rows="2"></textarea>
+                <button class="button button-primary" type="submit">Submit sponsor inquiry</button>
+              </form>
+            </section>
+            <section class="business-partnership-form-card" id="artist-application" aria-labelledby="artist-application-title">
+              <h3 id="artist-application-title">Artist or DJ profile</h3>
+              <p>Request a profile or booking introduction. A profile does not guarantee a booking.</p>
+              <p id="artistApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
+              <div id="artistApplicationStatus" class="partnership-application-status" hidden></div>
+              <form class="partnership-application-form business-partnership-form" id="artistPartnerApplication" hidden>
+                <label for="artistOrganizationName">Artist or DJ name</label>
+                <input id="artistOrganizationName" name="organizationName" maxlength="160" required>
+                <label for="artistWebsite">Public profile or portfolio (optional)</label>
+                <input id="artistWebsite" name="websiteUrl" type="url" maxlength="2048" placeholder="https://...">
+                <label for="artistDetails">Describe your work, audience, and the profile you need</label>
+                <textarea id="artistDetails" name="applicationDetails" minlength="30" maxlength="3000" rows="4" required></textarea>
+                <label for="artistSupport">Genres, location, or booking preferences (optional)</label>
+                <textarea id="artistSupport" name="requestedSupport" maxlength="1000" rows="2"></textarea>
+                <button class="button button-primary" type="submit">Submit artist inquiry</button>
+              </form>
+            </section>
+            <section class="business-partnership-form-card" id="branding-application" aria-labelledby="branding-application-title">
+              <h3 id="branding-application-title">Event branding</h3>
+              <p>Request a quote for event branding and production. Work begins only after a written quote is accepted.</p>
+              <p id="brandingApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
+              <div id="brandingApplicationStatus" class="partnership-application-status" hidden></div>
+              <form class="partnership-application-form business-partnership-form" id="brandingPartnerApplication" hidden>
+                <label for="brandingOrganizationName">Organization or event name</label>
+                <input id="brandingOrganizationName" name="organizationName" maxlength="160" required>
+                <label for="brandingWebsite">Website (optional)</label>
+                <input id="brandingWebsite" name="websiteUrl" type="url" maxlength="2048" placeholder="https://...">
+                <label for="brandingDetails">Describe the materials, event date, quantity, and location</label>
+                <textarea id="brandingDetails" name="applicationDetails" minlength="30" maxlength="3000" rows="4" required></textarea>
+                <label for="brandingSupport">Budget or production requirements (optional)</label>
+                <textarea id="brandingSupport" name="requestedSupport" maxlength="1000" rows="2"></textarea>
+                <button class="button button-primary" type="submit">Request a branding quote</button>
+              </form>
+            </section>
+            <section class="business-partnership-form-card" id="investment" aria-labelledby="investmentApplicationTitle">
+              <h3 id="investmentApplicationTitle">Investment interest</h3>
+              <p>This is a non-binding inquiry only—not an offer, subscription, commitment, or promise of returns. Any investment requires separate due diligence and final documents.</p>
+              <p id="investmentApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
+              <div id="investmentApplicationStatus" class="partnership-application-status" hidden></div>
+              <form class="partnership-application-form business-partnership-form" id="investmentPartnerApplication" hidden>
+                <label for="investmentOrganizationName">Investor or organization name</label>
+                <input id="investmentOrganizationName" name="organizationName" maxlength="160" required>
+                <label for="investmentWebsite">Website (optional)</label>
+                <input id="investmentWebsite" name="websiteUrl" type="url" maxlength="2048" placeholder="https://...">
+                <label for="investmentDetails">What would you like to explore? Do not include confidential financial or personal information.</label>
+                <textarea id="investmentDetails" name="applicationDetails" minlength="30" maxlength="3000" rows="4" required></textarea>
+                <label for="investmentSupport">Relevant expertise or preferred contact method (optional)</label>
+                <textarea id="investmentSupport" name="requestedSupport" maxlength="1000" rows="2"></textarea>
+                <button class="button button-primary" type="submit">Submit non-binding inquiry</button>
+              </form>
+              <p><a href="partnership.html#investment-brief-title">Read the investment brief and risk notes</a></p>
+            </section>
+          </div>
+        </section>
+
+        <section class="partnership-member-area" id="creator-application" aria-labelledby="creator-application-title">
+          <p class="eyebrow">CREATOR &amp; AFFILIATE PROGRAM</p>
+          <h2 id="creator-application-title">Apply and track referrals</h2>
+          <p class="partnership-member-intro">We review applications online. Commission is agreed individually before activation and is credited only after attributed ticket orders are paid.</p>
+          <p class="partnership-member-feedback" id="partnerFeedback" role="status" aria-live="polite"></p>
+          <div id="partnerSignedOut" hidden>
+            <p>Sign in to apply or view your creator partner account.</p>
+            <a class="button button-primary" href="account.html?returnTo=%2Fpartner-dashboard.html%23creator-application">Sign in to continue</a>
+          </div>
+          <form class="partnership-application-form" id="partnerApplicationForm" hidden>
+            <p id="partnerAccountName" class="partnership-account-name"></p>
+            <label for="partnerSocialPlatform">Main platform</label>
+            <select id="partnerSocialPlatform" name="socialPlatform" required>
+              <option value="">Choose a platform</option>
+              <option>Instagram</option><option>TikTok</option><option>YouTube</option><option>Facebook</option><option>Other</option>
+            </select>
+            <label for="partnerProfileUrl">Public profile link</label>
+            <input id="partnerProfileUrl" name="profileUrl" type="url" maxlength="2048" placeholder="https://..." required>
+            <label for="partnerAudienceDescription">Tell us about your audience and how you would promote events</label>
+            <textarea id="partnerAudienceDescription" name="audienceDescription" minlength="20" maxlength="1500" rows="4" required></textarea>
+            <button class="button button-primary" type="submit">Submit creator application</button>
+          </form>
+          <div class="partnership-member-dashboard" id="partnerDashboard" hidden>
+            <h3 id="partnerStatusHeading"></h3>
+            <p id="partnerStatusDescription"></p>
+            <p id="partnerAdminNote" hidden></p>
+            <div id="partnerApprovedDetails" hidden>
+              <label for="partnerReferralUrl">Your referral link</label>
+              <div class="partnership-referral-link"><input id="partnerReferralUrl" type="url" readonly><button class="button" id="copyPartnerLink" type="button">Copy link</button></div>
+              <p class="field-hint">The last valid click is attributed for 30 days. Commissions are calculated on paid ticket subtotal only.</p>
+              <a class="partnership-share-whatsapp" id="sharePartnerWhatsapp" target="_blank" rel="noopener noreferrer">Share your link on WhatsApp</a>
+              <dl class="partnership-partner-stats">
+                <div><dt>Link visits</dt><dd id="partnerClicks">0</dd></div>
+                <div><dt>Paid ticket orders</dt><dd id="partnerConversions">0</dd></div>
+                <div><dt>Agreed commission</dt><dd id="partnerRate">—</dd></div>
+                <div><dt>Earned</dt><dd id="partnerEarned">KES 0</dd></div>
+                <div><dt>Paid out</dt><dd id="partnerPaid">KES 0</dd></div>
+                <div><dt>Balance due</dt><dd id="partnerDue">KES 0</dd></div>
+              </dl>
+              <div><h3>Manual payout history</h3><div id="partnerPayoutHistory"><p>No payouts have been recorded yet.</p></div></div>
+            </div>
+            <button class="button" id="editPartnerApplication" type="button" hidden>Update application</button>
+            <form class="partnership-application-form" id="partnerUpdateForm" hidden>
+              <label for="partnerUpdatePlatform">Main platform</label>
+              <select id="partnerUpdatePlatform" name="socialPlatform" required>
+                <option value="">Choose a platform</option>
+                <option>Instagram</option><option>TikTok</option><option>YouTube</option><option>Facebook</option><option>Other</option>
+              </select>
+              <label for="partnerUpdateProfileUrl">Public profile link</label>
+              <input id="partnerUpdateProfileUrl" name="profileUrl" type="url" maxlength="2048" required>
+              <label for="partnerUpdateAudience">Tell us about your audience and how you would promote events</label>
+              <textarea id="partnerUpdateAudience" name="audienceDescription" minlength="20" maxlength="1500" rows="4" required></textarea>
+              <button class="button button-primary" type="submit">Resubmit application</button>
+            </form>
+          </div>
+        </section>
+        <p class="partnership-requirement">You can manage proposals, payments, and follow-up through this dashboard. An in-person meeting is not required. Custom work and investments still need separate written terms before delivery or funding.</p>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand-block"><a href="index.html" class="brand footer-brand"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a><p>Discover experiences and find your next great event across Africa.</p><a class="footer-email" href="mailto:hello@valorafrica.co.ke">hello@valorafrica.co.ke</a></div>
+      <div class="footer-column"><h2 class="footer-heading">Partner programs</h2><nav class="footer-links" aria-label="Partner programs"><a href="partners.html">Explore programs</a><a href="partnership.html#investment-brief-title">Investment brief</a><a href="partner-terms.html">Draft participation terms</a></nav></div>
+      <div class="footer-column"><h2 class="footer-heading">Account &amp; support</h2><nav class="footer-links" aria-label="Account and support"><a href="account.html">Your account</a><a href="wallet.html">Valor Wallet</a><a href="contact.html">Contact support</a><a href="refund-policy.html">Refund policy</a></nav></div>
+    </div>
+    <div class="wrap footer-bottom"><p>© 2026 Valor Africa Events</p><a href="index.html">Back to home <span aria-hidden="true">↑</span></a></div>
+  </footer>
+</body>
+</html>

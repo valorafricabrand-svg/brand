@@ -614,7 +614,7 @@
     const list = document.getElementById('partnershipApplicationsList');
     list.replaceChildren();
     const { applications } = await api('/api/partnership-applications/admin');
-    if (!applications.length) return addText(list, 'p', 'empty', 'No organizer or sponsor inquiries have been received.');
+    if (!applications.length) return addText(list, 'p', 'empty', 'No partner program inquiries have been received.');
     applications.forEach((application) => {
       const card = document.createElement('article');
       card.className = 'record';
@@ -624,14 +624,21 @@
         city: 'City Sponsor · KES 75,000',
         premium: 'Premium Partner · KES 200,000'
       };
-      addText(card, 'h3', '', `${application.type === 'organizer' ? 'Organizer partner' : 'Event sponsor'} · ${application.organizationName}`);
+      const applicationTypes = {
+        organizer: 'Organizer partner',
+        sponsor: 'Event sponsor',
+        artist: 'Artist / DJ profile',
+        branding: 'Event branding',
+        investment: 'Non-binding investment inquiry'
+      };
+      addText(card, 'h3', '', `${applicationTypes[application.type] || 'Partner inquiry'} · ${application.organizationName}`);
       addText(card, 'p', 'record-meta', `${application.status.toUpperCase()} · ${application.displayName || 'Account'} · ${application.email} · Submitted ${new Date(application.createdAt).toLocaleString()}`);
       if (application.sponsorshipTier) addText(card, 'p', 'record-contact',
         `Package: ${sponsorshipTierLabels[application.sponsorshipTier] || application.sponsorshipTier}`);
       if (application.websiteUrl) addText(card, 'p', 'record-contact', application.websiteUrl);
       addText(card, 'p', 'record-description', application.applicationDetails);
       if (application.requestedSupport) addText(card, 'p', 'record-contact',
-        `${application.type === 'organizer' ? 'Interested support' : 'Events or activations'}: ${application.requestedSupport}`);
+        `${application.type === 'organizer' ? 'Interested support' : 'Additional details'}: ${application.requestedSupport}`);
       const label = document.createElement('label');
       label.textContent = 'Follow-up status';
       const status = document.createElement('select');

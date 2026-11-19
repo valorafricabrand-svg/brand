@@ -16,6 +16,7 @@ const paypal = require('./paypal');
 const walletSms = require('./wallet-sms');
 const accountEmail = require('./account-email');
 const { normalizeKenyanPhone } = require('./kenyan-phone');
+const { PARTNER_APPLICATION_TYPES, PARTNER_TERMS_VERSION } = require('./partner-terms');
 
 const allowedCategories = new Set(['Movies & Cinema','Concerts','Festivals','Community','Food & Drink','Arts & Culture','Sports','Business','Comedy','Nightlife','Workshops & Classes','Conferences & Networking','Religious & Faith','Other']);
 const allowedTimezones = new Set(['Africa/Nairobi','UTC','Africa/Lagos','Africa/Accra']);
@@ -825,6 +826,20 @@ function createApp(options = {}) {
     `).get(sha256(token));
     if (!account) return res.status(401).json({ error: 'Your session has expired. Please sign in again.' });
     req.account = account;
+    next();
+  }
+
+  function requirePartnerTermsAcknowledgement(req, res, next) {
+    const acknowledgement = db.prepare(`
+      SELECT 1 FROM partner_terms_acknowledgements
+      WHERE account_id=? AND terms_version=?
+    `).get(req.account.id, PARTNER_TERMS_VERSION);
+    if (!acknowledgement) {
+      return res.status(428).json({
+        error: 'Review and acknowledge the current partner terms before continuing.',
+        termsVersion: PARTNER_TERMS_VERSION
+      });
+    }
     next();
   }
 
@@ -2401,6 +2416,54 @@ function createApp(options = {}) {
     }
   });
 
+  app.get('/api/partner-terms/current', (req, res) => {
+    res.json({
+      version: PARTNER_TERMS_VERSION,
+      status: 'draft',
+      title: 'Valor Africa Partner Participation Terms',
+      documentUrl: '/partner-terms.html'
+    });
+  });
+
+  app.get('/api/partner-terms/me', requireAccount, (req, res) => {
+    const acknowledgement = db.prepare(`
+      SELECT terms_version AS version,signer_name AS signerName,
+        acknowledged_at AS acknowledgedAt
+      FROM partner_terms_acknowledgements
+      WHERE account_id=? AND terms_version=?
+    `).get(req.account.id, PARTNER_TERMS_VERSION);
+    res.json({ version: PARTNER_TERMS_VERSION, status: 'draft', acknowledgement: acknowledgement || null });
+  });
+
+  app.post('/api/partner-terms/acknowledge', requireAccount, (req, res) => {
+    const { version, signerName, acknowledged } = req.body || {};
+    if (version !== PARTNER_TERMS_VERSION) {
+      return res.status(409).json({ error: 'These terms have changed. Reload the current partner terms and try again.' });
+    }
+    if (acknowledged !== true) {
+      return res.status(400).json({ error: 'Confirm that you have read and acknowledge the draft terms.' });
+    }
+    if (typeof signerName !== 'string' || signerName.trim().length < 3 || signerName.trim().length > 160) {
+      return res.status(400).json({ error: 'Enter your full name (3–160 characters) to record your acknowledgement.' });
+    }
+    db.prepare(`
+      INSERT INTO partner_terms_acknowledgements
+        (account_id,terms_version,signer_name,account_email)
+      VALUES (?,?,?,?)
+      ON CONFLICT(account_id,terms_version) DO NOTHING
+    `).run(req.account.id, PARTNER_TERMS_VERSION, signerName.trim(), req.account.email);
+    const acknowledgement = db.prepare(`
+      SELECT terms_version AS version,signer_name AS signerName,
+        acknowledged_at AS acknowledgedAt
+      FROM partner_terms_acknowledgements
+      WHERE account_id=? AND terms_version=?
+    `).get(req.account.id, PARTNER_TERMS_VERSION);
+    res.status(201).json({
+      acknowledgement,
+      message: 'Your acknowledgement of this draft has been recorded. It is not a binding agreement until the terms are legally reviewed and approved.'
+    });
+  });
+
   function affiliateEarnings(partnerId) {
     const earnedKes = db.prepare(`
       SELECT COALESCE(SUM(ROUND(amount_kes * affiliate_commission_percent / 100.0)),0) AS amount
@@ -2461,7 +2524,7 @@ function createApp(options = {}) {
     });
   });
 
-  app.post('/api/partners/apply', requireAccount, partnerApplicationLimiter, (req, res) => {
+  app.post('/api/partners/apply', requireAccount, requirePartnerTermsAcknowledgement, partnerApplicationLimiter, (req, res) => {
     const socialPlatform = req.body?.socialPlatform;
     const profileUrl = typeof req.body?.profileUrl === 'string' ? req.body.profileUrl.trim() : '';
     const audienceDescription = typeof req.body?.audienceDescription === 'string' ? req.body.audienceDescription.trim() : '';
@@ -2528,6 +2591,20 @@ function createApp(options = {}) {
     res.json({ sponsors: rows });
   });
 
+  app.get('/api/sponsorships/me', requireAccount, (req, res) => {
+    const purchases = db.prepare(`
+      SELECT id AS purchaseId,tier,brand_name AS brandName,status,
+        payment_method AS paymentMethod,amount_kes AS amountKes,
+        result_description AS resultDescription,starts_at AS startsAt,
+        ends_at AS endsAt,created_at AS createdAt
+      FROM sponsorship_purchases
+      WHERE account_id=?
+      ORDER BY created_at DESC
+      LIMIT 100
+    `).all(req.account.id);
+    res.json({ purchases });
+  });
+
   app.get('/api/partnership-applications/me', requireAccount, (req, res) => {
     const applications = db.prepare(`
       SELECT id,application_type AS type,organization_name AS organizationName,
@@ -2539,16 +2616,21 @@ function createApp(options = {}) {
     res.json({ applications });
   });
 
-  app.post('/api/partnership-applications', requireAccount, partnerApplicationLimiter, (req, res) => {
+  app.post('/api/partnership-applications', requireAccount, requirePartnerTermsAcknowledgement, partnerApplicationLimiter, (req, res) => {
     const type = req.body?.type;
     const organizationName = typeof req.body?.organizationName === 'string' ? req.body.organizationName.trim() : '';
     const websiteUrl = typeof req.body?.websiteUrl === 'string' ? req.body.websiteUrl.trim() : '';
     const applicationDetails = typeof req.body?.applicationDetails === 'string' ? req.body.applicationDetails.trim() : '';
     const requestedSupport = typeof req.body?.requestedSupport === 'string' ? req.body.requestedSupport.trim() : '';
     const sponsorshipTier = typeof req.body?.sponsorshipTier === 'string' ? req.body.sponsorshipTier.trim() : '';
-    if (!['organizer','sponsor'].includes(type)) return res.status(400).json({ error: 'Choose organizer partner or event sponsor.' });
+    if (!PARTNER_APPLICATION_TYPES.includes(type)) {
+      return res.status(400).json({ error: 'Choose a supported partner program.' });
+    }
     if (!organizationName || organizationName.length > 160) {
       return res.status(400).json({ error: 'Organization name is required and must be 160 characters or fewer.' });
+    }
+    if (type !== 'sponsor' && sponsorshipTier) {
+      return res.status(400).json({ error: 'Sponsorship packages are only available for sponsor applications.' });
     }
     if (sponsorshipTier && !Object.keys(sponsorshipTiers).includes(sponsorshipTier)) {
       return res.status(400).json({ error: 'Choose a valid sponsorship package, or leave it blank for a custom proposal.' });
@@ -2589,12 +2671,14 @@ function createApp(options = {}) {
     res.status(201).json({
       id,
       status: 'pending',
-      message: `Your ${type === 'organizer' ? 'organizer partnership' : 'sponsorship'} inquiry was received. Our team will contact you to discuss fit and any terms; no package or price is committed by this application.`
+      message: type === 'investment'
+        ? 'Your non-binding investment inquiry was received. It is not an investment offer or commitment; any investment would require separate due diligence and signed legal documents.'
+        : `Your ${type} inquiry was received. We will follow up through your account; activation and any commercial terms require internal review and separate written confirmation. No meeting is required to submit or track an inquiry.`
     });
   });
 
   app.get('/api/partnership-applications/admin', requireAdmin, (req, res) => {
-    const type = ['organizer','sponsor'].includes(req.query.type) ? req.query.type : null;
+    const type = PARTNER_APPLICATION_TYPES.includes(req.query.type) ? req.query.type : null;
     const applications = (type
       ? db.prepare(`
           SELECT p.id,p.account_id AS accountId,a.email,a.display_name AS displayName,
@@ -2775,12 +2859,54 @@ function createApp(options = {}) {
     }
   });
 
+  app.get('/api/reviews/highlights', (req, res, next) => {
+    try {
+      const rows = db.prepare(`
+        SELECT e.title AS eventTitle, e.slug AS eventSlug, e.city,
+          f.rating, f.review, f.updated_at AS updatedAt,
+          COALESCE(NULLIF(TRIM(a.display_name), ''), 'Valor attendee') AS displayName
+        FROM event_feedback f
+        JOIN events e ON e.id = f.event_id
+        JOIN accounts a ON a.id = f.account_id
+        WHERE e.status='approved' AND e.deleted_at IS NULL
+          AND f.rating IS NOT NULL AND TRIM(f.review) <> ''
+          AND e.capacity IS NOT NULL
+          AND (SELECT COALESCE(SUM(o.quantity),0) FROM orders o
+            WHERE o.event_id=e.id AND o.order_type='ticket' AND o.status IN ('paid','confirmed')) >= e.capacity
+        ORDER BY f.rating DESC, datetime(f.updated_at) DESC
+        LIMIT 9
+      `).all();
+      res.json({
+        highlights: rows.map((row) => ({
+          eventTitle: row.eventTitle,
+          eventSlug: row.eventSlug,
+          city: row.city,
+          rating: row.rating,
+          review: row.review,
+          displayName: row.displayName,
+          updatedAt: row.updatedAt
+        }))
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/api/events/by-slug/:slug', (req, res) => {
     const row = db.prepare(`
-      SELECT * FROM events WHERE slug = ? AND status = 'approved' AND deleted_at IS NULL
+      SELECT e.*,
+        (SELECT COALESCE(SUM(o.quantity),0) FROM orders o
+          WHERE o.event_id=e.id AND o.order_type='ticket' AND o.status IN ('paid','confirmed')) AS tickets_sold
+      FROM events e WHERE e.slug = ? AND e.status = 'approved' AND e.deleted_at IS NULL
     `).get(req.params.slug);
     if (!row) return res.status(404).json({ error: 'This event is not available.' });
-    res.json({ event: publicEvent(row) });
+    res.json({
+      event: {
+        ...publicEvent(row),
+        ticketsSold: row.tickets_sold,
+        soldOut: row.capacity !== null && row.tickets_sold >= row.capacity
+      }
+    });
   });
 
   app.post('/api/events/:id/views', eventViewLimiter, (req, res) => {
@@ -4286,10 +4412,7 @@ function createApp(options = {}) {
     return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
   }
 
-  app.post('/api/sponsorships', (req, res, next) => {
-    if (req.body && req.body.paymentMethod === 'wallet') return requireAccount(req, res, next);
-    next();
-  }, async (req, res, next) => {
+  app.post('/api/sponsorships', requireAccount, requirePartnerTermsAcknowledgement, async (req, res, next) => {
     try {
       const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
       if (!['mpesa','wallet','nowpayments','paypal'].includes(paymentMethod)) {
@@ -4396,7 +4519,7 @@ function createApp(options = {}) {
             amountKes: tierInfo.priceKes,
             description: `${tierInfo.label} sponsorship for ${brandNameTrimmed}`.slice(0, 127),
             successUrl: `${baseUrl}/sponsorship-status.html?purchaseId=${encodeURIComponent(id)}&payment=nowpayments`,
-            cancelUrl: `${baseUrl}/partnership.html?checkout=cancelled`
+            cancelUrl: `${baseUrl}/partner-dashboard.html#sponsorship`
           });
           if (!invoice || typeof invoice.id !== 'string' || typeof invoice.url !== 'string' ||
               !Number.isFinite(invoice.priceAmountUsd) || invoice.priceAmountUsd <= 0) {
@@ -4429,7 +4552,7 @@ function createApp(options = {}) {
             amountKes: tierInfo.priceKes,
             description: `${tierInfo.label} sponsorship for ${brandNameTrimmed}`.slice(0, 127),
             returnUrl: `${baseUrl}/sponsorship-status.html?purchaseId=${encodeURIComponent(id)}&payment=paypal`,
-            cancelUrl: `${baseUrl}/partnership.html?checkout=cancelled`
+            cancelUrl: `${baseUrl}/partner-dashboard.html#sponsorship`
           });
           db.prepare(`
             UPDATE sponsorship_purchases SET paypal_order_id=?,paypal_amount_usd=? WHERE id=? AND status='pending'
@@ -4533,7 +4656,7 @@ function createApp(options = {}) {
       const tickets = db.prepare(`
         SELECT t.code,t.ticket_type AS ticketType,t.created_at AS issuedAt,
           o.id AS orderId,o.status AS orderStatus,o.ticket_email_status AS ticketEmailStatus,o.quantity,
-          e.id AS eventId,e.title AS eventTitle,e.slug AS eventSlug,e.starts_at AS startsAt,
+          e.id AS eventId,e.title AS eventTitle,e.slug AS eventSlug,e.starts_at AS startsAt,e.ends_at AS endsAt,
           e.venue_name AS venueName,e.city,e.timezone,
           COALESCE(f.loved,0) AS loved,f.rating,f.review
         FROM tickets t
@@ -4596,8 +4719,33 @@ function createApp(options = {}) {
     if (typeof review !== 'string' || review.length > 1200) {
       return res.status(400).json({ error: 'Review must be text of 1,200 characters or fewer.' });
     }
-    const eventExists = db.prepare(`SELECT 1 FROM events WHERE id=? LIMIT 1`).get(req.params.eventId);
-    if (!eventExists) return res.status(404).json({ error: 'This event is not available.' });
+    const eventRow = db.prepare(`SELECT ends_at FROM events WHERE id=? LIMIT 1`).get(req.params.eventId);
+    if (!eventRow) return res.status(404).json({ error: 'This event is not available.' });
+
+    const trimmedReview = review.trim();
+    if (normalizedRating !== null || trimmedReview !== '') {
+      const attended = db.prepare(`
+        SELECT 1 FROM tickets t
+        JOIN orders o ON o.id=t.order_id
+        WHERE t.event_id=? AND o.order_type='ticket' AND o.status IN ('paid','confirmed')
+          AND (
+            o.account_id=? OR (
+              o.account_id IS NULL AND EXISTS (
+                SELECT 1 FROM wallets w WHERE w.account_id=?
+                  AND substr(replace(replace(replace(replace(replace(o.phone,'+',''),' ',''),'-',''),'(',''),')',''),-9)
+                    = substr(w.phone,-9)
+              )
+            )
+          )
+        LIMIT 1
+      `).get(req.params.eventId, req.account.id, req.account.id);
+      if (!attended) {
+        return res.status(403).json({ error: 'You can only rate and review events you attended.' });
+      }
+      if (new Date(eventRow.ends_at).getTime() > Date.now()) {
+        return res.status(403).json({ error: 'You can rate and review this event once it has ended.' });
+      }
+    }
 
     try {
       db.prepare(`
@@ -4605,8 +4753,8 @@ function createApp(options = {}) {
         VALUES (?,?,?,?,?,datetime('now'))
         ON CONFLICT(account_id,event_id) DO UPDATE SET
           loved=excluded.loved,rating=excluded.rating,review=excluded.review,updated_at=datetime('now')
-      `).run(req.account.id, req.params.eventId, loved ? 1 : 0, normalizedRating, review.trim());
-      res.json({ loved, rating: normalizedRating, review: review.trim() });
+      `).run(req.account.id, req.params.eventId, loved ? 1 : 0, normalizedRating, trimmedReview);
+      res.json({ loved, rating: normalizedRating, review: trimmedReview });
     } catch (error) {
       next(error);
     }

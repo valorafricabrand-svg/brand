@@ -47,6 +47,7 @@ img { display: block; max-width: 100%; }
 .event-detail-copy { min-width: 0; }
 .event-detail-categories { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .event-detail-categories span { padding: 5px 12px; border: 1px solid #ecd7c2; border-radius: 999px; color: #9a4c08; background: #fff8ef; font-size: 12px; font-weight: 800; }
+.event-detail-categories span.event-detail-sold-out-badge { border-color: #c51636; color: #fff; background: #c51636; letter-spacing: .04em; }
 .event-detail-copy h1 { margin: 0 0 22px; color: #1c1c1c; font: 900 clamp(28px, 4vw, 48px)/1.1 Manrope, sans-serif; letter-spacing: -.035em; text-transform: uppercase; }
 .event-detail-facts { display: grid; margin-bottom: 26px; }
 .event-detail-fact { display: grid; gap: 3px; padding: 13px 0; border-bottom: 1px solid #e7e7e4; }
@@ -203,20 +204,27 @@ img { display: block; max-width: 100%; }
 .ticket-review-form { display: grid; gap: 10px; width: 100%; }
 .ticket-review-form h3 { margin: 0; font: 800 18px Manrope, sans-serif; }
 .ticket-review-form label { display: grid; gap: 6px; color: #35445a; font-size: 13px; font-weight: 700; }
-.ticket-review-form select, .ticket-review-form textarea { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; color: var(--ink); background: #fff; font: inherit; }
-.ticket-review-form textarea { resize: vertical; }
+.ticket-review-form textarea { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; color: var(--ink); background: #fff; font: inherit; resize: vertical; }
 .ticket-review-form .button { justify-self: start; width: auto; }
 .ticket-review-form button:disabled, .ticket-love:disabled { cursor: wait; opacity: .6; }
+.ticket-review-pending { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .ticket-feedback-status { min-height: 1.5em; color: #067647; }
 .ticket-feedback-status.error { color: #b42318; }
+.star-rating-field { display: grid; gap: 6px; }
+.star-rating-field > span:first-child { color: #35445a; font-size: 13px; font-weight: 700; }
+.star-rating-input { display: inline-flex; gap: 4px; }
+.star-rating-star { display: grid; width: 32px; height: 32px; place-items: center; padding: 0; border: 0; border-radius: 7px; color: #d7dce3; background: none; cursor: pointer; transition: color .15s ease, transform .15s ease; }
+.star-rating-star:hover, .star-rating-star:focus-visible { transform: scale(1.12); }
+.star-rating-star svg { width: 24px; height: 24px; fill: currentColor; }
+.star-rating-star.is-filled { color: #f5b400; }
+.star-rating-star:disabled { cursor: wait; opacity: .6; }
 .event-detail-poster-wrap { box-sizing: border-box; }
 .event-detail-feedback { width: 100%; margin-top: 12px; padding: 12px; border-top: 0; border-radius: 12px; background: #f8faf9; }
 .event-detail-feedback .ticket-love, .event-detail-love { min-height: 38px; width: 100%; padding: 7px 12px; font-size: 13px; }
 .event-detail-feedback .ticket-review-form { gap: 8px; }
 .event-detail-feedback .ticket-review-form h3 { font-size: 15px; }
 .event-detail-feedback .ticket-review-form label { font-size: 12px; }
-.event-detail-feedback select, .event-detail-feedback textarea { min-height: 38px; padding: 8px 10px; }
-.event-detail-feedback textarea { height: 64px; }
+.event-detail-feedback textarea { min-height: 38px; height: 64px; padding: 8px 10px; }
 .event-public-reviews { margin: 0 clamp(22px, 4vw, 40px) clamp(22px, 4vw, 40px); padding-top: 22px; border-top: 1px solid #e7ece9; }
 .event-review-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .event-review-heading h2 { margin: 0; font: 800 20px Manrope, sans-serif; }
@@ -1275,4 +1283,25 @@ img { display: block; max-width: 100%; }
   .partner-program-index { display: none; }
   .partner-program-badge { grid-column: 2; justify-self: start; }
   .partner-program-cta { width: 100%; min-width: 0; margin-right: 0; }
+}
+
+/* Homepage testimonials: real attendee reviews from sold-out events */
+.testimonials-section { padding-block: clamp(40px, 6vw, 64px); }
+.testimonials-heading { max-width: 640px; margin: 0 auto 28px; text-align: center; }
+.testimonials-heading h2 { margin: 6px 0 0; color: var(--ink); font: 800 clamp(26px, 3.5vw, 34px)/1.2 Manrope, sans-serif; }
+.testimonials-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.testimonial-card { display: grid; align-content: start; gap: 10px; padding: 22px; border: 1px solid #e7ece9; border-radius: 16px; background: #fff; box-shadow: 0 10px 26px rgba(20, 39, 58, .05); }
+.testimonial-stars { color: #f5b400; font-size: 15px; letter-spacing: 2px; }
+.testimonial-quote { margin: 0; color: #35445a; font-size: 14.5px; line-height: 1.6; }
+.testimonial-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+.testimonial-meta strong { color: var(--ink); font-size: 13px; }
+.testimonial-event-link { color: var(--green); font-size: 12.5px; font-weight: 800; }
+.testimonial-sold-out-tag { padding: 3px 9px; border-radius: 999px; color: #fff; background: #c51636; font-size: 10px; font-weight: 800; letter-spacing: .05em; }
+.testimonials-empty { margin: 0; padding: 30px; border: 1px dashed #c9d3de; border-radius: 14px; color: var(--muted); text-align: center; font-size: 14px; }
+
+@media (max-width: 900px) {
+  .testimonials-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .testimonials-grid { grid-template-columns: 1fr; }
 }

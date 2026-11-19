@@ -115,37 +115,42 @@
     }
   }
 
-  applicationForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    submitApplication(applicationForm);
-  });
-  document.getElementById('partnerUpdateForm').addEventListener('submit', (event) => {
-    event.preventDefault();
-    submitApplication(event.currentTarget);
-  });
-  document.getElementById('editPartnerApplication').addEventListener('click', () => {
-    document.getElementById('partnerUpdateForm').hidden = false;
-  });
-  document.getElementById('copyPartnerLink').addEventListener('click', async () => {
-    const input = document.getElementById('partnerReferralUrl');
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(input.value);
-      } else {
-        input.select();
-        if (!document.execCommand('copy')) throw new Error('Clipboard access is unavailable in this browser.');
+  if (signedOut && applicationForm && dashboard && feedback) {
+    applicationForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      submitApplication(applicationForm);
+    });
+    document.getElementById('partnerUpdateForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      submitApplication(event.currentTarget);
+    });
+    document.getElementById('editPartnerApplication').addEventListener('click', () => {
+      document.getElementById('partnerUpdateForm').hidden = false;
+    });
+    document.getElementById('copyPartnerLink').addEventListener('click', async () => {
+      const input = document.getElementById('partnerReferralUrl');
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(input.value);
+        } else {
+          input.select();
+          if (!document.execCommand('copy')) throw new Error('Clipboard access is unavailable in this browser.');
+        }
+        setFeedback('Your referral link has been copied.');
+      } catch (error) {
+        setFeedback(error.message, true);
       }
-      setFeedback('Your referral link has been copied.');
-    } catch (error) {
-      setFeedback(error.message, true);
-    }
-  });
+    });
+  }
 
   const businessSignedOut = document.getElementById('businessPartnerSignedOut');
   const businessApplications = [
     { type: 'organizer', form: document.getElementById('organizerPartnerApplication') },
-    { type: 'sponsor', form: document.getElementById('sponsorPartnerApplication') }
-  ];
+    { type: 'sponsor', form: document.getElementById('sponsorPartnerApplication') },
+    { type: 'artist', form: document.getElementById('artistPartnerApplication') },
+    { type: 'branding', form: document.getElementById('brandingPartnerApplication') },
+    { type: 'investment', form: document.getElementById('investmentPartnerApplication') }
+  ].filter((entry) => entry.form);
 
   function renderBusinessApplication(entry, application) {
     const status = document.getElementById(`${entry.type}ApplicationStatus`);
@@ -166,7 +171,9 @@
       : application.status === 'contacted'
         ? 'Our team has started follow-up. Check the review note below or your account email.'
         : application.status === 'approved'
-          ? 'Your partnership inquiry is approved for follow-up. Confirm any fees, deliverables, budget, and agreement directly with Valor Africa before proceeding.'
+        ? entry.type === 'investment'
+          ? 'Your non-binding investment inquiry is approved for further discussion. It is not an investment offer or commitment; any investment requires separate due diligence and signed legal documents.'
+          : 'Your partnership inquiry is approved for follow-up. Confirm any fees, deliverables, budget, and agreement directly with Valor Africa before proceeding.'
           : application.status === 'rejected'
             ? 'Your inquiry needs an update. Review the note and edit your details below before resubmitting.'
             : 'This inquiry is closed. Contact Valor Africa if you would like to start a new conversation.';
@@ -186,8 +193,7 @@
       }
       entry.form.querySelector('[type="submit"]').textContent = 'Update and resubmit inquiry';
     } else {
-      entry.form.querySelector('[type="submit"]').textContent =
-        entry.type === 'organizer' ? 'Submit organizer inquiry' : 'Submit sponsor inquiry';
+      entry.form.querySelector('[type="submit"]').textContent = `Submit ${entry.type} inquiry`;
     }
   }
 
@@ -244,7 +250,12 @@
     });
   });
 
-  if (token) loadPartner();
-  else signedOut.hidden = false;
+  if (signedOut && applicationForm && dashboard && feedback) {
+    if (token) loadPartner();
+    else signedOut.hidden = false;
+  }
   loadBusinessApplications();
+  const hashTarget = window.location.hash && document.getElementById(window.location.hash.slice(1));
+  const sponsorProgram = hashTarget && hashTarget.closest('details.partner-program');
+  if (sponsorProgram) sponsorProgram.open = true;
 })();

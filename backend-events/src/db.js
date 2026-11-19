@@ -260,11 +260,12 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS partnership_applications (
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    application_type TEXT NOT NULL CHECK (application_type IN ('organizer','sponsor')),
+    application_type TEXT NOT NULL CHECK (application_type IN ('organizer','sponsor','artist','branding','investment')),
     organization_name TEXT NOT NULL,
     website_url TEXT NOT NULL DEFAULT '',
     application_details TEXT NOT NULL,
     requested_support TEXT NOT NULL DEFAULT '',
+    sponsorship_tier TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','contacted','approved','rejected','closed')),
     admin_note TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -275,6 +276,15 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS partnership_applications_status_created
     ON partnership_applications(application_type,status,created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS partner_terms_acknowledgements (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    terms_version TEXT NOT NULL,
+    signer_name TEXT NOT NULL,
+    account_email TEXT NOT NULL,
+    acknowledged_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (account_id,terms_version)
+  );
 
   CREATE TABLE IF NOT EXISTS tickets (
     code TEXT PRIMARY KEY,
@@ -691,6 +701,50 @@ db.exec('DROP TABLE IF EXISTS wallet_sessions');
 const partnershipApplicationColumns = db.prepare('PRAGMA table_info(partnership_applications)').all();
 if (!partnershipApplicationColumns.some((column) => column.name === 'sponsorship_tier')) {
   db.exec("ALTER TABLE partnership_applications ADD COLUMN sponsorship_tier TEXT NOT NULL DEFAULT ''");
+}
+const partnershipApplicationsSchema = db.prepare(`
+  SELECT sql FROM sqlite_master WHERE type='table' AND name='partnership_applications'
+`).get().sql;
+if (!partnershipApplicationsSchema.includes("'investment'")) {
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    db.exec(`
+      BEGIN IMMEDIATE;
+      CREATE TABLE partnership_applications_new (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        application_type TEXT NOT NULL CHECK (application_type IN ('organizer','sponsor','artist','branding','investment')),
+        organization_name TEXT NOT NULL,
+        website_url TEXT NOT NULL DEFAULT '',
+        application_details TEXT NOT NULL,
+        requested_support TEXT NOT NULL DEFAULT '',
+        sponsorship_tier TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','contacted','approved','rejected','closed')),
+        admin_note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        reviewed_at TEXT,
+        UNIQUE (account_id,application_type)
+      );
+      INSERT INTO partnership_applications_new (
+        id,account_id,application_type,organization_name,website_url,application_details,
+        requested_support,sponsorship_tier,status,admin_note,created_at,updated_at,reviewed_at
+      )
+      SELECT id,account_id,application_type,organization_name,website_url,application_details,
+        requested_support,sponsorship_tier,status,admin_note,created_at,updated_at,reviewed_at
+      FROM partnership_applications;
+      DROP TABLE partnership_applications;
+      ALTER TABLE partnership_applications_new RENAME TO partnership_applications;
+      CREATE INDEX partnership_applications_status_created
+        ON partnership_applications(application_type,status,created_at DESC);
+      COMMIT;
+    `);
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
 }
 
 const adPackageColumns = db.prepare('PRAGMA table_info(ad_packages)').all();

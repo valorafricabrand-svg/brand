@@ -9,16 +9,12 @@
     element.classList.add('error');
   }
 
-  function createTicketFeedback(ticket) {
-    const feedback = document.createElement('section');
-    feedback.className = 'ticket-feedback';
-    feedback.setAttribute('aria-label', `Feedback for ${ticket.eventTitle}`);
-
+  function createLoveButton(loved) {
     const loveButton = document.createElement('button');
     loveButton.type = 'button';
     loveButton.className = 'ticket-love';
-    loveButton.setAttribute('aria-pressed', String(Boolean(ticket.loved)));
-    loveButton.setAttribute('aria-label', ticket.loved ? 'Remove love for this event' : 'Show that you loved this event');
+    loveButton.setAttribute('aria-pressed', String(Boolean(loved)));
+    loveButton.setAttribute('aria-label', loved ? 'Remove love for this event' : 'Show that you loved this event');
     const heart = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     heart.setAttribute('viewBox', '0 0 24 24');
     heart.setAttribute('aria-hidden', 'true');
@@ -27,24 +23,103 @@
     heartPath.setAttribute('d', 'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z');
     heart.appendChild(heartPath);
     const loveText = document.createElement('span');
-    loveText.textContent = ticket.loved ? 'You loved this event' : 'I loved this event';
+    loveText.textContent = loved ? 'You loved this event' : 'I loved this event';
     loveButton.append(heart, loveText);
+    return { loveButton, loveText };
+  }
+
+  function createStarRatingInput(initialValue) {
+    const wrap = document.createElement('div');
+    wrap.className = 'star-rating-input';
+    wrap.setAttribute('role', 'radiogroup');
+    wrap.setAttribute('aria-label', 'Rating out of 5 stars');
+    let value = initialValue || 0;
+    const starPath = 'M12 2.6l2.9 6 6.6.9-4.8 4.6 1.2 6.6L12 17.4l-5.9 3.3 1.2-6.6-4.8-4.6 6.6-.9z';
+    const buttons = [1, 2, 3, 4, 5].map((n) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'star-rating-star';
+      button.setAttribute('aria-label', `${n} ${n === 1 ? 'star' : 'stars'}`);
+      const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      icon.setAttribute('viewBox', '0 0 24 24');
+      icon.setAttribute('aria-hidden', 'true');
+      const iconPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      iconPath.setAttribute('d', starPath);
+      icon.appendChild(iconPath);
+      button.appendChild(icon);
+      button.addEventListener('mouseenter', () => paint(n));
+      button.addEventListener('focus', () => paint(n));
+      button.addEventListener('click', () => {
+        value = value === n ? 0 : n;
+        paint(value);
+        wrap.dispatchEvent(new CustomEvent('change'));
+      });
+      wrap.appendChild(button);
+      return button;
+    });
+    function paint(upTo) {
+      buttons.forEach((button, index) => button.classList.toggle('is-filled', index < upTo));
+    }
+    wrap.addEventListener('mouseleave', () => paint(value));
+    paint(value);
+    return {
+      element: wrap,
+      getValue: () => value || null,
+      setValue: (next) => { value = next || 0; paint(value); }
+    };
+  }
+
+  function createTicketFeedback(ticket) {
+    const feedback = document.createElement('section');
+    feedback.className = 'ticket-feedback';
+    feedback.setAttribute('aria-label', `Feedback for ${ticket.eventTitle}`);
+
+    const { loveButton, loveText } = createLoveButton(ticket.loved);
 
     const reviewForm = document.createElement('form');
     reviewForm.className = 'ticket-review-form';
     const reviewHeading = document.createElement('h3');
-    reviewHeading.textContent = 'Leave a review';
-    const ratingLabel = document.createElement('label');
-    ratingLabel.textContent = 'Rating (optional)';
-    const ratingSelect = document.createElement('select');
-    ratingSelect.name = 'rating';
-    ratingSelect.setAttribute('aria-label', 'Event rating');
-    ratingSelect.add(new Option('Choose a rating', ''));
-    for (let rating = 5; rating >= 1; rating -= 1) {
-      ratingSelect.add(new Option(`${rating} ${rating === 1 ? 'star' : 'stars'}`, String(rating)));
+    reviewHeading.textContent = 'Rate & review this event';
+
+    const hasEnded = Boolean(ticket.endsAt) && new Date(ticket.endsAt).getTime() <= Date.now();
+    if (!hasEnded) {
+      const notYet = document.createElement('p');
+      notYet.className = 'ticket-review-pending';
+      notYet.textContent = ticket.endsAt
+        ? `You'll be able to rate this event once it ends, on ${new Date(ticket.endsAt).toLocaleDateString('en-KE', { dateStyle: 'medium' })}.`
+        : "You'll be able to rate this event once it has ended.";
+      reviewForm.append(reviewHeading, notYet);
+      feedback.append(loveButton, reviewForm);
+      loveButton.addEventListener('click', async () => {
+        loveButton.disabled = true;
+        try {
+          const saved = await api(`/api/account/events/${encodeURIComponent(ticket.eventId)}/feedback`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${window.valorAccountToken()}` },
+            body: JSON.stringify({
+              loved: loveButton.getAttribute('aria-pressed') !== 'true',
+              rating: ticket.rating || null,
+              review: ticket.review || ''
+            })
+          });
+          loveButton.setAttribute('aria-pressed', String(saved.loved));
+          loveButton.setAttribute('aria-label', saved.loved ? 'Remove love for this event' : 'Show that you loved this event');
+          loveText.textContent = saved.loved ? 'You loved this event' : 'I loved this event';
+        } catch (error) {
+          console.error('Could not update favorite:', error.message);
+        } finally {
+          loveButton.disabled = false;
+        }
+      });
+      return feedback;
     }
-    if (ticket.rating) ratingSelect.value = String(ticket.rating);
-    ratingLabel.appendChild(ratingSelect);
+
+    const starInput = createStarRatingInput(ticket.rating);
+    const starField = document.createElement('div');
+    starField.className = 'star-rating-field';
+    const starFieldLabel = document.createElement('span');
+    starFieldLabel.textContent = 'Your rating';
+    starField.append(starFieldLabel, starInput.element);
 
     const reviewLabel = document.createElement('label');
     reviewLabel.textContent = 'Your review (optional)';
@@ -59,11 +134,11 @@
     const saveButton = document.createElement('button');
     saveButton.type = 'submit';
     saveButton.className = 'button button-primary';
-    saveButton.textContent = 'Save feedback';
+    saveButton.textContent = 'Save review';
     const status = document.createElement('p');
     status.className = 'ticket-feedback-status';
     status.setAttribute('role', 'status');
-    reviewForm.append(reviewHeading, ratingLabel, reviewLabel, saveButton, status);
+    reviewForm.append(reviewHeading, starField, reviewLabel, saveButton, status);
 
     const saveFeedback = async (loved, successMessage) => {
       loveButton.disabled = true;
@@ -76,13 +151,14 @@
           headers: { Authorization: `Bearer ${window.valorAccountToken()}` },
           body: JSON.stringify({
             loved,
-            rating: ratingSelect.value ? Number(ratingSelect.value) : null,
+            rating: starInput.getValue(),
             review: reviewInput.value
           })
         });
         loveButton.setAttribute('aria-pressed', String(saved.loved));
         loveButton.setAttribute('aria-label', saved.loved ? 'Remove love for this event' : 'Show that you loved this event');
         loveText.textContent = saved.loved ? 'You loved this event' : 'I loved this event';
+        starInput.setValue(saved.rating);
         status.textContent = successMessage(saved);
       } catch (error) {
         status.textContent = error.message;
@@ -99,7 +175,7 @@
     });
     reviewForm.addEventListener('submit', (submitEvent) => {
       submitEvent.preventDefault();
-      saveFeedback(loveButton.getAttribute('aria-pressed') === 'true', () => 'Your feedback has been saved.');
+      saveFeedback(loveButton.getAttribute('aria-pressed') === 'true', () => 'Your review has been saved.');
     });
     feedback.append(loveButton, reviewForm);
     return feedback;
@@ -177,11 +253,34 @@
     status.setAttribute('role', 'status');
     status.textContent = 'Loading your event feedback…';
     root.appendChild(status);
+    // Rating and review-writing lives on My Tickets, limited to attendees after the event ends
+    // (see createTicketFeedback) — the event page itself only offers a quick bookmark toggle.
     api('/api/account/events/' + encodeURIComponent(event.id) + '/feedback', { headers: { Authorization: 'Bearer ' + token } }).then((saved) => {
       status.remove();
-      const feedback = createTicketFeedback({ eventId: event.id, eventTitle: event.title, loved: saved.loved, rating: saved.rating, review: saved.review });
-      feedback.classList.add('event-detail-feedback');
-      root.appendChild(feedback);
+      const { loveButton, loveText } = createLoveButton(saved.loved);
+      loveButton.classList.add('event-detail-love');
+      loveButton.addEventListener('click', async () => {
+        loveButton.disabled = true;
+        try {
+          const updated = await api('/api/account/events/' + encodeURIComponent(event.id) + '/feedback', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token },
+            body: JSON.stringify({
+              loved: loveButton.getAttribute('aria-pressed') !== 'true',
+              rating: saved.rating,
+              review: saved.review
+            })
+          });
+          loveButton.setAttribute('aria-pressed', String(updated.loved));
+          loveButton.setAttribute('aria-label', updated.loved ? 'Remove from favorites' : 'Add to favorites');
+          loveText.textContent = updated.loved ? 'You loved this event' : 'I loved this event';
+        } catch (error) {
+          console.error('Could not update favorite:', error.message);
+        } finally {
+          loveButton.disabled = false;
+        }
+      });
+      root.appendChild(loveButton);
     }).catch((error) => { status.textContent = error.message; status.classList.add('error'); });
   }
 
@@ -344,6 +443,12 @@
         tag.textContent = category;
         categories.appendChild(tag);
       });
+      if (event.soldOut) {
+        const soldOutBadge = document.createElement('span');
+        soldOutBadge.className = 'event-detail-sold-out-badge';
+        soldOutBadge.textContent = 'SOLD OUT';
+        categories.appendChild(soldOutBadge);
+      }
       const details = document.createElement('div');
       details.className = 'event-detail-facts';
       const addFact = (label, value) => {
@@ -965,112 +1070,14 @@
         section.append(title, details, code, qr, eventLink);
         if (!feedbackEvents.has(ticket.eventId)) {
           feedbackEvents.add(ticket.eventId);
-          const feedback = document.createElement('section');
-          feedback.className = 'ticket-feedback';
-          feedback.setAttribute('aria-label', `Feedback for ${ticket.eventTitle}`);
-
-          const loveButton = document.createElement('button');
-          loveButton.type = 'button';
-          loveButton.className = 'ticket-love';
-          loveButton.setAttribute('aria-pressed', String(Boolean(ticket.loved)));
-          loveButton.setAttribute('aria-label', ticket.loved ? 'Remove love for this event' : 'Show that you loved this event');
-          const heart = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-          heart.setAttribute('viewBox', '0 0 24 24');
-          heart.setAttribute('aria-hidden', 'true');
-          heart.classList.add('ticket-love-icon');
-          const heartPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          heartPath.setAttribute('d', 'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z');
-          heart.appendChild(heartPath);
-          const loveText = document.createElement('span');
-          loveText.textContent = ticket.loved ? 'You loved this event' : 'I loved this event';
-          loveButton.append(heart, loveText);
-
-          const reviewForm = document.createElement('form');
-          reviewForm.className = 'ticket-review-form';
-          const reviewHeading = document.createElement('h3');
-          reviewHeading.textContent = 'Leave a review';
-          const ratingLabel = document.createElement('label');
-          ratingLabel.textContent = 'Rating (optional)';
-          const ratingSelect = document.createElement('select');
-          ratingSelect.name = 'rating';
-          ratingSelect.setAttribute('aria-label', 'Event rating');
-          ratingSelect.add(new Option('Choose a rating', ''));
-          for (let rating = 5; rating >= 1; rating -= 1) {
-            ratingSelect.add(new Option(`${rating} ${rating === 1 ? 'star' : 'stars'}`, String(rating)));
-          }
-          if (ticket.rating) ratingSelect.value = String(ticket.rating);
-          ratingLabel.appendChild(ratingSelect);
-          const reviewLabel = document.createElement('label');
-          reviewLabel.textContent = 'Your review (optional)';
-          const reviewInput = document.createElement('textarea');
-          reviewInput.name = 'review';
-          reviewInput.maxLength = 1200;
-          reviewInput.rows = 3;
-          reviewInput.placeholder = 'What did you think of the event?';
-          reviewInput.value = ticket.review || '';
-          reviewLabel.appendChild(reviewInput);
-          const saveButton = document.createElement('button');
-          saveButton.type = 'submit';
-          saveButton.className = 'button button-primary';
-          saveButton.textContent = 'Save feedback';
-          const status = document.createElement('p');
-          status.className = 'ticket-feedback-status';
-          status.setAttribute('role', 'status');
-          reviewForm.append(reviewHeading, ratingLabel, reviewLabel, saveButton, status);
-
-          loveButton.addEventListener('click', async () => {
-            const loved = loveButton.getAttribute('aria-pressed') !== 'true';
-            loveButton.disabled = true;
-            status.textContent = '';
-            try {
-              const saved = await api(`/api/account/events/${encodeURIComponent(ticket.eventId)}/feedback`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                  loved,
-                  rating: ratingSelect.value ? Number(ratingSelect.value) : null,
-                  review: reviewInput.value
-                })
-              });
-              loveButton.setAttribute('aria-pressed', String(saved.loved));
-              loveButton.setAttribute('aria-label', saved.loved ? 'Remove love for this event' : 'Show that you loved this event');
-              loveText.textContent = saved.loved ? 'You loved this event' : 'I loved this event';
-              status.textContent = saved.loved ? 'Thanks for sharing the love!' : 'Your love was removed.';
-            } catch (error) {
-              status.textContent = error.message;
-              status.classList.add('error');
-            } finally {
-              loveButton.disabled = false;
-            }
+          const feedback = createTicketFeedback({
+            eventId: ticket.eventId,
+            eventTitle: ticket.eventTitle,
+            loved: ticket.loved,
+            rating: ticket.rating,
+            review: ticket.review,
+            endsAt: ticket.endsAt
           });
-
-          reviewForm.addEventListener('submit', async (submitEvent) => {
-            submitEvent.preventDefault();
-            saveButton.disabled = true;
-            status.classList.remove('error');
-            status.textContent = '';
-            try {
-              const saved = await api(`/api/account/events/${encodeURIComponent(ticket.eventId)}/feedback`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                  loved: loveButton.getAttribute('aria-pressed') === 'true',
-                  rating: ratingSelect.value ? Number(ratingSelect.value) : null,
-                  review: reviewInput.value
-                })
-              });
-              loveButton.setAttribute('aria-pressed', String(saved.loved));
-              loveButton.setAttribute('aria-label', saved.loved ? 'Remove love for this event' : 'Show that you loved this event');
-              loveText.textContent = saved.loved ? 'You loved this event' : 'I loved this event';
-              status.textContent = 'Your feedback has been saved.';
-            } catch (error) {
-              status.textContent = error.message;
-              status.classList.add('error');
-            } finally {
-              saveButton.disabled = false;
-            }
-          });
-          feedback.append(loveButton, reviewForm);
           section.appendChild(feedback);
         }
         if (['not_sent','sending','failed'].includes(ticket.ticketEmailStatus) && !emailNotices.has(ticket.orderId)) {

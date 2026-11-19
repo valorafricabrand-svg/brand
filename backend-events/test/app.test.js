@@ -18,6 +18,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../src/db');
 const { createApp, initializeAdmin } = require('../src/app');
 const { login } = require('../src/auth');
+const { PARTNER_TERMS_VERSION } = require('../src/partner-terms');
 const mpesa = require('../src/mpesa');
 const nowpayments = require('../src/nowpayments');
 const { normalizeKenyanPhone } = require('../src/kenyan-phone');
@@ -209,7 +210,7 @@ async function ticketAccountAuth(idToken = 'valid-google-token') {
   return { Authorization: `Bearer ${response.body.accessToken}` };
 }
 
-function createTestAccountAuth(email) {
+function createTestAccountAuth(email, { acknowledgeTerms = true } = {}) {
   const id = crypto.randomUUID();
   const token = crypto.randomBytes(32).toString('base64url');
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
@@ -221,6 +222,13 @@ function createTestAccountAuth(email) {
     INSERT INTO account_sessions (token_hash,account_id,expires_at)
     VALUES (?,?,datetime('now','+30 days'))
   `).run(tokenHash, id);
+  if (acknowledgeTerms) {
+    db.prepare(`
+      INSERT INTO partner_terms_acknowledgements
+        (account_id,terms_version,signer_name,account_email)
+      VALUES (?,?,?,?)
+    `).run(id, PARTNER_TERMS_VERSION, email.split('@')[0], email);
+  }
   return { Authorization: `Bearer ${token}` };
 }
 
@@ -998,6 +1006,20 @@ test('free registrations require an account but do not require M-Pesa', async ()
   assert.equal(accountTicket.ticketEmailStatus, 'sent');
   assert.equal(accountTicket.loved, 0);
   assert.match(accountTicket.qr, /^data:image\/png;base64,/);
+
+  const unrelatedAuth = createTestAccountAuth('unrelated-ticket-owner@example.com');
+  const noTicketReview = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
+    .set(unrelatedAuth).send({ loved: true, rating: 5, review: 'I was not even there.' });
+  assert.equal(noTicketReview.status, 403);
+  assert.match(noTicketReview.body.error, /attended/i);
+
+  const tooEarlyReview = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
+    .set(accountAuth).send({ loved: true, rating: 5, review: 'Reviewing before it even happened.' });
+  assert.equal(tooEarlyReview.status, 403);
+  assert.match(tooEarlyReview.body.error, /ended/i);
+
+  db.prepare(`UPDATE events SET ends_at=datetime('now','-1 day') WHERE id=?`).run(submitted.body.id);
+
   const loved = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
     .set(accountAuth).send({ loved: true, rating: 5, review: 'Really enjoyed this event.' });
   assert.equal(loved.status, 200);
@@ -1006,6 +1028,7 @@ test('free registrations require an account but do not require M-Pesa', async ()
   const reviewedTicket = updatedTicket.body.tickets.find((ticket) => ticket.orderId === registration.body.orderId);
   assert.equal(reviewedTicket.loved, 1);
   assert.equal(reviewedTicket.rating, 5);
+  assert.ok(reviewedTicket.endsAt);
   const publicReviews = await request(app).get(`/api/events/${submitted.body.id}/reviews`);
   assert.equal(publicReviews.status, 200);
   assert.equal(publicReviews.body.ratingCount, 1);
@@ -1016,7 +1039,6 @@ test('free registrations require an account but do not require M-Pesa', async ()
   const invalidReview = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
     .set(accountAuth).send({ loved: true, rating: 6, review: '' });
   assert.equal(invalidReview.status, 400);
-  const unrelatedAuth = createTestAccountAuth('unrelated-ticket-owner@example.com');
   const unauthorizedReview = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
     .set(unrelatedAuth)
     .send({ loved: true, rating: null, review: '' });
@@ -1287,6 +1309,54 @@ test('email verification, password reset, and Google sign-in create separate acc
   emailGateway.enabled = true;
 });
 
+test('partner terms acknowledgement is authenticated and required before partner actions', async () => {
+  const current = await request(app).get('/api/partner-terms/current');
+  assert.equal(current.status, 200);
+  assert.equal(current.body.version, PARTNER_TERMS_VERSION);
+  assert.equal(current.body.status, 'draft');
+
+  assert.equal((await request(app).get('/api/partner-terms/me')).status, 401);
+  assert.equal((await request(app).post('/api/partner-terms/acknowledge').send({})).status, 401);
+  assert.equal((await request(app).get('/api/sponsorships/me')).status, 401);
+  assert.equal((await request(app).post('/api/sponsorships').send({
+    tier: 'community', brandName: 'Signed In Required', buyerName: 'Member', paymentMethod: 'paypal'
+  })).status, 401);
+
+  const auth = createTestAccountAuth('terms-applicant@example.com', { acknowledgeTerms: false });
+  const status = await request(app).get('/api/partner-terms/me').set(auth);
+  assert.equal(status.status, 200);
+  assert.equal(status.body.acknowledgement, null);
+  assert.equal((await request(app).post('/api/partners/apply').set(auth).send({})).status, 428);
+  assert.equal((await request(app).post('/api/partnership-applications').set(auth).send({
+    type: 'investment',
+    organizationName: 'Interested Investor',
+    applicationDetails: 'I would like to explore a non-binding investment discussion.'
+  })).status, 428);
+  assert.equal((await request(app).post('/api/sponsorships').set(auth).send({
+    tier: 'community', brandName: 'Terms Required', buyerName: 'Terms Applicant', paymentMethod: 'paypal'
+  })).status, 428);
+  assert.equal((await request(app).post('/api/partner-terms/acknowledge').set(auth).send({
+    version: PARTNER_TERMS_VERSION,
+    signerName: 'Terms Applicant',
+    acknowledged: false
+  })).status, 400);
+  assert.equal((await request(app).post('/api/partner-terms/acknowledge').set(auth).send({
+    version: 'old-version',
+    signerName: 'Terms Applicant',
+    acknowledged: true
+  })).status, 409);
+
+  const acknowledged = await request(app).post('/api/partner-terms/acknowledge').set(auth).send({
+    version: PARTNER_TERMS_VERSION,
+    signerName: 'Terms Applicant',
+    acknowledged: true
+  });
+  assert.equal(acknowledged.status, 201);
+  assert.equal(acknowledged.body.acknowledgement.version, PARTNER_TERMS_VERSION);
+  assert.equal((await request(app).get('/api/partner-terms/me').set(auth)).body.acknowledgement.signerName, 'Terms Applicant');
+  assert.equal((await request(app).get('/api/sponsorships/me').set(auth)).status, 200);
+});
+
 test('creator partners earn attributable commissions only on paid ticket orders and admins record payouts', async () => {
   const creatorAuth = createTestAccountAuth('creator-partner@example.com');
   assert.equal((await request(app).post('/api/partners/apply').send({})).status, 401);
@@ -1437,7 +1507,7 @@ test('organizer and sponsor partnership applications support secure follow-up an
     });
   assert.equal(organizer.status, 201);
   assert.equal(organizer.body.status, 'pending');
-  assert.match(organizer.body.message, /no package or price is committed/);
+  assert.match(organizer.body.message, /separate written confirmation/);
   const duplicate = await request(app).post('/api/partnership-applications')
     .set(applicantAuth)
     .set('X-Forwarded-For', '198.51.100.50')
@@ -1459,9 +1529,34 @@ test('organizer and sponsor partnership applications support secure follow-up an
       requestedSupport: 'Nairobi event sponsorship and brand activations.'
     });
   assert.equal(sponsor.status, 201);
+    const artist = await request(app).post('/api/partnership-applications')
+      .set(applicantAuth)
+      .send({
+        type: 'artist',
+        organizationName: 'DJ Example',
+        applicationDetails: 'I would like a profile to showcase my DJ work and event performance history.'
+      });
+    assert.equal(artist.status, 201);
+    const branding = await request(app).post('/api/partnership-applications')
+      .set(applicantAuth)
+      .send({
+        type: 'branding',
+        organizationName: 'Nairobi Summer Fest',
+        applicationDetails: 'We need event branding materials and a quote for a December event in Nairobi.'
+      });
+    assert.equal(branding.status, 201);
+    const investment = await request(app).post('/api/partnership-applications')
+      .set(applicantAuth)
+      .send({
+        type: 'investment',
+        organizationName: 'Interested Investor',
+        applicationDetails: 'I would like to explore a non-binding investment discussion with the company.'
+      });
+    assert.equal(investment.status, 201);
+    assert.match(investment.body.message, /not an investment offer or commitment/);
   const mine = await request(app).get('/api/partnership-applications/me').set(applicantAuth);
   assert.equal(mine.status, 200);
-  assert.deepEqual(mine.body.applications.map((application) => application.type), ['organizer','sponsor']);
+    assert.deepEqual(mine.body.applications.map((application) => application.type), ['artist','branding','investment','organizer','sponsor']);
   const mineSponsor = mine.body.applications.find((application) => application.type === 'sponsor');
   assert.equal(mineSponsor.sponsorshipTier, 'premium');
   const mineOrganizer = mine.body.applications.find((application) => application.type === 'organizer');
@@ -1470,7 +1565,7 @@ test('organizer and sponsor partnership applications support secure follow-up an
   assert.equal((await request(app).get('/api/partnership-applications/admin')).status, 401);
   const adminList = await request(app).get('/api/partnership-applications/admin').set(admin);
   assert.equal(adminList.status, 200);
-  assert.equal(adminList.body.applications.length, 3);
+  assert.equal(adminList.body.applications.length, 6);
   assert.equal(adminList.body.applications.find((application) => application.organizationName === 'Sample Brand').sponsorshipTier, 'premium');
   assert.equal((await request(app).get('/api/partnership-applications/admin?type=sponsor').set(admin)).body.applications.length, 2);
 
@@ -2215,7 +2310,7 @@ test('advertising orders also accept NOWPayments and PayPal, activating the book
   assert.equal(replay.body.status, 'paid');
 });
 
-test('sponsors can pay directly for a package, activating site-wide visibility without an inquiry', async () => {
+test('signed-in sponsors can pay directly for packages and manage their own sponsorships', async () => {
   function realSponsorshipCheckoutIds(id) {
     const row = db.prepare(`
       SELECT checkout_request_id AS checkoutRequestId, merchant_request_id AS merchantRequestId
@@ -2229,17 +2324,22 @@ test('sponsors can pay directly for a package, activating site-wide visibility w
   assert.deepEqual(tiers.body.tiers.map((tier) => tier.priceKes), [25000, 75000, 200000]);
   assert.deepEqual(tiers.body.tiers.map((tier) => tier.days), [14, 30, 60]);
 
-  const invalidTier = await request(app).post('/api/sponsorships').send({
+  const sponsorAuth = createTestAccountAuth('sponsorship-account@example.com');
+  assert.equal((await request(app).post('/api/sponsorships').send({
+    tier: 'community', brandName: 'Signed In Required', buyerName: 'Jane', paymentMethod: 'mpesa', phone: '0712345678'
+  })).status, 401);
+
+  const invalidTier = await request(app).post('/api/sponsorships').set(sponsorAuth).send({
     tier: 'platinum', brandName: 'Acme', buyerName: 'Jane', paymentMethod: 'mpesa', phone: '0712345678'
   });
   assert.equal(invalidTier.status, 400);
 
-  const badLogo = await request(app).post('/api/sponsorships').send({
+  const badLogo = await request(app).post('/api/sponsorships').set(sponsorAuth).send({
     tier: 'community', brandName: 'Acme', logoUrl: 'not-a-url', buyerName: 'Jane', paymentMethod: 'mpesa', phone: '0712345678'
   });
   assert.equal(badLogo.status, 400);
 
-  const mpesaPurchase = await request(app).post('/api/sponsorships').send({
+  const mpesaPurchase = await request(app).post('/api/sponsorships').set(sponsorAuth).send({
     tier: 'community', brandName: 'Acme Coffee', websiteUrl: 'https://acme.example',
     logoUrl: 'https://acme.example/logo.png', buyerName: 'Jane Doe', paymentMethod: 'mpesa', phone: '0712345678'
   });
@@ -2253,6 +2353,11 @@ test('sponsors can pay directly for a package, activating site-wide visibility w
     .set('X-Order-Access', mpesaPurchase.body.accessToken);
   assert.equal(purchaseStatus.status, 200);
   assert.equal(purchaseStatus.body.status, 'active');
+  const ownedPurchases = await request(app).get('/api/sponsorships/me').set(sponsorAuth);
+  assert.equal(ownedPurchases.status, 200);
+  assert.deepEqual(ownedPurchases.body.purchases.map((purchase) => purchase.purchaseId), [mpesaPurchase.body.purchaseId]);
+  assert.deepEqual((await request(app).get('/api/sponsorships/me')
+    .set(createTestAccountAuth('other-sponsorship-account@example.com'))).body.purchases, []);
   const afterActive = await request(app).get('/api/sponsorships/active');
   assert.ok(afterActive.body.sponsors.some((sponsor) => sponsor.brandName === 'Acme Coffee' && sponsor.tier === 'community'));
 
@@ -2265,7 +2370,7 @@ test('sponsors can pay directly for a package, activating site-wide visibility w
   assert.equal(walletPurchase.body.status, 'active');
   assert.equal((await request(app).get('/api/wallet').set(walletAuth)).body.balanceKes, 25000);
 
-  const cryptoPurchase = await request(app).post('/api/sponsorships').send({
+  const cryptoPurchase = await request(app).post('/api/sponsorships').set(sponsorAuth).send({
     tier: 'city', brandName: 'City Threads', buyerName: 'John Doe', paymentMethod: 'nowpayments'
   });
   assert.equal(cryptoPurchase.status, 201);
@@ -2285,7 +2390,7 @@ test('sponsors can pay directly for a package, activating site-wide visibility w
   assert.equal(ipn.status, 200);
   assert.equal(db.prepare('SELECT status FROM sponsorship_purchases WHERE id=?').get(cryptoPurchase.body.purchaseId).status, 'active');
 
-  const paypalPurchase = await request(app).post('/api/sponsorships').send({
+  const paypalPurchase = await request(app).post('/api/sponsorships').set(sponsorAuth).send({
     tier: 'premium', brandName: 'Premium Motors', buyerName: 'Amina', paymentMethod: 'paypal'
   });
   assert.equal(paypalPurchase.status, 201);
@@ -2311,6 +2416,57 @@ test('sponsors can pay directly for a package, activating site-wide visibility w
   const doubleCancel = await request(app).patch(`/api/sponsorships/admin/${mpesaPurchase.body.purchaseId}`)
     .set(admin).send({ status: 'cancelled' });
   assert.equal(doubleCancel.status, 409);
+});
+
+test('event pages report sold-out status and only sold-out events surface in homepage review highlights', async () => {
+  const soldOutAuth = createTestAccountAuth(`sold-out-attendee-${crypto.randomUUID()}@example.com`);
+  const soldOutEvent = createStoredTestEvent('Sold Out Showcase', soldOutAuth);
+  db.prepare(`
+    UPDATE events SET capacity=1,regular_price=0,early_bird_price=NULL,early_bird_ends=NULL,vip_price=NULL WHERE id=?
+  `).run(soldOutEvent.id);
+
+  const openAuth = createTestAccountAuth(`not-sold-out-attendee-${crypto.randomUUID()}@example.com`);
+  const openEvent = createStoredTestEvent('Still Has Room Showcase', openAuth);
+  db.prepare(`
+    UPDATE events SET capacity=10,regular_price=0,early_bird_price=NULL,early_bird_ends=NULL,vip_price=NULL WHERE id=?
+  `).run(openEvent.id);
+
+  const beforeSale = await request(app).get(`/api/events/by-slug/${soldOutEvent.slug}`);
+  assert.equal(beforeSale.body.event.soldOut, false);
+  assert.equal(beforeSale.body.event.ticketsSold, 0);
+
+  const soldOutRegistration = await request(app).post('/api/orders/tickets').set(soldOutAuth).send({
+    eventId: soldOutEvent.id, ticketType: 'Regular', buyerName: 'Sold Out Attendee', phone: '0712345678', quantity: 1
+  });
+  assert.equal(soldOutRegistration.status, 201);
+
+  const openRegistration = await request(app).post('/api/orders/tickets').set(openAuth).send({
+    eventId: openEvent.id, ticketType: 'Regular', buyerName: 'Open Attendee', phone: '0712345679', quantity: 1
+  });
+  assert.equal(openRegistration.status, 201);
+
+  const afterSale = await request(app).get(`/api/events/by-slug/${soldOutEvent.slug}`);
+  assert.equal(afterSale.body.event.soldOut, true);
+  assert.equal(afterSale.body.event.ticketsSold, 1);
+  const stillOpen = await request(app).get(`/api/events/by-slug/${openEvent.slug}`);
+  assert.equal(stillOpen.body.event.soldOut, false);
+
+  db.prepare(`UPDATE events SET ends_at=datetime('now','-1 day') WHERE id IN (?,?)`)
+    .run(soldOutEvent.id, openEvent.id);
+
+  const soldOutReview = await request(app).post(`/api/account/events/${soldOutEvent.id}/feedback`)
+    .set(soldOutAuth).send({ loved: true, rating: 5, review: 'Packed house, incredible energy all night.' });
+  assert.equal(soldOutReview.status, 200);
+
+  const openReview = await request(app).post(`/api/account/events/${openEvent.id}/feedback`)
+    .set(openAuth).send({ loved: true, rating: 5, review: 'Good event but not sold out.' });
+  assert.equal(openReview.status, 200);
+
+  const highlights = await request(app).get('/api/reviews/highlights');
+  assert.equal(highlights.status, 200);
+  assert.ok(highlights.body.highlights.some((item) => item.review === 'Packed house, incredible energy all night.'
+    && item.eventSlug === soldOutEvent.slug));
+  assert.ok(!highlights.body.highlights.some((item) => item.review === 'Good event but not sold out.'));
 });
 
 after(() => {

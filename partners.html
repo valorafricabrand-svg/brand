@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Partner with Valor Africa | Sponsors, Organizers, Affiliates, Artists &amp; Branding</title>
-  <meta name="description" content="Five ways to partner with Valor Africa: sponsor an event, list your own event, earn as an affiliate, get booked as an artist or DJ, or commission event branding.">
-  <meta property="og:title" content="Partner with Valor Africa">
+  <title>Partner Programs | Valor Africa</title>
+  <meta name="description" content="Explore Valor Africa event sponsorship, organizer, creator, artist, and branding programs, then manage applications and sponsorships in one dashboard.">
+  <meta property="og:title" content="Partner Programs | Valor Africa">
   <meta property="og:description" content="Five ways to partner with Valor Africa: sponsor an event, list your own event, earn as an affiliate, get booked as an artist or DJ, or commission event branding.">
   <meta property="og:url" content="https://valorafrica.co.ke/partners.html">
   <meta property="og:image" content="https://valorafrica.co.ke/images/og-image.svg">
@@ -16,10 +16,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/events.css?v=payment-methods-1">
+  <link rel="stylesheet" href="styles/events.css?v=real-reviews-1">
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
-  <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
-  <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
   <script src="scripts/nav-history.js?v=1" defer></script>
@@ -38,7 +36,7 @@
         <a href="wallet.html">Wallet</a>
         <a href="account.html">Account</a>
         <a href="contact.html">Help</a>
-        <a class="nav-host" href="partnership.html">Partnership with Valor</a>
+        <a class="nav-host" href="partner-dashboard.html">Partner dashboard</a>
       </div>
     </nav>
   </header>
@@ -72,7 +70,7 @@
 
     <section class="wrap partner-programs-list" aria-label="Partnership programs">
 
-      <details class="partner-program" style="--program-accent:#16a34a">
+      <details class="partner-program" id="sponsors" style="--program-accent:#16a34a" open>
         <summary>
           <span class="partner-program-index" aria-hidden="true">01</span>
           <svg class="partner-program-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M17 25 22 20a7 7 0 0 1 10 0l5 5M13 23l-6-5m28 0 5 5M18 28l7 7a5 5 0 0 0 7-7l-4-4M12 20l-5 5 9 10 5-4m15-13 5 5-9 10-5-4M3 17h7v15H3zm35 0h7v15h-7z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/></svg>
@@ -84,7 +82,7 @@
           <svg class="partner-program-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4"/></svg>
         </summary>
         <div class="partner-program-body">
-          <p class="partner-program-kicker" id="sponsors">What you get</p>
+          <p class="partner-program-kicker">What you get</p>
           <p>Valor Africa sells event tickets across Kenya with M-Pesa, card, and crypto checkout. Pick a package and pay — your brand appears automatically, no meetings needed.</p>
           <ul class="partnership-tier-prices partner-program-prices">
             <li><strong>Community</strong><span>KES 25,000 · 14 days</span></li>
@@ -96,8 +94,8 @@
             <li>Your logo, name, and link go live automatically in the sponsor strip the moment payment is confirmed.</li>
             <li>Stay visible for your package's full day count — extend or upgrade any time.</li>
           </ol>
-          <a class="button button-primary partner-program-cta" href="partnership.html#sponsor-checkout">Pay &amp; become a sponsor</a>
-          <a class="partner-program-alt" href="partnership.html#sponsor-application">Have a bigger or custom campaign in mind? Send us a message instead →</a>
+          <a class="button button-primary partner-program-cta" href="partner-dashboard.html#sponsorship">Open sponsor dashboard</a>
+          <a class="partner-program-alt" href="partner-dashboard.html#sponsor-application">Propose a custom campaign online →</a>
           <p class="partnership-requirement">Sponsorship funds visibility — it is not an investment in Valor Africa.</p>
         </div>
       </details>
@@ -127,8 +125,8 @@
             <li>We review it and your event page publishes.</li>
             <li>Share your link, sell tickets, and add promotion or branding any time.</li>
           </ol>
-          <a class="button button-primary partner-program-cta" href="host.html">List your event free</a>
-          <a class="partner-program-alt" href="partnership.html#organizer-application">Prefer a hands-on partnership conversation? Apply as an organizer partner →</a>
+          <a class="button button-primary partner-program-cta" href="partner-dashboard.html#organizer-application">Open organizer dashboard</a>
+          <a class="partner-program-alt" href="host.html">List your event free →</a>
           <p class="partnership-requirement">Listing is free. Promotion and event branding are optional paid add-ons you choose yourself.</p>
         </div>
       </details>
@@ -157,7 +155,7 @@
             <li>Once approved, get your unique referral link and share it.</li>
             <li>The last valid click is attributed for 30 days — your dashboard tracks visits, paid orders, and balance due.</li>
           </ol>
-          <a class="button button-primary partner-program-cta" href="partnership.html#creator-application">Apply as a creator partner</a>
+          <a class="button button-primary partner-program-cta" href="partner-dashboard.html#creator-application">Open creator dashboard</a>
           <p class="partnership-requirement">We value audience relevance and engagement, not a fixed follower count. Commission is credited only after a ticket order is paid.</p>
         </div>
       </details>
@@ -186,8 +184,7 @@
             <li>We build your profile and send it for your approval.</li>
             <li>Organizers and sponsors can find and book you — upgrade any time.</li>
           </ol>
-          <a class="button button-primary partner-program-cta" href="mailto:hello@valorafrica.co.ke?subject=Artist%2FDJ%20profile&body=Hi%20Valor%20Africa%2C%0A%0AI%27d%20like%20to%20create%20an%20artist%2FDJ%20profile.%0AName%2FDJ%20name%3A%0AWhat%20I%20do%3A%0ALinks%20(mixes%2C%20socials)%3A%0A">Create my free profile</a>
-          <a class="partner-program-alt" href="mailto:hello@valorafrica.co.ke?subject=Featured%20artist%2FDJ%20listing">Ask about a featured listing →</a>
+          <a class="button button-primary partner-program-cta" href="partner-dashboard.html#artist-application">Request an artist profile</a>
           <p class="partnership-requirement">We do not guarantee bookings or sponsorship — we make the introductions. Only share music and images you own or have rights to.</p>
         </div>
       </details>
@@ -216,7 +213,7 @@
             <li>Pay a deposit and send your logo.</li>
             <li>We send designs for approval, then produce and deliver.</li>
           </ol>
-          <a class="button button-primary partner-program-cta" href="branding.html">Start my branding project</a>
+          <a class="button button-primary partner-program-cta" href="partner-dashboard.html#branding-application">Request a branding quote</a>
           <p class="partnership-requirement">Final pricing is confirmed with you before you pay. See examples and shop official merch on our branding page.</p>
         </div>
       </details>
@@ -231,7 +228,7 @@
     <div class="wrap footer-inner">
       <div class="footer-brand-block"><a href="index.html" class="brand footer-brand"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a><p>Discover experiences and find your next great event across Africa.</p><a class="footer-email" href="mailto:hello@valorafrica.co.ke">hello@valorafrica.co.ke</a></div>
       <div class="footer-column"><h2 class="footer-heading">Discover</h2><nav class="footer-links" aria-label="Discover"><a href="events.html">Browse events</a><a href="about.html">About Valor Africa</a><a href="shop.html">Shop now</a></nav></div>
-      <div class="footer-column"><h2 class="footer-heading">For organizers</h2><nav class="footer-links" aria-label="For organizers"><a href="host.html">Host an event</a><a href="advertise.html">Promote an event</a><a href="partnership.html">Partnership with Valor</a><a href="partners.html" aria-current="page">Partner programs</a></nav></div>
+      <div class="footer-column"><h2 class="footer-heading">For organizers</h2><nav class="footer-links" aria-label="For organizers"><a href="host.html">Host an event</a><a href="advertise.html">Promote an event</a><a href="partner-dashboard.html">Partner dashboard</a></nav></div>
       <div class="footer-column"><h2 class="footer-heading">Tickets &amp; support</h2><nav class="footer-links" aria-label="Tickets and support"><a href="account.html">Your account</a><a href="wallet.html">Valor Wallet</a><a href="contact.html">Contact support</a><a href="refund-policy.html">Refund policy</a></nav></div>
     </div>
     <div class="wrap footer-bottom"><p>© 2026 Valor Africa Events</p><a href="index.html">Back to home <span aria-hidden="true">↑</span></a></div>

@@ -34,8 +34,8 @@
       feedback.classList.remove('error');
       const token = window.valorAccountToken();
       const values = Object.fromEntries(new FormData(form));
-      if (values.paymentMethod === 'wallet' && !token) {
-        setFeedback(feedback, 'Sign in to your account and link a phone wallet before paying with your balance.', true);
+      if (!token) {
+        setFeedback(feedback, 'Sign in to your account before starting a sponsorship.', true);
         return;
       }
       if (values.paymentMethod === 'mpesa' && !paymentsConfigured) {
@@ -45,10 +45,9 @@
       submitButton.disabled = true;
       setFeedback(feedback, 'Starting your sponsorship checkout…');
       try {
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const result = await api('/api/sponsorships', {
           method: 'POST',
-          headers,
+          headers: { Authorization: `Bearer ${token}` },
           body: JSON.stringify(values)
         });
         window.sessionStorage.setItem(`valor-sponsorship-${result.purchaseId}`, result.accessToken);
