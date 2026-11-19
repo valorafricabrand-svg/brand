@@ -1115,6 +1115,14 @@ test('free registrations require an account but do not require M-Pesa', async ()
   const restoredFeedback = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
     .set(accountAuth).send({ loved: true, rating: 4, review: 'Loved this older ticket.' });
   assert.equal(restoredFeedback.status, 200);
+  db.prepare(`UPDATE events SET starts_at=datetime('now','+1 day'),ends_at=datetime('now','+2 day') WHERE id=?`)
+    .run(submitted.body.id);
+  const futureEventReviews = await request(app).get(`/api/events/${submitted.body.id}/reviews`);
+  assert.equal(futureEventReviews.body.loveCount, 2);
+  assert.equal(futureEventReviews.body.ratingCount, 0);
+  assert.equal(futureEventReviews.body.averageRating, null);
+  assert.equal(futureEventReviews.body.reviewCount, 0);
+  assert.equal(futureEventReviews.body.reviews.length, 0);
 
   const verification = await request(app).get(`/api/tickets/${order.body.tickets[0].code}/verify`);
   assert.equal(verification.body.valid, true);
@@ -2530,6 +2538,12 @@ test('event pages report sold-out status and homepage review highlights include 
     && item.rating === 5 && item.eventSlug === soldOutEvent.slug));
   assert.ok(highlights.body.highlights.some((item) => item.review === 'Good event but not sold out.'
     && item.rating === 5 && item.eventSlug === openEvent.slug));
+
+  db.prepare(`UPDATE events SET starts_at=datetime('now','+1 day'),ends_at=datetime('now','+2 day') WHERE id=?`)
+    .run(openEvent.id);
+  const afterReschedule = await request(app).get('/api/reviews/highlights');
+  assert.ok(!afterReschedule.body.highlights.some((item) => item.eventSlug === openEvent.slug));
+  assert.ok(afterReschedule.body.highlights.some((item) => item.eventSlug === soldOutEvent.slug));
 });
 
 after(() => {

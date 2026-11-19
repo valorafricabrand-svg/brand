@@ -2887,11 +2887,12 @@ function createApp(options = {}) {
       if (!eventExists) return res.status(404).json({ error: 'This event is not available.' });
       const summary = db.prepare(`
         SELECT
-          COUNT(*) AS loveCount,
-          COUNT(rating) AS ratingCount,
-          AVG(rating) AS averageRating,
-          SUM(CASE WHEN TRIM(review) <> '' THEN 1 ELSE 0 END) AS reviewCount
-        FROM event_feedback
+          SUM(CASE WHEN f.loved=1 THEN 1 ELSE 0 END) AS loveCount,
+          COUNT(CASE WHEN julianday(e.ends_at) <= julianday('now') THEN f.rating END) AS ratingCount,
+          AVG(CASE WHEN julianday(e.ends_at) <= julianday('now') THEN f.rating END) AS averageRating,
+          SUM(CASE WHEN julianday(e.ends_at) <= julianday('now') AND TRIM(f.review) <> '' THEN 1 ELSE 0 END) AS reviewCount
+        FROM event_feedback f
+        JOIN events e ON e.id=f.event_id
         WHERE event_id=? AND (loved=1 OR rating IS NOT NULL OR TRIM(review) <> '')
       `).get(req.params.eventId);
       const reviews = db.prepare(`
@@ -2899,7 +2900,8 @@ function createApp(options = {}) {
           f.rating,f.review,f.updated_at AS updatedAt
         FROM event_feedback f
         JOIN accounts a ON a.id=f.account_id
-        WHERE f.event_id=? AND TRIM(f.review) <> ''
+        JOIN events e ON e.id=f.event_id
+        WHERE f.event_id=? AND TRIM(f.review) <> '' AND julianday(e.ends_at) <= julianday('now')
         ORDER BY datetime(f.updated_at) DESC
         LIMIT 20
       `).all(req.params.eventId);
@@ -2931,6 +2933,7 @@ function createApp(options = {}) {
         JOIN accounts a ON a.id = f.account_id
         WHERE e.status='approved' AND e.deleted_at IS NULL
           AND f.rating IS NOT NULL AND TRIM(f.review) <> ''
+          AND julianday(e.ends_at) <= julianday('now')
         ORDER BY datetime(f.updated_at) DESC
         LIMIT 9
       `).all();
