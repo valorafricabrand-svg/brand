@@ -115,7 +115,15 @@
     return slide;
   }
 
-  function showSlide(index) {
+  function startActiveVideo(video) {
+    if (!video.dataset.src) return;
+    video.preload = 'auto';
+    if (!video.src) video.src = video.dataset.src;
+    video.setAttribute('autoplay', '');
+    video.play().catch(() => {});
+  }
+
+  function showSlide(index, playVideoImmediately = false) {
     if (!slides.length) return;
     active = (index + slides.length) % slides.length;
     [...track.children].forEach((slide, slideIndex) => {
@@ -123,19 +131,28 @@
       slide.classList.toggle('is-active', isActive);
       const video = slide.querySelector('video');
       if (video) {
-        video.autoplay = isActive;
-        video.preload = isActive ? 'auto' : 'none';
-        if (isActive) {
-          if (!video.src) video.src = video.dataset.src;
-          video.setAttribute('autoplay', '');
-          video.play().catch(() => {});
+        if (isActive && (playVideoImmediately || video.src)) {
+          startActiveVideo(video);
         } else {
           video.pause();
+          video.preload = 'none';
           video.removeAttribute('autoplay');
         }
       }
     });
     [...dotsWrap.children].forEach((dot, dotIndex) => dot.classList.toggle('is-active', dotIndex === active));
+  }
+
+  function scheduleVideoPlayback() {
+    const enableWhenIdle = () => {
+      if (!document.hidden) showSlide(active, true);
+    };
+    const afterLoad = () => {
+      if (window.requestIdleCallback) window.requestIdleCallback(enableWhenIdle, { timeout: 2500 });
+      else window.setTimeout(enableWhenIdle, 1200);
+    };
+    if (document.readyState === 'complete') afterLoad();
+    else window.addEventListener('load', afterLoad, { once: true });
   }
 
   function stopRotation() {
@@ -157,7 +174,7 @@
       dot.type = 'button';
       dot.className = 'hero-promo-dot';
       dot.setAttribute('aria-label', `Go to highlight ${index + 1}`);
-      dot.addEventListener('click', () => { showSlide(index); startRotation(); });
+      dot.addEventListener('click', () => { showSlide(index, true); startRotation(); });
       return dot;
     }));
     showSlide(0);
@@ -169,6 +186,11 @@
     section.addEventListener('focusout', (event) => {
       if (!section.contains(event.relatedTarget)) startRotation();
     });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) track.querySelectorAll('video').forEach((video) => video.pause());
+      else showSlide(active);
+    });
+    scheduleVideoPlayback();
 
     try {
       const data = await window.valorEventsApi('/api/hero-highlights');
@@ -186,6 +208,11 @@
         : [];
       if (!remoteSlides.length) return;
 
+      track.querySelectorAll('video').forEach((video) => {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+      });
       slides = remoteSlides;
       track.replaceChildren(...slides.map(createSlide));
       dotsWrap.replaceChildren(...slides.map((_, index) => {
@@ -193,7 +220,7 @@
         dot.type = 'button';
         dot.className = 'hero-promo-dot';
         dot.setAttribute('aria-label', `Go to highlight ${index + 1}`);
-        dot.addEventListener('click', () => { showSlide(index); startRotation(); });
+        dot.addEventListener('click', () => { showSlide(index, true); startRotation(); });
         return dot;
       }));
       showSlide(0);

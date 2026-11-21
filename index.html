@@ -15,6 +15,7 @@
   <meta property="og:site_name" content="Valor Africa Events">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#087f5b">
+  <link rel="preload" as="image" href="images/events/valor-ticket-buyer-cover.jpg" fetchpriority="high">
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -53,10 +54,10 @@
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=local-live-read-fallback-1" defer></script>
+  <script src="scripts/hero-promo.js?v=home-hero-media-fast-1" defer></script>
   <script src="scripts/google-pay.js?v=braintree-google-pay-1" defer></script>
   <script src="scripts/apple-pay.js?v=braintree-apple-pay-1" defer></script>
-  <script src="scripts/events.js?v=braintree-apple-pay-1" defer></script>
-  <script src="scripts/hero-promo.js?v=hero-carousel-preserve-slide-order-6" defer></script>
+  <script src="scripts/events.js?v=home-promo-media-fast-1" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/branding-marquee.js?v=branding-perf-1" defer></script>
   <script src="scripts/community-events.js?v=past-events-marquee-1" defer></script>
@@ -100,11 +101,26 @@
   </nav>
 
   <main id="main">
-    <section class="hero-promo wrap" id="heroPromo" aria-roledescription="carousel" aria-label="Valor Africa highlights" hidden>
+    <section class="hero-promo wrap" id="heroPromo" aria-roledescription="carousel" aria-label="Valor Africa highlights">
       <div class="hero-promo-window">
-        <div class="hero-promo-track" id="heroPromoTrack"></div>
+        <div class="hero-promo-track" id="heroPromoTrack">
+          <div class="hero-promo-slide is-active" role="group" aria-roledescription="slide" aria-label="1 of 1: Your next great experience starts here.">
+            <div class="hero-promo-visual"><img src="images/events/valor-ticket-buyer-cover.jpg" alt="" width="640" height="360" fetchpriority="high"></div>
+            <div class="hero-promo-copy accent-0">
+              <span class="hero-promo-badge">For ticket buyers</span>
+              <h2>Your next great experience starts here.</h2>
+              <p>Discover concerts, festivals and experiences across Africa.</p>
+              <div class="hero-promo-actions">
+                <a class="hero-promo-cta-primary" href="events.html">Explore events</a>
+                <a class="hero-promo-cta-secondary" href="events.html">Browse all events</a>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="hero-promo-dots" id="heroPromoDots" role="group" aria-label="Choose a highlight"></div>
+      <div class="hero-promo-dots" id="heroPromoDots" role="group" aria-label="Choose a highlight">
+        <button class="hero-promo-dot is-active" type="button" aria-label="Go to highlight 1"></button>
+      </div>
     </section>
 
     <section class="valor-ads wrap" aria-labelledby="valorAdsHeading">
