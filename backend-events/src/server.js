@@ -23,8 +23,10 @@ const app = createApp();
 const server = app.listen(port, '0.0.0.0', () => {
   console.log(`Valor Africa event service listening on port ${port}.`);
   console.log(`M-Pesa checkout: ${require('./payhero').isConfigured() ? 'enabled' : 'disabled until PayHero credentials and HTTPS callback are configured'}.`);
+  console.log(`Artist booking deposits: ${app.locals.artistBookingsPaymentsEnabled ? 'enabled' : 'disabled (PayHero unconfigured or ARTIST_BOOKINGS_PAYMENTS_ENABLED=false)'}.`);
   console.log(`Ticket confirmation email: ${require('./ticket-email').isConfigured() ? 'enabled' : 'disabled until Resend credentials and a verified sender are configured'}.`);
   console.log(`Reminder emails: ${require('./reminder-email').isConfigured() ? 'enabled' : 'disabled until Resend credentials and a verified sender are configured'}.`);
+  console.log(`Artist booking emails: ${require('./artist-booking-email').isConfigured() ? 'enabled' : 'disabled until Resend credentials and a verified sender are configured'}.`);
 });
 const ticketEmailRetryTimer = setInterval(() => {
   app.locals.retryPendingTicketEmails().catch((error) => {
@@ -44,11 +46,21 @@ reminderEmailTimer.unref();
 app.locals.sendDueReminderEmails().catch((error) => {
   console.error('Could not send due reminder emails:', error);
 });
+const artistBookingEmailRetryTimer = setInterval(() => {
+  app.locals.retryPendingArtistBookingEmails().catch((error) => {
+    console.error('Could not retry pending artist booking emails:', error);
+  });
+}, 60 * 1000);
+artistBookingEmailRetryTimer.unref();
+app.locals.retryPendingArtistBookingEmails().catch((error) => {
+  console.error('Could not retry pending artist booking emails:', error);
+});
 
 function shutdown(signal) {
   console.log(`${signal} received; closing event service.`);
   clearInterval(ticketEmailRetryTimer);
   clearInterval(reminderEmailTimer);
+  clearInterval(artistBookingEmailRetryTimer);
   server.close(() => {
     require('./db').close();
     process.exit(0);

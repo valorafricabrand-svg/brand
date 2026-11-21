@@ -54,6 +54,7 @@
     await loadOrders();
     await loadPartners();
     await loadPartnershipApplications();
+    await loadArtistMarketplace();
     await loadGiftMarketplace();
   }
 
@@ -330,6 +331,106 @@
 
   async function loadGiftMarketplace() {
     await Promise.all([loadGiftMerchants(), loadGiftVouchers(), loadGiftPayouts(), loadGiftRefunds()]);
+  }
+
+  async function loadArtistMarketplace() {
+    await Promise.all([loadArtistProfiles(), loadArtistBookings()]);
+  }
+
+  async function loadArtistProfiles() {
+    const list = document.getElementById('artistProfilesList');
+    list.replaceChildren();
+    const { profiles } = await api('/api/artists/admin');
+    if (!profiles.length) return addText(list, 'p', 'empty', 'No artist profiles have been published.');
+    profiles.forEach((profile) => {
+      const card = document.createElement('article');
+      card.className = 'record';
+      card.dataset.artistProfileId = profile.id;
+      addText(card, 'h3', '', `${profile.displayName} · ${profile.status.toUpperCase()}`);
+      addText(card, 'p', 'record-meta', `${profile.email} · ${profile.artistType} · ${profile.city} · ${profile.activeServices} active services`);
+      addText(card, 'p', 'record-contact', `${profile.socialPlatform}: ${profile.socialProfileUrl}`);
+      const profileLink = document.createElement('a');
+      profileLink.href = `/artist.html?slug=${encodeURIComponent(profile.slug)}`;
+      profileLink.textContent = 'View public profile';
+      card.appendChild(profileLink);
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = profile.status === 'active' ? 'button reject' : 'button secondary';
+      toggle.dataset.artistProfileStatus = profile.status === 'active' ? 'suspended' : 'active';
+      toggle.textContent = profile.status === 'active' ? 'Unlist profile' : 'Restore profile';
+      card.appendChild(toggle);
+      list.appendChild(card);
+    });
+  }
+
+  async function loadArtistBookings() {
+    const list = document.getElementById('artistBookingsList');
+    list.replaceChildren();
+    const { bookings } = await api('/api/artist-bookings/admin');
+    if (!bookings.length) return addText(list, 'p', 'empty', 'No artist service bookings yet.');
+    bookings.forEach((booking) => {
+      const card = document.createElement('article');
+      card.className = 'record';
+      card.dataset.artistBookingId = booking.id;
+      addText(card, 'h3', '', `${booking.eventName} · ${booking.artistName} · ${booking.status.replace(/_/g, ' ').toUpperCase()}`);
+      addText(card, 'p', 'record-meta', `${booking.organizerEmail} · ${booking.serviceTitle} · ${new Date(booking.eventDate).toLocaleString()} · ${booking.eventLocation}`);
+      addText(card, 'p', 'record-meta', `Service KES ${Number(booking.servicePriceKes).toLocaleString('en-KE')} · Deposit KES ${Number(booking.depositAmountKes).toLocaleString('en-KE')} · Valor fee KES ${Number(booking.valorFeeKes).toLocaleString('en-KE')} · Artist payout KES ${Number(booking.artistPayoutKes).toLocaleString('en-KE')}`);
+      if (booking.mpesaReceipt) addText(card, 'p', 'record-contact', `M-Pesa receipt: ${booking.mpesaReceipt}`);
+      if (booking.receivedAmountKes && booking.receivedAmountKes !== booking.depositAmountKes) {
+        addText(card, 'p', 'record-contact', `Payment review: M-Pesa reported KES ${Number(booking.receivedAmountKes).toLocaleString('en-KE')}.`);
+      }
+      if (booking.payoutReference) {
+        addText(card, 'p', 'record-contact', `Payout recorded: KES ${Number(booking.paidOutKes).toLocaleString('en-KE')} · ${booking.payoutReference}`);
+      } else if (booking.status === 'completed') {
+        const fields = document.createElement('div');
+        fields.className = 'record-actions';
+        const reference = document.createElement('input');
+        reference.maxLength = 120;
+        reference.placeholder = 'Transfer reference (already sent)';
+        reference.dataset.artistPayoutReference = '';
+        const note = document.createElement('input');
+        note.maxLength = 500;
+        note.placeholder = 'Payout note';
+        note.dataset.artistPayoutNote = '';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'button secondary';
+        button.dataset.recordArtistPayout = '';
+        button.textContent = 'Record manual artist payout';
+        fields.append(reference, note, button);
+        card.appendChild(fields);
+      }
+      if (booking.refundReference) {
+        addText(card, 'p', 'record-contact', `Refund recorded: KES ${Number(booking.refundedKes).toLocaleString('en-KE')} · ${booking.refundReference}`);
+      } else if (['cancellation_review','payment_review'].includes(booking.status)) {
+        addText(card, 'p', 'record-description', `Accepted cancellation policy: ${booking.cancellationPolicy}`);
+        const fields = document.createElement('div');
+        fields.className = 'record-actions';
+        const amount = document.createElement('input');
+        amount.type = 'number';
+        amount.min = '1';
+        amount.max = String(booking.receivedAmountKes || booking.depositAmountKes);
+        amount.step = '1';
+        amount.placeholder = `Refund up to KES ${booking.receivedAmountKes || booking.depositAmountKes}`;
+        amount.dataset.artistRefundAmount = '';
+        const reference = document.createElement('input');
+        reference.maxLength = 120;
+        reference.placeholder = 'Completed refund transfer reference';
+        reference.dataset.artistRefundReference = '';
+        const note = document.createElement('input');
+        note.maxLength = 500;
+        note.placeholder = 'Refund decision and policy note';
+        note.dataset.artistRefundNote = '';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'button secondary';
+        button.dataset.recordArtistRefund = '';
+        button.textContent = 'Record manual refund';
+        fields.append(amount, reference, note, button);
+        card.appendChild(fields);
+      }
+      list.appendChild(card);
+    });
   }
 
   async function loadGiftMerchants() {
@@ -841,6 +942,7 @@
     document.getElementById('partnersSection').hidden = button.dataset.adminTab !== 'partners';
     document.getElementById('partnershipApplicationsSection').hidden = button.dataset.adminTab !== 'partnership-applications';
     document.getElementById('sponsorshipsSection').hidden = button.dataset.adminTab !== 'sponsorships';
+    document.getElementById('artistsSection').hidden = button.dataset.adminTab !== 'artists';
     document.getElementById('giftsSection').hidden = button.dataset.adminTab !== 'gifts';
     document.getElementById('remindersSection').hidden = button.dataset.adminTab !== 'reminders';
     if (button.dataset.adminTab === 'partners') {
@@ -851,6 +953,9 @@
     }
     if (button.dataset.adminTab === 'sponsorships') {
       loadSponsorships().catch((error) => setFeedback(feedback, error.message, true));
+    }
+    if (button.dataset.adminTab === 'artists') {
+      loadArtistMarketplace().catch((error) => setFeedback(feedback, error.message, true));
     }
     if (button.dataset.adminTab === 'gifts') {
       loadGiftMarketplace().catch((error) => setFeedback(feedback, error.message, true));
@@ -1017,6 +1122,69 @@
         setFeedback(feedback, status === 'approved' ? 'Refund approved and recorded.' : 'Refund request rejected.');
       }
       await loadGiftMarketplace();
+    } catch (error) {
+      button.disabled = false;
+      setFeedback(feedback, error.message, true);
+    }
+  });
+
+  document.getElementById('artistProfilesList').addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-artist-profile-status]');
+    if (!button) return;
+    const card = button.closest('[data-artist-profile-id]');
+    const status = button.dataset.artistProfileStatus;
+    if (status === 'suspended' && !window.confirm('Unlist this artist profile from public search? Existing bookings will remain available.')) return;
+    button.disabled = true;
+    try {
+      await api(`/api/artists/admin/${encodeURIComponent(card.dataset.artistProfileId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status })
+      });
+      setFeedback(feedback, status === 'active' ? 'Artist profile restored.' : 'Artist profile unlisted.');
+      await loadArtistProfiles();
+    } catch (error) {
+      button.disabled = false;
+      setFeedback(feedback, error.message, true);
+    }
+  });
+
+  document.getElementById('artistBookingsList').addEventListener('click', async (event) => {
+    const payoutButton = event.target.closest('[data-record-artist-payout]');
+    const refundButton = event.target.closest('[data-record-artist-refund]');
+    const button = payoutButton || refundButton;
+    if (!button) return;
+    const card = button.closest('[data-artist-booking-id]');
+    button.disabled = true;
+    try {
+      if (payoutButton) {
+        if (!window.confirm('Confirm the artist payout has already been transferred. This only records the completed transfer.')) {
+          button.disabled = false;
+          return;
+        }
+        await api(`/api/artist-bookings/admin/${encodeURIComponent(card.dataset.artistBookingId)}/payout`, {
+          method: 'POST',
+          body: JSON.stringify({
+            reference: card.querySelector('[data-artist-payout-reference]').value,
+            note: card.querySelector('[data-artist-payout-note]').value
+          })
+        });
+        setFeedback(feedback, 'Manual artist deposit payout recorded.');
+      } else {
+        if (!window.confirm('Confirm the refund has already been transferred and follows the accepted cancellation policy. This only records the completed refund.')) {
+          button.disabled = false;
+          return;
+        }
+        await api(`/api/artist-bookings/admin/${encodeURIComponent(card.dataset.artistBookingId)}/refund`, {
+          method: 'POST',
+          body: JSON.stringify({
+            amountKes: Number(card.querySelector('[data-artist-refund-amount]').value),
+            reference: card.querySelector('[data-artist-refund-reference]').value,
+            note: card.querySelector('[data-artist-refund-note]').value
+          })
+        });
+        setFeedback(feedback, 'Manual artist booking refund recorded.');
+      }
+      await loadArtistBookings();
     } catch (error) {
       button.disabled = false;
       setFeedback(feedback, error.message, true);

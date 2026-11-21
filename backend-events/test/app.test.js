@@ -223,6 +223,21 @@ const reminderEmailGateway = {
     }
   }
 };
+const artistBookingEmailAttempts = [];
+const artistBookingEmailGateway = {
+  enabled: true,
+  failNext: false,
+  isConfigured() {
+    return this.enabled;
+  },
+  async sendUpdate(notification) {
+    artistBookingEmailAttempts.push(notification);
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error('Temporary artist booking email failure.');
+    }
+  }
+};
 const app = createApp({
   payhero: paymentGateway,
   stripe: stripeGateway,
@@ -233,6 +248,8 @@ const app = createApp({
   email: emailGateway,
   ticketEmail: ticketEmailGateway,
   reminderEmail: reminderEmailGateway,
+  artistBookingEmail: artistBookingEmailGateway,
+  artistBookingsPaymentsEnabled: true,
   verifyGoogleToken: async (idToken) => {
     const profiles = {
       'valid-google-token': { sub: 'google-subject-123', email: 'google@example.com', name: 'Google Member' },
@@ -1752,6 +1769,7 @@ test('creator partners activate immediately at 5% and earn attributable commissi
     profileUrl: 'http://instagram.example/creator',
     audienceDescription: 'I share events with my local community.'
   });
+
   assert.equal(invalidApplication.status, 400);
   const application = await request(app).post('/api/partners/apply').set(creatorAuth).send({
     socialPlatform: 'Instagram',
@@ -1850,6 +1868,195 @@ test('creator partners activate immediately at 5% and earn attributable commissi
   assert.equal(selfOrder.status, 201);
   const selfOrderRow = db.prepare('SELECT * FROM orders WHERE id=?').get(selfOrder.body.orderId);
   assert.equal(selfOrderRow.affiliate_partner_id, null);
+});
+
+test('artists publish searchable services, take booking deposits, and receive recorded manual payouts', async () => {
+  const artistAuth = createTestAccountAuth(`artist-${crypto.randomUUID()}@example.com`);
+  const organizerAuth = createTestAccountAuth(`organizer-${crypto.randomUUID()}@example.com`);
+  const unacknowledgedAuth = createTestAccountAuth(`artist-terms-${crypto.randomUUID()}@example.com`, { acknowledgeTerms: false });
+  assert.equal((await request(app).put('/api/artists/me').set(unacknowledgedAuth).send({})).status, 428);
+  const profileResponse = await request(app).put('/api/artists/me').set(artistAuth).send({
+    displayName: 'Nairobi Test Artist',
+    artistType: 'both',
+    bio: 'A professional event performer available for festivals and private events.',
+    city: 'Nairobi',
+    genres: 'Afrobeats, Amapiano',
+    socialPlatform: 'Instagram',
+    socialProfileUrl: 'https://www.instagram.com/test.artist/',
+    portfolioUrl: 'https://artist.example.com',
+    profileImageUrl: '',
+    availabilityNote: 'Available weekends.'
+  });
+  assert.equal(profileResponse.status, 201);
+  assert.match(profileResponse.body.referralUrl, /events\.html\?ref=/);
+  assert.equal(profileResponse.body.profile.status, 'active');
+  const artistDashboard = await request(app).get('/api/artists/me').set(artistAuth);
+  assert.equal(artistDashboard.body.profile.slug, profileResponse.body.profile.slug);
+  assert.equal(artistDashboard.body.referralStats.clicks, 0);
+
+  const serviceResponse = await request(app).post('/api/artists/services').set(artistAuth).send({
+    title: 'Festival DJ set',
+    description: 'A high-energy DJ set for festivals, corporate events, and private celebrations.',
+    category: 'DJ performance',
+    priceKes: 1000,
+    durationMinutes: 120,
+    cancellationPolicy: 'Cancel at least seven days before the event for a full deposit refund.'
+  });
+  assert.equal(serviceResponse.status, 201);
+  const serviceId = serviceResponse.body.service.id;
+  const directory = await request(app).get('/api/artists?search=Afrobeats&city=Nairobi');
+  assert.equal(directory.status, 200);
+  assert.equal(directory.body.artists.length, 1);
+  const publicProfile = await request(app).get(`/api/artists/${profileResponse.body.profile.slug}`);
+  assert.equal(publicProfile.status, 200);
+  assert.equal(publicProfile.body.artist.services[0].id, serviceId);
+
+  const clientRequestId = crypto.randomUUID();
+  const bookingResponse = await request(app).post('/api/artist-bookings').set(organizerAuth).send({
+    serviceId,
+    clientRequestId,
+    eventName: 'Nairobi launch party',
+    eventDate: new Date(Date.now() + 10 * 86400000).toISOString(),
+    eventLocation: 'Nairobi',
+    message: 'We would like to book you for our upcoming launch party.'
+  });
+  assert.equal(bookingResponse.status, 201);
+  const bookingId = bookingResponse.body.booking.id;
+  assert.equal(bookingResponse.body.booking.depositAmountKes, 400);
+  await new Promise((resolve) => setImmediate(resolve));
+  const requestEmail = db.prepare(`
+    SELECT n.status,a.email FROM artist_booking_email_notifications n
+    JOIN accounts a ON a.id=n.recipient_account_id
+    WHERE n.booking_id=? AND n.notification_type='request'
+  `).get(bookingId);
+  assert.equal(requestEmail.status, 'sent');
+  assert.equal(requestEmail.email, db.prepare('SELECT email FROM accounts WHERE id=?')
+    .get(db.prepare('SELECT account_id FROM artist_profiles WHERE id=?').get(profileResponse.body.profile.id).account_id).email);
+  assert.ok(artistBookingEmailAttempts.some((email) =>
+    email.subject === 'New booking request: Nairobi launch party' && email.html.includes('Festival DJ set')));
+  assert.equal((await request(app).post('/api/artist-bookings').set(organizerAuth).send({
+    serviceId,
+    clientRequestId,
+    eventName: 'Nairobi launch party',
+    eventDate: new Date(Date.now() + 10 * 86400000).toISOString(),
+    eventLocation: 'Nairobi',
+    message: 'We would like to book you for our upcoming launch party.'
+  })).body.duplicate, true);
+  assert.equal((await request(app).post(`/api/artist-bookings/${bookingId}/respond`)
+    .set(organizerAuth).send({ decision: 'accept' })).status, 404);
+  artistBookingEmailGateway.failNext = true;
+  assert.equal((await request(app).post(`/api/artist-bookings/${bookingId}/respond`)
+    .set(artistAuth).send({ decision: 'accept' })).status, 200);
+  await new Promise((resolve) => setImmediate(resolve));
+  const failedAcceptanceEmail = db.prepare(`
+    SELECT id,status FROM artist_booking_email_notifications
+    WHERE booking_id=? AND notification_type='accepted'
+  `).get(bookingId);
+  assert.equal(failedAcceptanceEmail.status, 'failed');
+  db.prepare("UPDATE artist_booking_email_notifications SET attempted_at=datetime('now','-2 hours') WHERE id=?")
+    .run(failedAcceptanceEmail.id);
+  assert.equal(await app.locals.retryPendingArtistBookingEmails(), 1);
+  assert.equal(db.prepare('SELECT status FROM artist_booking_email_notifications WHERE id=?')
+    .get(failedAcceptanceEmail.id).status, 'sent');
+
+  const paymentDisabledApp = createApp({ artistBookingsPaymentsEnabled: false });
+  assert.equal((await request(paymentDisabledApp).get('/api/artist-bookings/payment-status')).body.enabled, false);
+  assert.equal((await request(paymentDisabledApp).post(`/api/artist-bookings/${bookingId}/deposit`)
+    .set(organizerAuth).send({ phone: '0712345678', acceptedCancellationPolicy: true })).status, 503);
+  const payheroUnavailableApp = createApp({ payhero: { isConfigured: () => false } });
+  assert.equal((await request(payheroUnavailableApp).get('/api/artist-bookings/payment-status')).body.enabled, false);
+  const previousPaymentsSetting = process.env.ARTIST_BOOKINGS_PAYMENTS_ENABLED;
+  try {
+    delete process.env.ARTIST_BOOKINGS_PAYMENTS_ENABLED;
+    const defaultPaymentsApp = createApp({ payhero: paymentGateway });
+    assert.equal((await request(defaultPaymentsApp).get('/api/artist-bookings/payment-status')).body.enabled, true);
+    process.env.ARTIST_BOOKINGS_PAYMENTS_ENABLED = 'false';
+    const pausedPaymentsApp = createApp({ payhero: paymentGateway });
+    assert.equal((await request(pausedPaymentsApp).get('/api/artist-bookings/payment-status')).body.enabled, false);
+  } finally {
+    if (previousPaymentsSetting === undefined) delete process.env.ARTIST_BOOKINGS_PAYMENTS_ENABLED;
+    else process.env.ARTIST_BOOKINGS_PAYMENTS_ENABLED = previousPaymentsSetting;
+  }
+
+  const missingPolicy = await request(app).post(`/api/artist-bookings/${bookingId}/deposit`)
+    .set(organizerAuth).send({ phone: '0712345678' });
+  assert.equal(missingPolicy.status, 400);
+  const depositResponse = await request(app).post(`/api/artist-bookings/${bookingId}/deposit`)
+    .set(organizerAuth).send({ phone: '0712345678', acceptedCancellationPolicy: true });
+  assert.equal(depositResponse.status, 200);
+  assert.equal(depositResponse.body.amountKes, 400);
+  assert.equal(paymentGateway.lastOrder.amountKes, 400);
+  const callback = await request(app).post('/api/payhero/callback').send({
+    response: {
+      CheckoutRequestID: db.prepare('SELECT checkout_request_id FROM artist_bookings WHERE id=?').get(bookingId).checkout_request_id,
+      ResultCode: 0,
+      Amount: 400,
+      MpesaReceiptNumber: 'ARTISTBOOKINGTEST'
+    }
+  });
+  assert.equal(callback.status, 200);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM artist_booking_email_notifications
+    WHERE booking_id=? AND notification_type='deposit_paid' AND status='sent'
+  `).get(bookingId).count, 2);
+  const organizerBookings = await request(app).get('/api/artist-bookings/me').set(organizerAuth);
+  assert.equal(organizerBookings.body.bookings[0].status, 'deposit_paid');
+  assert.equal(organizerBookings.body.bookings[0].valorFeeKes, 32);
+  assert.equal(organizerBookings.body.bookings[0].artistPayoutKes, 368);
+  assert.match(organizerBookings.body.bookings[0].cancellationPolicy, /seven days/);
+
+  assert.equal((await request(app).post(`/api/artist-bookings/${bookingId}/complete`)
+    .set(artistAuth).send({})).status, 409);
+  db.prepare('UPDATE artist_bookings SET event_date=? WHERE id=?')
+    .run(new Date(Date.now() - 3 * 3600000).toISOString(), bookingId);
+  assert.equal((await request(app).post(`/api/artist-bookings/${bookingId}/complete`)
+    .set(artistAuth).send({})).body.status, 'service_completed');
+  assert.equal((await request(app).post(`/api/artist-bookings/${bookingId}/complete`)
+    .set(organizerAuth).send({})).body.status, 'completed');
+  const payout = await request(app).post(`/api/artist-bookings/admin/${bookingId}/payout`)
+    .set(admin).send({ reference: 'ARTIST-TRANSFER-1', note: 'Artist deposit paid after event completion.' });
+  assert.equal(payout.status, 201);
+  assert.equal(payout.body.amountKes, 368);
+  assert.equal((await request(app).post(`/api/artist-bookings/admin/${bookingId}/payout`)
+    .set(admin).send({ reference: 'ARTIST-TRANSFER-2', note: 'Duplicate payout check.' })).status, 409);
+
+  const refundBookingResponse = await request(app).post('/api/artist-bookings').set(organizerAuth).send({
+    serviceId,
+    clientRequestId: crypto.randomUUID(),
+    eventName: 'Nairobi community event',
+    eventDate: new Date(Date.now() + 12 * 86400000).toISOString(),
+    eventLocation: 'Nairobi',
+    message: 'We would like to book you for a community event.'
+  });
+  const refundBookingId = refundBookingResponse.body.booking.id;
+  assert.equal((await request(app).post(`/api/artist-bookings/${refundBookingId}/respond`)
+    .set(artistAuth).send({ decision: 'accept' })).status, 200);
+  await request(app).post(`/api/artist-bookings/${refundBookingId}/deposit`)
+    .set(organizerAuth).send({ phone: '0712345678', acceptedCancellationPolicy: true });
+  await request(app).post('/api/payhero/callback').send({
+    response: {
+      CheckoutRequestID: db.prepare('SELECT checkout_request_id FROM artist_bookings WHERE id=?').get(refundBookingId).checkout_request_id,
+      ResultCode: 0,
+      Amount: 400,
+      MpesaReceiptNumber: 'ARTISTBOOKINGTEST2'
+    }
+  });
+  assert.equal((await request(app).post(`/api/artist-bookings/${refundBookingId}/cancel`)
+    .set(organizerAuth).send({})).body.status, 'cancellation_review');
+  const refund = await request(app).post(`/api/artist-bookings/admin/${refundBookingId}/refund`)
+    .set(admin).send({ amountKes: 400, reference: 'ARTIST-REFUND-1', note: 'Refund sent under the listing policy.' });
+  assert.equal(refund.status, 201);
+  assert.equal(db.prepare('SELECT status FROM artist_bookings WHERE id=?').get(refundBookingId).status, 'refunded');
+
+  assert.equal((await request(app).get('/api/artists/admin')).status, 401);
+  const adminArtists = await request(app).get('/api/artists/admin').set(admin);
+  assert.equal(adminArtists.status, 200);
+  assert.equal(adminArtists.body.profiles[0].id, profileResponse.body.profile.id);
+  const unlist = await request(app).patch(`/api/artists/admin/${profileResponse.body.profile.id}`)
+    .set(admin).send({ status: 'suspended' });
+  assert.equal(unlist.status, 200);
+  assert.equal((await request(app).get(`/api/artists/${profileResponse.body.profile.slug}`)).status, 404);
 });
 
 test('organizer and sponsor partnership applications support secure follow-up and resubmission', async () => {

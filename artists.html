@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Find Artists and DJs for Events | Valor Africa</title>
+  <meta name="description" content="Discover artists, DJs, MCs, and performers for your next event. Browse services and send booking requests with Valor Africa.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://valorafrica.co.ke/artists.html">
+  <meta property="og:title" content="Find Artists and DJs for Events | Valor Africa">
+  <meta property="og:description" content="Browse artist and DJ services and send event booking requests with Valor Africa.">
+  <meta property="og:url" content="https://valorafrica.co.ke/artists.html">
+  <meta property="og:image" content="https://valorafrica.co.ke/images/og-image.svg">
+  <meta name="theme-color" content="#087f5b">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/events.css?v=artist-marketplace-1">
+  <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
+  <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
+  <script src="scripts/events-api.js?v=local-live-read-fallback-1" defer></script>
+  <script src="scripts/artists.js?v=1" defer></script>
+  <script src="scripts/nav-toggle.js?v=1" defer></script>
+  <script src="scripts/privacy-consent.js" defer></script>
+  <script src="scripts/nav-history.js?v=1" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <nav class="nav wrap" aria-label="Main navigation">
+      <a href="index.html" class="brand" aria-label="Valor Africa Events home"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a>
+      <button class="menu-toggle" id="menuToggle" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Open navigation"><span></span><span></span><span></span></button>
+      <div class="nav-links" id="navLinks">
+        <a href="events.html">Events</a>
+        <a href="artists.html" aria-current="page">Artists &amp; DJs</a>
+        <a href="host.html">For organizers</a>
+        <a href="account.html">Account</a>
+        <a href="contact.html">Help</a>
+        <a class="nav-host" href="partner-dashboard.html?program=artist#artist-application">List your services <span aria-hidden="true">↗</span></a>
+      </div>
+    </nav>
+  </header>
+  <main id="main" class="wrap">
+    <section class="page-intro artist-directory-intro">
+      <p class="eyebrow">ARTISTS · DJS · EVENT TALENT</p>
+      <h1>Find the right talent for your event.</h1>
+      <p>Discover performers, compare services and prices, then send a booking request directly through Valor Africa.</p>
+      <a class="button button-primary" href="partner-dashboard.html?program=artist#artist-application">List your artist or DJ services</a>
+    </section>
+    <section class="artist-directory" aria-label="Artist directory">
+      <form class="artist-search" id="artistSearchForm">
+        <label for="artistSearch">Search by name, service, or genre</label>
+        <input id="artistSearch" name="search" type="search" maxlength="100" placeholder="Try DJ, Afrobeats, or Nairobi">
+        <label for="artistCitySearch">City</label>
+        <input id="artistCitySearch" name="city" type="search" maxlength="100" placeholder="Any city">
+        <button class="button button-primary" type="submit">Search artists</button>
+      </form>
+      <p id="artistDirectoryStatus" class="artist-page-status" role="status" aria-live="polite">Loading artist services…</p>
+      <div class="artist-directory-grid" id="artistDirectoryGrid"></div>
+    </section>
+    <section class="artist-payment-disclosure">
+      <h2>Booking and payment information</h2>
+      <p>Sending a request does not confirm a booking or require payment; the artist must accept it first. When M-Pesa checkout is available, the organizer pays a 40% deposit through Valor, including an 8% Valor fee on the deposit, and pays the remaining service balance directly to the artist. Review the service cancellation policy before checkout.</p>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div class="footer-brand-block"><a href="index.html" class="brand footer-brand"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a><p>Discover experiences and find your next great event across Africa.</p><a class="footer-email" href="mailto:hello@valorafrica.co.ke">hello@valorafrica.co.ke</a></div>
+      <div class="footer-column"><h2 class="footer-heading">Discover</h2><nav class="footer-links" aria-label="Discover"><a href="events.html">Browse events</a><a href="artists.html">Find artists &amp; DJs</a><a href="about.html">About Valor Africa</a></nav></div>
+      <div class="footer-column"><h2 class="footer-heading">For organizers</h2><nav class="footer-links" aria-label="For organizers"><a href="host.html">Host an event</a><a href="partner-dashboard.html?program=artist#artist-application">List artist services</a><a href="partner-dashboard.html">Partner dashboard</a></nav></div>
+      <div class="footer-column"><h2 class="footer-heading">Tickets &amp; support</h2><nav class="footer-links" aria-label="Tickets and support"><a href="account.html">Your account</a><a href="artist-bookings.html">My artist bookings</a><a href="contact.html">Contact support</a><a href="refund-policy.html">Refund policy</a></nav></div>
+    </div>
+    <div class="wrap footer-bottom"><p>© 2026 Valor Africa Events</p><a href="index.html">Back to home <span aria-hidden="true">↑</span></a></div>
+  </footer>
+  <script src="scripts/social-links.js?v=1" defer></script>
+</body>
+</html>

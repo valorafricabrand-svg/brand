@@ -17,7 +17,8 @@
   <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
   <script src="scripts/partnership.js?v=partner-auto-2" defer></script>
   <script src="scripts/sponsorship.js?v=partner-dashboard-1" defer></script>
-  <script src="scripts/partner-dashboard.js?v=partner-auto-2" defer></script>
+  <script src="scripts/partner-dashboard.js?v=artist-marketplace-1" defer></script>
+  <script src="scripts/artist-marketplace-dashboard.js?v=1" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
   <script src="scripts/nav-history.js?v=1" defer></script>
@@ -182,22 +183,78 @@
                 <button class="button button-primary" type="submit">Submit sponsor inquiry</button>
               </form>
             </section>
-            <section class="business-partnership-form-card" id="artist-application" data-partner-program="artist" aria-labelledby="artist-application-title">
-              <h3 id="artist-application-title">Artist or DJ profile</h3>
-              <p>Request a profile or booking introduction. A profile does not guarantee a booking.</p>
+            <section class="business-partnership-form-card artist-marketplace-dashboard" id="artist-application" data-partner-program="artist" aria-labelledby="artist-application-title">
+              <h3 id="artist-application-title">Publish your artist or DJ services</h3>
+              <p>Create your public profile once, add multiple services, and receive booking requests from event organizers. Your profile and services publish immediately.</p>
+              <p class="artist-payment-disclosure"><strong>Payment notice:</strong> after you accept a request, organizers can pay a 40% M-Pesa deposit through Valor when checkout is available. Valor retains 8% of the deposit; the remaining 60% is paid directly by the organizer to you. Review the current draft partner terms and each service's cancellation policy.</p>
               <p id="artistApplicationFeedback" class="partnership-member-feedback" role="status" aria-live="polite"></p>
-              <div id="artistApplicationStatus" class="partnership-application-status" hidden></div>
-              <form class="partnership-application-form business-partnership-form" id="artistPartnerApplication" hidden>
-                <label for="artistOrganizationName">Artist or DJ name</label>
-                <input id="artistOrganizationName" name="organizationName" maxlength="160" required>
-                <label for="artistWebsite">Public profile or portfolio (optional)</label>
-                <input id="artistWebsite" name="websiteUrl" type="url" maxlength="2048" placeholder="https://...">
-                <label for="artistDetails">Describe your work, audience, and the profile you need</label>
-                <textarea id="artistDetails" name="applicationDetails" minlength="30" maxlength="3000" rows="4" required></textarea>
-                <label for="artistSupport">Genres, location, or booking preferences (optional)</label>
-                <textarea id="artistSupport" name="requestedSupport" maxlength="1000" rows="2"></textarea>
-                <button class="button button-primary" type="submit">Submit artist inquiry</button>
+              <div class="artist-referral-card" id="artistReferralCard" hidden>
+                <h4>Influence ticket sales</h4>
+                <p>Share your tracked link to earn the existing 5% creator commission on eligible paid ticket sales.</p>
+                <p class="artist-referral-stats" id="artistReferralStats"></p>
+                <label for="artistReferralLink">Your ticket referral link</label>
+                <div class="artist-referral-row">
+                  <input id="artistReferralLink" type="url" readonly>
+                  <button class="button secondary" id="copyArtistReferral" type="button">Copy link</button>
+                </div>
+              </div>
+              <form class="partnership-application-form artist-marketplace-form" id="artistProfileForm">
+                <h4>Your public profile</h4>
+                <label for="artistDisplayName">Artist or DJ name</label>
+                <input id="artistDisplayName" name="displayName" maxlength="100" required>
+                <label for="artistType">Profile type</label>
+                <select id="artistType" name="artistType" required>
+                  <option value="artist">Artist</option><option value="dj">DJ</option><option value="both">Artist and DJ</option>
+                </select>
+                <label for="artistCity">City or base</label>
+                <input id="artistCity" name="city" maxlength="100" required>
+                <label for="artistGenres">Genres or specialties</label>
+                <input id="artistGenres" name="genres" maxlength="300" required>
+                <label for="artistBio">Short bio (20 characters minimum)</label>
+                <textarea id="artistBio" name="bio" minlength="20" maxlength="2000" rows="4" required></textarea>
+                <label for="artistImageUrl">Profile image URL (optional, HTTPS)</label>
+                <input id="artistImageUrl" name="profileImageUrl" type="url" maxlength="2048" placeholder="https://...">
+                <label for="artistPortfolioUrl">Portfolio URL (optional, HTTPS)</label>
+                <input id="artistPortfolioUrl" name="portfolioUrl" type="url" maxlength="2048" placeholder="https://...">
+                <label for="artistSocialPlatform">Social platform</label>
+                <select id="artistSocialPlatform" name="socialPlatform" required>
+                  <option>Instagram</option><option>TikTok</option><option>YouTube</option><option>Facebook</option><option>Other</option>
+                </select>
+                <label for="artistSocialProfileUrl">Public social profile URL (HTTPS)</label>
+                <input id="artistSocialProfileUrl" name="socialProfileUrl" type="url" maxlength="2048" required placeholder="https://...">
+                <label for="artistAvailability">Availability or booking notes (optional)</label>
+                <textarea id="artistAvailability" name="availabilityNote" maxlength="500" rows="2"></textarea>
+                <button class="button button-primary" type="submit">Publish profile</button>
               </form>
+              <section class="artist-dashboard-section" aria-labelledby="artistServicesTitle">
+                <h4 id="artistServicesTitle">Your services</h4>
+                <div class="artist-service-list" id="artistServiceList" aria-live="polite"></div>
+                <form class="partnership-application-form artist-marketplace-form" id="artistServiceForm" hidden>
+                  <h5 id="artistServiceFormTitle">Add a service</h5>
+                  <label for="artistServiceTitle">Service title</label>
+                  <input id="artistServiceTitle" name="title" maxlength="120" required>
+                  <label for="artistServiceCategory">Category</label>
+                  <select id="artistServiceCategory" name="category" required>
+                    <option>DJ performance</option><option>Live music</option><option>MC / host</option><option>Dance / performance</option><option>Other</option>
+                  </select>
+                  <label for="artistServiceDescription">What is included?</label>
+                  <textarea id="artistServiceDescription" name="description" minlength="20" maxlength="2000" rows="3" required></textarea>
+                  <label for="artistServicePrice">Service price (KES)</label>
+                  <input id="artistServicePrice" name="priceKes" type="number" min="1" step="1" required>
+                  <label for="artistServiceDuration">Duration (minutes)</label>
+                  <input id="artistServiceDuration" name="durationMinutes" type="number" min="15" max="1440" step="15" required>
+                  <label for="artistServiceCancellation">Cancellation and refund policy (20 characters minimum)</label>
+                  <textarea id="artistServiceCancellation" name="cancellationPolicy" minlength="20" maxlength="1500" rows="3" required></textarea>
+                  <div class="artist-service-form-actions">
+                    <button class="button button-primary" type="submit">Add service</button>
+                    <button class="button secondary" id="cancelArtistServiceEdit" type="button" hidden>Cancel edit</button>
+                  </div>
+                </form>
+              </section>
+              <section class="artist-dashboard-section" aria-labelledby="artistBookingRequestsTitle">
+                <h4 id="artistBookingRequestsTitle">Booking requests</h4>
+                <div class="artist-booking-list" id="artistBookingList" aria-live="polite"></div>
+              </section>
             </section>
             <section class="business-partnership-form-card" id="branding-application" data-partner-program="branding" aria-labelledby="branding-application-title">
               <h3 id="branding-application-title">Event branding</h3>
@@ -300,8 +357,8 @@
   <footer class="site-footer">
     <div class="wrap footer-inner">
       <div class="footer-brand-block"><a href="index.html" class="brand footer-brand"><span class="brand-mark" aria-hidden="true">V</span><span class="brand-copy">Valor Africa<small>EVENTS &amp; TICKETS</small></span></a><p>Discover experiences and find your next great event across Africa.</p><a class="footer-email" href="mailto:hello@valorafrica.co.ke">hello@valorafrica.co.ke</a></div>
-      <div class="footer-column"><h2 class="footer-heading">Partner programs</h2><nav class="footer-links" aria-label="Partner programs"><a href="partners.html">Explore programs</a><a href="partnership.html#investment-brief-title">Investment brief</a><a href="partner-terms.html">Draft participation terms</a></nav></div>
-      <div class="footer-column"><h2 class="footer-heading">Account &amp; support</h2><nav class="footer-links" aria-label="Account and support"><a href="account.html">Your account</a><a href="wallet.html">Valor Wallet</a><a href="contact.html">Contact support</a><a href="refund-policy.html">Refund policy</a></nav></div>
+      <div class="footer-column"><h2 class="footer-heading">Partner programs</h2><nav class="footer-links" aria-label="Partner programs"><a href="partners.html">Explore programs</a><a href="artists.html">Artist &amp; DJ directory</a><a href="partnership.html#investment-brief-title">Investment brief</a><a href="partner-terms.html">Draft participation terms</a></nav></div>
+      <div class="footer-column"><h2 class="footer-heading">Account &amp; support</h2><nav class="footer-links" aria-label="Account and support"><a href="account.html">Your account</a><a href="artist-bookings.html">My artist bookings</a><a href="wallet.html">Valor Wallet</a><a href="contact.html">Contact support</a><a href="refund-policy.html">Refund policy</a></nav></div>
     </div>
     <div class="wrap footer-bottom"><p>© 2026 Valor Africa Events</p><a href="index.html">Back to home <span aria-hidden="true">↑</span></a></div>
   </footer>

@@ -257,6 +257,120 @@ db.exec(`
     UNIQUE (partner_id,reference)
   );
 
+  CREATE TABLE IF NOT EXISTS artist_profiles (
+    id TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL UNIQUE REFERENCES accounts(id) ON DELETE CASCADE,
+    slug TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    artist_type TEXT NOT NULL CHECK (artist_type IN ('artist','dj','both')),
+    bio TEXT NOT NULL,
+    city TEXT NOT NULL,
+    genres TEXT NOT NULL DEFAULT '',
+    profile_image_url TEXT NOT NULL DEFAULT '',
+    portfolio_url TEXT NOT NULL DEFAULT '',
+    social_platform TEXT NOT NULL,
+    social_profile_url TEXT NOT NULL,
+    availability_note TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS artist_profiles_listing ON artist_profiles(status,city,display_name COLLATE NOCASE);
+
+  CREATE TABLE IF NOT EXISTS artist_services (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL REFERENCES artist_profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT NOT NULL CHECK (category IN ('DJ performance','Live music','MC / host','Dance / performance','Other')),
+    price_kes INTEGER NOT NULL CHECK (price_kes > 0),
+    duration_minutes INTEGER NOT NULL CHECK (duration_minutes BETWEEN 15 AND 1440),
+    cancellation_policy TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS artist_services_listing ON artist_services(profile_id,active,created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS artist_bookings (
+    id TEXT PRIMARY KEY,
+    service_id TEXT NOT NULL REFERENCES artist_services(id),
+    profile_id TEXT NOT NULL REFERENCES artist_profiles(id),
+    organizer_account_id TEXT NOT NULL REFERENCES accounts(id),
+    client_request_id TEXT NOT NULL,
+    event_name TEXT NOT NULL,
+    event_date TEXT NOT NULL,
+    event_location TEXT NOT NULL,
+    message TEXT NOT NULL,
+    service_price_kes INTEGER NOT NULL CHECK (service_price_kes > 0),
+    deposit_amount_kes INTEGER NOT NULL CHECK (deposit_amount_kes > 0),
+    valor_fee_kes INTEGER NOT NULL CHECK (valor_fee_kes >= 0),
+    artist_payout_kes INTEGER NOT NULL CHECK (artist_payout_kes >= 0),
+    cancellation_policy TEXT NOT NULL,
+    policy_accepted_at TEXT,
+    status TEXT NOT NULL DEFAULT 'requested' CHECK (status IN (
+      'requested','accepted','declined','deposit_pending','deposit_paid','service_completed',
+      'completed','cancelled','cancellation_review','refunded','payment_review'
+    )),
+    payment_method TEXT NOT NULL DEFAULT '',
+    phone TEXT NOT NULL DEFAULT '',
+    checkout_request_id TEXT UNIQUE,
+    merchant_request_id TEXT,
+    mpesa_receipt TEXT UNIQUE,
+    received_amount_kes INTEGER CHECK (received_amount_kes IS NULL OR received_amount_kes > 0),
+    artist_completed_at TEXT,
+    organizer_confirmed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    accepted_at TEXT,
+    paid_at TEXT,
+    cancelled_at TEXT,
+    refunded_at TEXT,
+    UNIQUE (organizer_account_id,client_request_id)
+  );
+  CREATE INDEX IF NOT EXISTS artist_bookings_profile ON artist_bookings(profile_id,status,event_date);
+  CREATE INDEX IF NOT EXISTS artist_bookings_organizer ON artist_bookings(organizer_account_id,created_at DESC);
+  CREATE INDEX IF NOT EXISTS artist_bookings_checkout ON artist_bookings(checkout_request_id);
+
+  CREATE TABLE IF NOT EXISTS artist_booking_email_notifications (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    booking_id TEXT NOT NULL REFERENCES artist_bookings(id) ON DELETE CASCADE,
+    recipient_account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    notification_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sending','sent','failed')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    attempted_at TEXT,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    sent_at TEXT,
+    UNIQUE (event_id,recipient_account_id)
+  );
+  CREATE INDEX IF NOT EXISTS artist_booking_email_retry
+    ON artist_booking_email_notifications(status,attempted_at,created_at);
+
+  CREATE TABLE IF NOT EXISTS artist_booking_payouts (
+    id TEXT PRIMARY KEY,
+    booking_id TEXT NOT NULL UNIQUE REFERENCES artist_bookings(id),
+    profile_id TEXT NOT NULL REFERENCES artist_profiles(id),
+    amount_kes INTEGER NOT NULL CHECK (amount_kes > 0),
+    reference TEXT NOT NULL COLLATE NOCASE,
+    note TEXT NOT NULL DEFAULT '',
+    admin_id INTEGER NOT NULL REFERENCES admins(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (profile_id,reference)
+  );
+
+  CREATE TABLE IF NOT EXISTS artist_booking_refunds (
+    id TEXT PRIMARY KEY,
+    booking_id TEXT NOT NULL UNIQUE REFERENCES artist_bookings(id),
+    amount_kes INTEGER NOT NULL CHECK (amount_kes > 0),
+    reference TEXT NOT NULL COLLATE NOCASE,
+    note TEXT NOT NULL DEFAULT '',
+    admin_id INTEGER NOT NULL REFERENCES admins(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (reference)
+  );
+
   CREATE TABLE IF NOT EXISTS partnership_applications (
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
@@ -606,6 +720,11 @@ const insertFeaturedClip = db.prepare(`
 if (!db.prepare('SELECT 1 FROM hero_slide_migrations WHERE migration=?').get('ticket-buyer-cover-jpg')) {
   db.prepare("UPDATE hero_slides SET poster_url='images/events/valor-ticket-buyer-cover.jpg' WHERE poster_url='images/events/valor-ticket-buyer-cover.png'").run();
   db.prepare('INSERT INTO hero_slide_migrations (migration) VALUES (?)').run('ticket-buyer-cover-jpg');
+}
+
+const artistBookingColumns = db.prepare('PRAGMA table_info(artist_bookings)').all();
+if (!artistBookingColumns.some((column) => column.name === 'received_amount_kes')) {
+  db.exec('ALTER TABLE artist_bookings ADD COLUMN received_amount_kes INTEGER');
 }
 
 const eventColumns = db.prepare('PRAGMA table_info(events)').all();

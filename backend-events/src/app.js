@@ -18,6 +18,7 @@ const walletSms = require('./wallet-sms');
 const accountEmail = require('./account-email');
 const { normalizeKenyanPhone } = require('./kenyan-phone');
 const { PARTNER_APPLICATION_TYPES, PARTNER_TERMS_VERSION } = require('./partner-terms');
+const { registerArtistMarketplaceRoutes } = require('./artist-marketplace');
 
 const CREATOR_COMMISSION_PERCENT = 5;
 const allowedCategories = new Set(['Movies & Cinema','Concerts','Festivals','Community','Food & Drink','Arts & Culture','Sports','Business','Comedy','Nightlife','Workshops & Classes','Conferences & Networking','Religious & Faith','Other']);
@@ -281,6 +282,12 @@ function createApp(options = {}) {
   const braintreeGateway = options.braintree || braintree;
   const smsGateway = options.sms || walletSms;
   const emailGateway = options.email || accountEmail;
+  const artistBookingsPaymentsRequested = typeof options.artistBookingsPaymentsEnabled === 'boolean'
+    ? options.artistBookingsPaymentsEnabled
+    : process.env.ARTIST_BOOKINGS_PAYMENTS_ENABLED !== 'false';
+  const artistBookingsPaymentsEnabled = artistBookingsPaymentsRequested
+    && typeof paymentGateway.isConfigured === 'function'
+    && paymentGateway.isConfigured();
   const ticketEmailGateway = options.ticketEmail || require('./ticket-email');
   const reminderEmailGateway = options.reminderEmail || require('./reminder-email');
   const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
@@ -849,6 +856,20 @@ function createApp(options = {}) {
     }
     next();
   }
+
+  const artistMarketplace = registerArtistMarketplaceRoutes(app, {
+    db,
+    requireAccount,
+    requireAdmin,
+    requirePartnerTermsAcknowledgement,
+    paymentGateway,
+    bookingEmailGateway: options.artistBookingEmail,
+    publicSiteUrl,
+    createSubmissionLimiter,
+    paymentsEnabled: artistBookingsPaymentsEnabled
+  });
+  app.locals.artistBookingsPaymentsEnabled = artistBookingsPaymentsEnabled;
+  app.locals.retryPendingArtistBookingEmails = artistMarketplace.retryPendingBookingEmails;
 
   function optionalAccount(req, res, next) {
     if (!req.headers.authorization) return next();
@@ -5362,6 +5383,17 @@ function createApp(options = {}) {
         await completeMerchantVoucherMpesaPayment(callback, merchantVoucherOrder);
       } catch (error) {
         console.error('M-Pesa merchant voucher payment verification failed; voucher code remains unavailable:', error.message);
+      }
+      return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
+    }
+    const artistBooking = db.prepare(`
+      SELECT * FROM artist_bookings WHERE checkout_request_id=?
+    `).get(callback.CheckoutRequestID);
+    if (artistBooking) {
+      try {
+        await artistMarketplace.completeMpesaCallback(callback, artistBooking);
+      } catch (error) {
+        console.error('M-Pesa artist booking verification failed; booking remains unconfirmed:', error.message);
       }
       return res.json({ ResultCode: 0, ResultDesc: 'Callback accepted.' });
     }

@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Event admin | Valor Africa</title>
   <link rel="stylesheet" href="/admin-assets/admin.css?v=hero-video-library-3">
-  <script src="/admin-assets/admin.js?v=hero-video-library-3" defer></script>
+  <script src="/admin-assets/admin.js?v=artist-marketplace-1" defer></script>
 </head>
 <body>
   <main class="admin-shell">
@@ -20,7 +20,7 @@
     <section class="card login-card" id="loginPanel">
       <p class="kicker">SECURE ORGANIZER TOOLS</p>
       <h1>Manage Valor Africa</h1>
-      <p>Sign in to manage event listings, homepage hero slides, merchandise, advertising, orders, and creator partners.</p>
+      <p>Sign in to manage event listings, homepage hero slides, merchandise, advertising, orders, creator partners, and artist bookings.</p>
       <form id="loginForm">
         <label for="username">Admin username</label>
         <input id="username" name="username" autocomplete="username" required>
@@ -34,7 +34,7 @@
       <div class="dashboard-heading">
         <p class="kicker">VALOR AFRICA EVENTS</p>
         <h1>Organizer dashboard</h1>
-        <p>Manage event listings, orders, advertising, and the creator partner program.</p>
+        <p>Manage event listings, orders, advertising, creator partners, and artist bookings.</p>
       </div>
       <nav class="tabs" aria-label="Admin sections">
         <button class="tab is-active" type="button" data-admin-tab="submissions">Event submissions</button>
@@ -45,6 +45,7 @@
         <button class="tab" type="button" data-admin-tab="partners">Creator partners</button>
         <button class="tab" type="button" data-admin-tab="partnership-applications">Partner program inquiries</button>
         <button class="tab" type="button" data-admin-tab="sponsorships">Paid sponsorships</button>
+        <button class="tab" type="button" data-admin-tab="artists">Artists &amp; bookings</button>
         <button class="tab" type="button" data-admin-tab="gifts">Gift marketplace</button>
         <button class="tab" type="button" data-admin-tab="reminders">Reminder emails</button>
       </nav>
@@ -132,6 +133,17 @@
       <section class="card admin-section" id="sponsorshipsSection" hidden>
         <div class="section-heading"><div><h2>Paid sponsorships</h2><p>Sponsors who paid directly for a package. Visibility activates automatically on payment; cancel here to pull a sponsor down early.</p></div></div>
         <div class="record-list" id="sponsorshipsList"></div>
+      </section>
+      <section class="card admin-section" id="artistsSection" hidden>
+        <div class="section-heading"><div><h2>Artists and service bookings</h2><p>Moderate public profiles, review booking deposits, manually record artist payouts after both sides confirm service completion, and record any approved manual refund. Recording does not transfer money.</p></div></div>
+        <section class="gift-admin-group" aria-labelledby="artistProfilesHeading">
+          <h3 id="artistProfilesHeading">Artist profiles</h3>
+          <div class="record-list" id="artistProfilesList"></div>
+        </section>
+        <section class="gift-admin-group" aria-labelledby="artistBookingsHeading">
+          <h3 id="artistBookingsHeading">Service bookings</h3>
+          <div class="record-list" id="artistBookingsList"></div>
+        </section>
       </section>
       <section class="card admin-section" id="giftsSection" hidden>
         <div class="section-heading"><div><h2>Gift marketplace operations</h2><p>Verify merchant applications, moderate voucher listings, record manual payouts, and review refunds. Payout controls only record transfers already made.</p></div></div>

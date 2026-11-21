@@ -32,9 +32,9 @@
     },
     artist: {
       title: 'Artist / DJ dashboard',
-      intro: 'Submit your profile details and manage your artist or DJ partnership request online without waiting for application review.',
+      intro: 'Publish an artist or DJ profile and services, receive event booking requests, and share a tracked ticket referral link.',
       sectionsTitle: 'Artist / DJ profile',
-      sectionsIntro: 'Your application activates automatically. Bookings and performance details are arranged separately.'
+      sectionsIntro: 'Your public profile and services publish immediately. Booking deposits remain unavailable pending legal review of final booking and refund terms.'
     },
     branding: {
       title: 'Event branding dashboard',
@@ -144,6 +144,7 @@
       termsGate.hidden = true;
       dashboard.hidden = false;
       scrollToRequestedSection();
+      if (selectedProgram === 'artist') window.dispatchEvent(new Event('valor-artist-dashboard-ready'));
       await loadSponsorships();
     } catch (error) {
       if (/sign in to your valor africa account|session has expired/i.test(error.message)) {
