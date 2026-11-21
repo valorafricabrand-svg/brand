@@ -1411,6 +1411,17 @@ img { display: block; max-width: 100%; }
 
 .partners-proof { position: relative; z-index: 2; margin-top: -34px; margin-bottom: 44px; }
 
+.why-partner-section { margin: 0 0 48px; padding: clamp(32px, 5vw, 56px) 0; background: #f0f7f4; }
+.why-partner-intro { max-width: 700px; margin: 0 auto 30px; text-align: center; }
+.why-partner-intro .eyebrow { margin: 0 0 8px; color: #087f5b; font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+.why-partner-intro h2 { margin: 0 0 10px; color: var(--ink); font: 800 clamp(24px, 3.5vw, 34px)/1.2 Manrope, sans-serif; }
+.why-partner-intro > p:last-child { margin: 0; color: var(--muted); font-size: 16px; }
+.why-partner-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.why-partner-card { display: flex; flex-direction: column; align-items: flex-start; min-height: 100%; padding: 24px 20px; border: 1px solid #e0ebe5; border-radius: 14px; background: #fff; box-shadow: 0 8px 24px rgba(20, 39, 58, .04); }
+.why-partner-card svg { width: 40px; height: 40px; margin-bottom: 20px; color: #087f5b; }
+.why-partner-card h3 { margin: 0 0 8px; color: var(--ink); font: 800 17px/1.3 Manrope, sans-serif; }
+.why-partner-card p { margin: 0; color: #596a82; font-size: 14px; line-height: 1.6; }
+
 .partner-programs-list { display: grid; gap: 16px; margin-bottom: 56px; }
 .partner-program { overflow: hidden; border: 1px solid #e3e8ee; border-radius: 16px; background: #fff; box-shadow: 0 10px 30px rgba(20, 39, 58, .05); transition: border-color .18s ease, box-shadow .18s ease; }
 .partner-program[open] { border-color: var(--program-accent); box-shadow: 0 16px 40px rgba(20, 39, 58, .1); }
@@ -1439,16 +1450,42 @@ img { display: block; max-width: 100%; }
 .partner-program-alt:hover { text-decoration: underline; }
 .partner-program .partnership-requirement { margin: 10px 0 0; padding: 14px 16px; border-radius: 10px; }
 
+.partners-faq { margin-bottom: 56px; scroll-margin-top: 24px; }
+.partners-faq-header { max-width: 720px; margin: 0 auto 30px; text-align: center; }
+.partners-faq-header .eyebrow { margin: 0 0 8px; color: #087f5b; font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+.partners-faq-header h2 { margin: 0 0 10px; color: var(--ink); font: 800 clamp(24px, 3.5vw, 34px)/1.2 Manrope, sans-serif; }
+.partners-faq-header > p:last-child { margin: 0; color: var(--muted); font-size: 16px; }
+.partners-faq-list { display: grid; gap: 14px; }
+.partner-faq-item { overflow: hidden; border: 1px solid #e1e8ee; border-radius: 10px; background: #f8fafc; }
+.partner-faq-item summary { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 24px; color: var(--ink); font-size: 16px; font-weight: 700; list-style: none; cursor: pointer; }
+.partner-faq-item summary::-webkit-details-marker { display: none; }
+.partner-faq-item summary::after { flex: 0 0 auto; color: var(--green); content: "+"; font-size: 20px; line-height: 1; }
+.partner-faq-item[open] summary::after { content: "\2212"; }
+.partner-faq-item summary:focus-visible { outline: 3px solid rgba(8, 127, 91, .35); outline-offset: -3px; }
+.partner-faq-answer { padding: 0 24px 22px; color: #4c5a70; font-size: 14.5px; line-height: 1.65; }
+.partner-faq-answer p { margin: 0; }
+.partner-faq-answer a { color: var(--green); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+
 .partners-investor-note { margin-bottom: 64px; padding: 22px 26px; border: 1px dashed #c9d3de; border-radius: 12px; background: #f8fafc; color: #4c5a70; text-align: center; }
 .partners-investor-note a { color: var(--green); font-weight: 800; }
 
 @media (max-width: 640px) {
   .partners-jump { gap: 8px; }
   .partners-jump a { padding: 8px 13px; font-size: 12px; }
+  .why-partner-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .why-partner-card { padding: 18px 15px; }
+  .why-partner-card svg { width: 34px; height: 34px; margin-bottom: 14px; }
   .partner-program summary { grid-template-columns: auto 1fr auto; column-gap: 12px; row-gap: 6px; }
   .partner-program-index { display: none; }
   .partner-program-badge { grid-column: 2; justify-self: start; }
   .partner-program-cta { width: 100%; min-width: 0; margin-right: 0; }
+  .partner-faq-item summary { padding: 18px 16px; font-size: 15px; }
+  .partner-faq-answer { padding: 0 16px 18px; font-size: 14px; }
+}
+
+@media (max-width: 420px) {
+  .why-partner-grid { grid-template-columns: 1fr; }
+  .why-partner-card { min-height: 0; }
 }
 
 /* Homepage testimonials: real attendee reviews */
