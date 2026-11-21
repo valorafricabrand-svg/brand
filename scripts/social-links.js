@@ -2,12 +2,12 @@
   const profiles = [
     {
       name: 'TikTok',
-      url: 'https://tiktok.com/valor_africa_tickethub',
+      url: 'https://www.tiktok.com/@valorafrica',
       icon: '<path d="M16.4 5.1a5.1 5.1 0 0 1-3-3V2h-3v11.3a2.5 2.5 0 1 1-2.1-2.5V7.7a5.6 5.6 0 1 0 5.1 5.6V8.1a8 8 0 0 0 3 .6V5.7a5.1 5.1 0 0 1-.1-.6Z"/>'
     },
     {
       name: 'YouTube',
-      url: 'https://www.youtube.com/valorafrica',
+      url: 'https://youtube.com/@valorafricabrand',
       icon: '<path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.9V8.1l6.3 3.9-6.3 3.9Z"/>'
     },
     {
