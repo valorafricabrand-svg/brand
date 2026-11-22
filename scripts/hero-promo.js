@@ -7,6 +7,11 @@
   if (!section || !track || !dotsWrap) return;
 
   const ACCENTS = ['accent-0', 'accent-1', 'accent-2', 'accent-3', 'accent-4'];
+  const FAST_START_VIDEO_ASSETS = new Set([
+    'videos/valor-ticket-buyer.mp4',
+    'videos/valor-featured-clip-002.mp4',
+    'videos/valor-featured-clip-001.mp4'
+  ]);
   const LOCAL_VIDEO_SLIDES = [
     {
       id: 'valor-ticket-buyer-promo',
@@ -14,7 +19,7 @@
       category: 'For ticket buyers',
       description: 'Discover concerts, festivals and experiences across Africa.',
       mediaType: 'video',
-      mediaUrl: 'videos/valor-ticket-buyer.mp4',
+      mediaUrl: 'videos/valor-ticket-buyer.mp4?v=mp4-faststart-1',
       posterUrl: 'images/events/valor-ticket-buyer-cover.jpg',
       linkUrl: 'events.html',
       ctaLabel: 'Explore events'
@@ -36,7 +41,7 @@
       category: 'Featured on Valor Africa',
       description: 'Explore events and experiences across Africa.',
       mediaType: 'video',
-      mediaUrl: 'videos/valor-featured-clip-002.mp4',
+      mediaUrl: 'videos/valor-featured-clip-002.mp4?v=mp4-faststart-1',
       posterUrl: 'images/events/video-ad-poster.svg',
       linkUrl: 'events.html',
       ctaLabel: 'Explore events'
@@ -47,7 +52,7 @@
       category: 'Featured on Valor Africa',
       description: 'Explore events and experiences across Africa.',
       mediaType: 'video',
-      mediaUrl: 'videos/valor-featured-clip-001.mp4',
+      mediaUrl: 'videos/valor-featured-clip-001.mp4?v=mp4-faststart-1',
       posterUrl: 'images/events/video-ad-poster.svg',
       linkUrl: 'events.html',
       ctaLabel: 'Explore events'
@@ -58,7 +63,15 @@
   let timer = null;
 
   function resolveAsset(value, apiBase) {
-    return value && apiBase && value.startsWith('/uploads/') ? new URL(value, apiBase).href : value;
+    const resolved = value && apiBase && value.startsWith('/uploads/') ? new URL(value, apiBase).href : value;
+    if (!resolved) return resolved;
+    const url = new URL(resolved, window.location.href);
+    if (url.origin === window.location.origin &&
+        FAST_START_VIDEO_ASSETS.has(url.pathname.replace(/^\/+/, ''))) {
+      url.searchParams.set('v', 'mp4-faststart-1');
+      return url.href;
+    }
+    return resolved;
   }
 
   function createSlide(slideData, index) {

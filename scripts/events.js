@@ -10,7 +10,7 @@
     category: 'For ticket buyers',
     location: 'Valor Africa Events',
     startsAt: new Date().toISOString(),
-    adVideo: 'videos/valor-ticket-buyer.mp4',
+    adVideo: 'videos/valor-ticket-buyer.mp4?v=mp4-faststart-1',
     adPoster: 'images/events/valor-ticket-buyer-cover.jpg',
     tickets: []
   };
@@ -43,7 +43,7 @@
       isSponsoredVideoPromo: true,
       title: 'Discover Valor Africa',
       category: 'Featured on Valor Africa',
-      adVideo: 'videos/valor-featured-clip-002.mp4',
+      adVideo: 'videos/valor-featured-clip-002.mp4?v=mp4-faststart-1',
       adPoster: 'images/events/video-ad-poster.svg',
       adDescription: 'Explore events and experiences across Africa.',
       adLink: 'events.html',
@@ -54,7 +54,7 @@
       isSponsoredVideoPromo: true,
       title: 'Discover Valor Africa',
       category: 'Featured on Valor Africa',
-      adVideo: 'videos/valor-featured-clip-001.mp4',
+      adVideo: 'videos/valor-featured-clip-001.mp4?v=mp4-faststart-1',
       adPoster: 'images/events/video-ad-poster.svg',
       adDescription: 'Explore events and experiences across Africa.',
       adLink: 'events.html',
