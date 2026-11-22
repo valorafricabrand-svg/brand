@@ -93,7 +93,93 @@
     if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function renderSponsorships(purchases) {
+  function formatRate(value) {
+    return value === null ? '—' : `${(Number(value) * 100).toFixed(2)}%`;
+  }
+
+  function renderSponsorReport(report, mount) {
+    mount.replaceChildren();
+    const range = document.createElement('p');
+    range.textContent = `Report range: ${report.range.startDate} to ${report.range.endDate} · ${report.campaign.tier} package · KES ${Number(report.campaign.amountKes).toLocaleString('en-KE')}`;
+    mount.appendChild(range);
+
+    const metrics = document.createElement('div');
+    metrics.className = 'sponsor-report-metrics';
+    [
+      ['Platform-measured viewable impressions', Number(report.metrics.impressions).toLocaleString('en-KE')],
+      ['Total campaign clicks', Number(report.metrics.clicks).toLocaleString('en-KE')],
+      ['Homepage placement CTR', formatRate(report.metrics.homepageClickThroughRate)],
+      ['Event-link clicks', Number(report.metrics.eventLinkClicks).toLocaleString('en-KE')],
+      ['Attributed paid ticket orders', Number(report.metrics.attributedPaidOrders).toLocaleString('en-KE')],
+      ['Attributed tickets', Number(report.metrics.attributedTickets).toLocaleString('en-KE')],
+      ['Attributed ticket sales', `KES ${Number(report.metrics.attributedSalesKes).toLocaleString('en-KE')}`],
+      ['Ticket conversion from event-link clicks', formatRate(report.metrics.ticketConversionRate)],
+      ['Campaign fee per click', report.metrics.costPerClickKes === null
+        ? '—'
+        : `KES ${Number(report.metrics.costPerClickKes).toLocaleString('en-KE', { maximumFractionDigits: 2 })}`]
+    ].forEach(([label, value]) => {
+      const metric = document.createElement('p');
+      metric.textContent = `${label}: ${value}`;
+      metrics.appendChild(metric);
+    });
+    mount.appendChild(metrics);
+
+    const placementsHeading = document.createElement('h4');
+    placementsHeading.textContent = 'Placement breakdown';
+    mount.appendChild(placementsHeading);
+    if (!report.placements.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'No tracked impressions or clicks in this date range.';
+      mount.appendChild(empty);
+    }
+    report.placements.forEach((placement) => {
+      const item = document.createElement('p');
+      const label = placement.placement === 'home-sponsor-strip'
+        ? 'Homepage sponsor strip'
+        : placement.placement === 'event-referral' ? 'Shared event link' : placement.placement;
+      item.textContent = `${label}: ${Number(placement.impressions).toLocaleString('en-KE')} impressions · ${Number(placement.clicks).toLocaleString('en-KE')} clicks · CTR ${formatRate(placement.clickThroughRate)}`;
+      mount.appendChild(item);
+    });
+
+    const deliveryHeading = document.createElement('h4');
+    deliveryHeading.textContent = 'Offline event-day deliverables';
+    mount.appendChild(deliveryHeading);
+    if (!report.deliveries.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'No organizer delivery reports have been submitted for this campaign.';
+      mount.appendChild(empty);
+    }
+    report.deliveries.forEach((delivery) => {
+      const item = document.createElement('article');
+      item.className = 'partnership-application-status';
+      const title = document.createElement('strong');
+      title.textContent = `${delivery.eventTitle} · ${delivery.status}`;
+      const data = document.createElement('p');
+      data.textContent = `${Number(delivery.attendanceCount).toLocaleString('en-KE')} organizer-reported attendees · ${Number(delivery.checkInCount).toLocaleString('en-KE')} organizer-reported check-ins · ${Number(delivery.samplesRedeemed).toLocaleString('en-KE')} samples redeemed`;
+      item.append(title, data);
+      if (delivery.otherDeliverables) {
+        const other = document.createElement('p');
+        other.textContent = `Other deliverables: ${delivery.otherDeliverables}`;
+        item.appendChild(other);
+      }
+      if (delivery.status === 'verified') {
+        const verified = document.createElement('p');
+        verified.textContent = `Verified by ${delivery.verifiedBy || 'Valor Africa'} on ${new Date(delivery.verifiedAt).toLocaleString('en-KE')}. ${delivery.verificationNote || ''}`.trim();
+        item.appendChild(verified);
+      } else if (delivery.verificationNote) {
+        const note = document.createElement('p');
+        note.textContent = `Valor review: ${delivery.verificationNote}`;
+        item.appendChild(note);
+      }
+      mount.appendChild(item);
+    });
+
+    const note = document.createElement('p');
+    note.textContent = 'Sales are attributed to recorded sponsor event-link clicks within 30 days. This is attribution, not proof the campaign caused a purchase. Offline figures are organizer-reported and remain unverified until Valor review.';
+    mount.appendChild(note);
+  }
+
+  function renderSponsorships(purchases, availableEvents) {
     sponsorshipList.replaceChildren();
     if (!purchases.length) {
       const empty = document.createElement('p');
@@ -121,13 +207,170 @@
       const impressionNote = document.createElement('p');
       impressionNote.textContent = 'Counted when at least half of this placement is visible for one continuous second while the page is visible. This does not guarantee human attention.';
       item.append(heading, status, period, impressions, impressionNote);
+
+      const campaignRunning = purchase.status === 'active' &&
+        Date.parse(purchase.endsAt) > Date.now();
+      if (campaignRunning) {
+        const eventForm = document.createElement('form');
+        eventForm.className = 'sponsor-campaign-events-form service-form';
+        const eventLabel = document.createElement('label');
+        eventLabel.textContent = 'Events for this campaign (up to 10)';
+        const eventSelect = document.createElement('select');
+        eventSelect.name = 'eventIds';
+        eventSelect.multiple = true;
+        eventSelect.size = Math.min(availableEvents.length || 3, 6);
+        const currentEvents = new Set(purchase.events.filter((event) => event.active).map((event) => event.eventId));
+        availableEvents.forEach((event) => {
+          const option = document.createElement('option');
+          option.value = event.id;
+          option.textContent = `${event.title} · ${event.city} · ${new Date(event.startsAt).toLocaleDateString('en-KE')}`;
+          option.selected = currentEvents.has(event.id);
+          eventSelect.appendChild(option);
+        });
+        eventLabel.appendChild(eventSelect);
+        if (!availableEvents.length) {
+          const noEvents = document.createElement('p');
+          noEvents.textContent = 'There are no published upcoming events available to link right now.';
+          eventForm.appendChild(noEvents);
+        }
+        const saveEvents = document.createElement('button');
+        saveEvents.type = 'submit';
+        saveEvents.className = 'button button-primary';
+        saveEvents.textContent = 'Save campaign events';
+        const eventFeedback = document.createElement('p');
+        eventFeedback.className = 'page-feedback';
+        eventFeedback.setAttribute('role', 'status');
+        eventFeedback.setAttribute('aria-live', 'polite');
+        eventForm.append(eventLabel, saveEvents, eventFeedback);
+        eventForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          saveEvents.disabled = true;
+          try {
+            const selectedEvents = Array.from(eventSelect.selectedOptions).map((option) => option.value);
+            await window.valorEventsApi(`/api/sponsorships/${encodeURIComponent(purchase.purchaseId)}/events`, {
+              method: 'PUT',
+              headers,
+              body: JSON.stringify({ eventIds: selectedEvents })
+            });
+            await loadSponsorships();
+          } catch (error) {
+            eventFeedback.textContent = error.message;
+            eventFeedback.classList.add('error');
+            saveEvents.disabled = false;
+          }
+        });
+        item.appendChild(eventForm);
+
+        const links = document.createElement('div');
+        links.className = 'sponsor-campaign-event-links';
+        purchase.events.filter((event) => event.active && Date.parse(event.startsAt) > Date.now()).forEach((event) => {
+          const linkRow = document.createElement('div');
+          const link = document.createElement('a');
+          const trackingUrl = new URL(
+            `/api/sponsorships/${encodeURIComponent(purchase.purchaseId)}/events/${encodeURIComponent(event.eventId)}/click`,
+            window.valorEventsApiBase
+          ).href;
+          link.href = trackingUrl;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer sponsored';
+          link.textContent = `Trackable link for ${event.title}`;
+          const copy = document.createElement('button');
+          copy.type = 'button';
+          copy.className = 'button secondary';
+          copy.textContent = 'Copy link';
+          const copyStatus = document.createElement('span');
+          copyStatus.setAttribute('role', 'status');
+          copy.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(trackingUrl);
+              copyStatus.textContent = ' Link copied.';
+            } catch (error) {
+              copyStatus.textContent = ' Copy was blocked; open the link and copy it from the address bar.';
+            }
+          });
+          linkRow.append(link, copy, copyStatus);
+          links.appendChild(linkRow);
+        });
+        item.appendChild(links);
+      }
+
+      const reportToggle = document.createElement('button');
+      reportToggle.type = 'button';
+      reportToggle.className = 'button secondary';
+      reportToggle.textContent = 'Load campaign report';
+      const reportPanel = document.createElement('section');
+      reportPanel.className = 'sponsor-campaign-report';
+      reportPanel.hidden = true;
+      const reportFilter = document.createElement('form');
+      reportFilter.className = 'sponsor-report-range service-form';
+      const reportStart = document.createElement('input');
+      reportStart.type = 'date';
+      reportStart.name = 'startDate';
+      reportStart.value = (purchase.startsAt || purchase.createdAt).slice(0, 10);
+      const reportStartLabel = document.createElement('label');
+      reportStartLabel.textContent = 'From';
+      reportStartLabel.appendChild(reportStart);
+      const reportEnd = document.createElement('input');
+      reportEnd.type = 'date';
+      reportEnd.name = 'endDate';
+      const campaignEnd = purchase.endsAt ? purchase.endsAt.slice(0, 10) : '';
+      reportEnd.value = campaignEnd && campaignEnd < new Date().toISOString().slice(0, 10)
+        ? campaignEnd
+        : new Date().toISOString().slice(0, 10);
+      const reportEndLabel = document.createElement('label');
+      reportEndLabel.textContent = 'To';
+      reportEndLabel.appendChild(reportEnd);
+      const runReport = document.createElement('button');
+      runReport.type = 'submit';
+      runReport.className = 'button button-primary';
+      runReport.textContent = 'Update report';
+      reportFilter.append(reportStartLabel, reportEndLabel, runReport);
+      const reportResults = document.createElement('div');
+      reportResults.className = 'sponsor-campaign-report-results';
+      reportPanel.append(reportFilter, reportResults);
+      reportToggle.addEventListener('click', async () => {
+        reportPanel.hidden = !reportPanel.hidden;
+        reportToggle.textContent = reportPanel.hidden ? 'Load campaign report' : 'Hide campaign report';
+        if (!reportPanel.hidden && !reportResults.childElementCount) {
+          await loadSponsorReport(purchase.purchaseId, reportStart.value, reportEnd.value, reportResults);
+        }
+      });
+      reportFilter.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        await loadSponsorReport(purchase.purchaseId, reportStart.value, reportEnd.value, reportResults);
+      });
+      item.append(reportToggle, reportPanel);
       sponsorshipList.appendChild(item);
     });
   }
 
+  async function loadSponsorReport(purchaseId, startDate, endDate, mount) {
+    mount.textContent = 'Loading campaign report…';
+    try {
+      const query = new URLSearchParams({ startDate, endDate });
+      const report = await window.valorEventsApi(
+        `/api/sponsorships/${encodeURIComponent(purchaseId)}/report?${query.toString()}`,
+        { headers }
+      );
+      renderSponsorReport(report, mount);
+    } catch (error) {
+      mount.textContent = error.message;
+      mount.classList.add('error');
+    }
+  }
+
   async function loadSponsorships() {
     const result = await window.valorEventsApi('/api/sponsorships/me', { headers });
-    renderSponsorships(result.purchases);
+    let availableEvents = [];
+    if (result.purchases.some((purchase) => purchase.status === 'active' && Date.parse(purchase.endsAt) > Date.now())) {
+      try {
+        const events = await window.valorEventsApi('/api/events');
+        availableEvents = events.events;
+      } catch (error) {
+        setFeedback(dashboardFeedback, `Could not load upcoming events for campaign links: ${error.message}`, true);
+      }
+    }
+    renderSponsorships(result.purchases, availableEvents);
   }
 
   async function initialize() {

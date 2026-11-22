@@ -869,6 +869,44 @@
     });
   }
 
+  async function loadSponsorDeliveries() {
+    const list = document.getElementById('sponsorDeliveriesList');
+    list.replaceChildren();
+    const { deliveries } = await api('/api/sponsorship-deliveries/admin');
+    if (!deliveries.length) return addText(list, 'p', 'empty', 'No organizer sponsor-delivery reports are waiting for review.');
+    deliveries.forEach((delivery) => {
+      const card = document.createElement('article');
+      card.className = 'record';
+      card.dataset.sponsorDeliveryId = delivery.id;
+      addText(card, 'h3', '', `${delivery.brandName} · ${delivery.eventTitle}`);
+      addText(card, 'p', 'record-meta',
+        `${delivery.tier} sponsorship · Organizer ${delivery.organizerEmail} · Event ${new Date(delivery.eventStartsAt).toLocaleDateString()} · Submitted ${new Date(delivery.submittedAt).toLocaleString()}`);
+      addText(card, 'p', 'record-description',
+        `Organizer-reported: ${Number(delivery.attendanceCount).toLocaleString('en-KE')} attendees · ${Number(delivery.checkInCount).toLocaleString('en-KE')} check-ins · ${Number(delivery.samplesRedeemed).toLocaleString('en-KE')} samples redeemed`);
+      if (delivery.otherDeliverables) addText(card, 'p', 'record-contact', `Other deliverables: ${delivery.otherDeliverables}`);
+      const actions = document.createElement('div');
+      actions.className = 'record-actions';
+      const note = document.createElement('input');
+      note.type = 'text';
+      note.maxLength = 1000;
+      note.placeholder = 'Verification note (required to reject)';
+      note.dataset.sponsorDeliveryNote = '';
+      const verify = document.createElement('button');
+      verify.type = 'button';
+      verify.className = 'button primary';
+      verify.dataset.reviewSponsorDelivery = 'verified';
+      verify.textContent = 'Verify report';
+      const reject = document.createElement('button');
+      reject.type = 'button';
+      reject.className = 'button reject';
+      reject.dataset.reviewSponsorDelivery = 'rejected';
+      reject.textContent = 'Reject report';
+      actions.append(note, verify, reject);
+      card.appendChild(actions);
+      list.appendChild(card);
+    });
+  }
+
   document.getElementById('sponsorshipsList').addEventListener('click', async (event) => {
     const cancel = event.target.closest('[data-cancel-sponsorship]');
     if (!cancel) return;
@@ -882,6 +920,29 @@
       await loadSponsorships();
     } catch (error) {
       cancel.disabled = false;
+      setFeedback(feedback, error.message, true);
+    }
+  });
+
+  document.getElementById('sponsorDeliveriesList').addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-review-sponsor-delivery]');
+    if (!button) return;
+    const card = button.closest('[data-sponsor-delivery-id]');
+    button.disabled = true;
+    try {
+      await api(`/api/sponsorship-deliveries/admin/${encodeURIComponent(card.dataset.sponsorDeliveryId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: button.dataset.reviewSponsorDelivery,
+          verificationNote: card.querySelector('[data-sponsor-delivery-note]').value
+        })
+      });
+      setFeedback(feedback, button.dataset.reviewSponsorDelivery === 'verified'
+        ? 'Sponsor delivery report verified and reviewer recorded.'
+        : 'Sponsor delivery report rejected with your note.');
+      await loadSponsorDeliveries();
+    } catch (error) {
+      button.disabled = false;
       setFeedback(feedback, error.message, true);
     }
   });
@@ -942,6 +1003,7 @@
     document.getElementById('partnersSection').hidden = button.dataset.adminTab !== 'partners';
     document.getElementById('partnershipApplicationsSection').hidden = button.dataset.adminTab !== 'partnership-applications';
     document.getElementById('sponsorshipsSection').hidden = button.dataset.adminTab !== 'sponsorships';
+    document.getElementById('sponsorDeliveriesSection').hidden = button.dataset.adminTab !== 'sponsor-deliveries';
     document.getElementById('artistsSection').hidden = button.dataset.adminTab !== 'artists';
     document.getElementById('giftsSection').hidden = button.dataset.adminTab !== 'gifts';
     document.getElementById('remindersSection').hidden = button.dataset.adminTab !== 'reminders';
@@ -953,6 +1015,9 @@
     }
     if (button.dataset.adminTab === 'sponsorships') {
       loadSponsorships().catch((error) => setFeedback(feedback, error.message, true));
+    }
+    if (button.dataset.adminTab === 'sponsor-deliveries') {
+      loadSponsorDeliveries().catch((error) => setFeedback(feedback, error.message, true));
     }
     if (button.dataset.adminTab === 'artists') {
       loadArtistMarketplace().catch((error) => setFeedback(feedback, error.message, true));

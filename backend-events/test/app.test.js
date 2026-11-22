@@ -3051,6 +3051,134 @@ test('signed-in sponsors can pay directly for packages and manage their own spon
   assert.equal(doubleCancel.status, 409);
 });
 
+test('sponsor campaign links attribute paid orders and organizers submit verifiable delivery reports', async () => {
+  const sponsorAuth = createTestAccountAuth(`campaign-sponsor-${crypto.randomUUID()}@example.com`);
+  const organizerAuth = createTestAccountAuth(`campaign-organizer-${crypto.randomUUID()}@example.com`);
+  const buyerAuth = createTestAccountAuth(`campaign-buyer-${crypto.randomUUID()}@example.com`);
+  const event = createStoredTestEvent('Sponsor Attribution Showcase', organizerAuth);
+  const purchase = await request(app).post('/api/sponsorships').set(sponsorAuth).send({
+    tier: 'community',
+    brandName: 'Campaign Brand',
+    websiteUrl: 'https://campaign-brand.example',
+    buyerName: 'Campaign Sponsor',
+    paymentMethod: 'mpesa',
+    phone: '0712345678'
+  });
+  assert.equal(purchase.status, 201);
+  const sponsorPayment = db.prepare(`
+    SELECT checkout_request_id AS checkoutRequestId,merchant_request_id AS merchantRequestId
+    FROM sponsorship_purchases WHERE id=?
+  `).get(purchase.body.purchaseId);
+  await completePayment(sponsorPayment.checkoutRequestId, sponsorPayment.merchantRequestId, 25000, 'CAMPAIGN001');
+  db.prepare(`
+    UPDATE sponsorship_purchases SET starts_at=?,ends_at=? WHERE id=?
+  `).run(
+    new Date(Date.now() - 3 * 86400000).toISOString(),
+    new Date(Date.now() + 11 * 86400000).toISOString(),
+    purchase.body.purchaseId
+  );
+
+  const selectedEvents = await request(app)
+    .put(`/api/sponsorships/${purchase.body.purchaseId}/events`)
+    .set(sponsorAuth)
+    .send({ eventIds: [event.id] });
+  assert.equal(selectedEvents.status, 200);
+  const externalClick = await request(app)
+    .get(`/api/sponsorships/${purchase.body.purchaseId}/click?placement=home-sponsor-strip`);
+  assert.equal(externalClick.status, 302);
+  assert.equal(externalClick.headers.location, 'https://campaign-brand.example/');
+  const eventClick = await request(app)
+    .get(`/api/sponsorships/${purchase.body.purchaseId}/events/${event.id}/click`);
+  assert.equal(eventClick.status, 302);
+  const eventLanding = new URL(eventClick.headers.location);
+  const clickId = eventLanding.searchParams.get('sponsor_click');
+  assert.ok(clickId);
+  assert.equal(eventLanding.searchParams.get('sponsor_event'), event.id);
+  assert.equal((await request(app).get(`/api/sponsorships/${purchase.body.purchaseId}/events/${crypto.randomUUID()}/click`)).status, 404);
+
+  const invalidAttribution = await request(app).post('/api/orders/tickets').set(buyerAuth).send({
+    eventId: event.id,
+    ticketType: 'Regular',
+    buyerName: 'Test Buyer',
+    phone: '0712345678',
+    paymentMethod: 'mpesa',
+    sponsorshipClickId: crypto.randomUUID()
+  });
+  assert.equal(invalidAttribution.status, 409);
+
+  const ticketOrder = await request(app).post('/api/orders/tickets').set(buyerAuth).send({
+    eventId: event.id,
+    ticketType: 'Regular',
+    buyerName: 'Test Buyer',
+    phone: '0712345678',
+    paymentMethod: 'mpesa',
+    sponsorshipClickId: clickId
+  });
+  assert.equal(ticketOrder.status, 201);
+  const orderPayment = db.prepare(`
+    SELECT checkout_request_id AS checkoutRequestId,merchant_request_id AS merchantRequestId
+    FROM orders WHERE id=?
+  `).get(ticketOrder.body.orderId);
+  await completePayment(orderPayment.checkoutRequestId, orderPayment.merchantRequestId, 1200, 'CAMPAIGNTICKET001');
+  const attributedOrder = db.prepare(`
+    SELECT sponsorship_purchase_id AS campaignId,sponsorship_click_id AS clickId
+    FROM orders WHERE id=?
+  `).get(ticketOrder.body.orderId);
+  assert.equal(attributedOrder.campaignId, purchase.body.purchaseId);
+  assert.equal(attributedOrder.clickId, clickId);
+
+  const eventStartsAt = new Date(Date.now() - 5 * 3600000).toISOString();
+  const eventEndsAt = new Date(Date.now() - 3600000).toISOString();
+  db.prepare('UPDATE events SET starts_at=?,ends_at=? WHERE id=?').run(eventStartsAt, eventEndsAt, event.id);
+  const unauthorizedDelivery = await request(app)
+    .post(`/api/events/mine/${event.id}/sponsorship-deliveries`)
+    .set(createTestAccountAuth(`unrelated-organizer-${crypto.randomUUID()}@example.com`))
+    .send({
+      campaignId: purchase.body.purchaseId,
+      attendanceCount: 250,
+      checkInCount: 180,
+      samplesRedeemed: 90
+    });
+  assert.equal(unauthorizedDelivery.status, 404);
+
+  const delivery = await request(app)
+    .post(`/api/events/mine/${event.id}/sponsorship-deliveries`)
+    .set(organizerAuth)
+    .send({
+      campaignId: purchase.body.purchaseId,
+      attendanceCount: 250,
+      checkInCount: 180,
+      samplesRedeemed: 90,
+      otherDeliverables: 'Stage banner displayed and sponsor mention delivered.'
+    });
+  assert.equal(delivery.status, 201);
+  assert.equal(delivery.body.status, 'pending');
+  const reviewed = await request(app)
+    .patch(`/api/sponsorship-deliveries/admin/${delivery.body.deliveryId}`)
+    .set(admin)
+    .send({ status: 'verified', verificationNote: 'Event-day photos reviewed.' });
+  assert.equal(reviewed.status, 200);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const report = await request(app)
+    .get(`/api/sponsorships/${purchase.body.purchaseId}/report?startDate=${today}&endDate=${today}`)
+    .set(sponsorAuth);
+  assert.equal(report.status, 200);
+  assert.equal(report.body.metrics.clicks, 2);
+  assert.equal(report.body.metrics.eventLinkClicks, 1);
+  assert.equal(report.body.metrics.attributedPaidOrders, 1);
+  assert.equal(report.body.metrics.attributedTickets, 1);
+  assert.equal(report.body.metrics.attributedSalesKes, 1200);
+  assert.equal(report.body.metrics.ticketConversionRate, 1);
+  assert.equal(report.body.metrics.costPerClickKes, 12500);
+  const homePlacement = report.body.placements.find((placement) => placement.placement === 'home-sponsor-strip');
+  assert.equal(homePlacement.clicks, 1);
+  const verifiedDelivery = report.body.deliveries[0];
+  assert.equal(verifiedDelivery.status, 'verified');
+  assert.equal(verifiedDelivery.verifiedBy, 'test-admin');
+  assert.equal(verifiedDelivery.attendanceCount, 250);
+});
+
 test('event pages report sold-out status and homepage review highlights include other reviewed events', async () => {
   const soldOutAuth = createTestAccountAuth(`sold-out-attendee-${crypto.randomUUID()}@example.com`);
   const soldOutEvent = createStoredTestEvent('Sold Out Showcase', soldOutAuth);

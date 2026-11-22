@@ -144,6 +144,8 @@ db.exec(`
     ticket_email_attempts INTEGER NOT NULL DEFAULT 0,
     ticket_email_attempted_at TEXT,
     ticket_email_error TEXT NOT NULL DEFAULT '',
+    sponsorship_purchase_id TEXT,
+    sponsorship_click_id TEXT,
     result_description TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     paid_at TEXT
@@ -685,6 +687,48 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS sponsorship_viewable_impressions_purchase
     ON sponsorship_viewable_impressions(sponsorship_purchase_id,created_at);
+
+  CREATE TABLE IF NOT EXISTS sponsorship_campaign_events (
+    sponsorship_purchase_id TEXT NOT NULL REFERENCES sponsorship_purchases(id) ON DELETE CASCADE,
+    event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (sponsorship_purchase_id,event_id)
+  );
+  CREATE INDEX IF NOT EXISTS sponsorship_campaign_events_event
+    ON sponsorship_campaign_events(event_id,active);
+
+  CREATE TABLE IF NOT EXISTS sponsorship_clicks (
+    id TEXT PRIMARY KEY,
+    sponsorship_purchase_id TEXT NOT NULL REFERENCES sponsorship_purchases(id) ON DELETE CASCADE,
+    event_id TEXT REFERENCES events(id) ON DELETE SET NULL,
+    placement TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS sponsorship_clicks_campaign
+    ON sponsorship_clicks(sponsorship_purchase_id,created_at);
+
+  CREATE TABLE IF NOT EXISTS sponsorship_event_deliveries (
+    id TEXT PRIMARY KEY,
+    sponsorship_purchase_id TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    submitted_by_account_id TEXT NOT NULL REFERENCES accounts(id),
+    attendance_count INTEGER NOT NULL CHECK (attendance_count >= 0),
+    check_in_count INTEGER NOT NULL CHECK (check_in_count >= 0),
+    samples_redeemed INTEGER NOT NULL CHECK (samples_redeemed >= 0),
+    other_deliverables TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','verified','rejected')),
+    submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+    verified_by_admin_id INTEGER REFERENCES admins(id),
+    verified_at TEXT,
+    verification_note TEXT NOT NULL DEFAULT '',
+    UNIQUE (sponsorship_purchase_id,event_id),
+    FOREIGN KEY (sponsorship_purchase_id,event_id)
+      REFERENCES sponsorship_campaign_events(sponsorship_purchase_id,event_id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS sponsorship_event_deliveries_review
+    ON sponsorship_event_deliveries(status,submitted_at);
 `);
 
 if (db.prepare('SELECT COUNT(*) AS count FROM hero_slides').get().count === 0) {
@@ -792,6 +836,12 @@ if (!orderColumns.some((column) => column.name === 'affiliate_commission_percent
 if (!orderColumns.some((column) => column.name === 'affiliate_referral_token_hash')) {
   db.exec('ALTER TABLE orders ADD COLUMN affiliate_referral_token_hash TEXT');
 }
+if (!orderColumns.some((column) => column.name === 'sponsorship_purchase_id')) {
+  db.exec('ALTER TABLE orders ADD COLUMN sponsorship_purchase_id TEXT');
+}
+if (!orderColumns.some((column) => column.name === 'sponsorship_click_id')) {
+  db.exec('ALTER TABLE orders ADD COLUMN sponsorship_click_id TEXT');
+}
 if (!orderColumns.some((column) => column.name === 'gift_recipient_name')) {
   db.exec("ALTER TABLE orders ADD COLUMN gift_recipient_name TEXT NOT NULL DEFAULT ''");
 }
@@ -817,6 +867,7 @@ if (!orderColumns.some((column) => column.name === 'braintree_capture_started_at
   db.exec('ALTER TABLE orders ADD COLUMN braintree_capture_started_at TEXT');
 }
 db.exec('CREATE INDEX IF NOT EXISTS orders_affiliate_partner ON orders(affiliate_partner_id, status, paid_at)');
+db.exec('CREATE INDEX IF NOT EXISTS orders_sponsorship_campaign ON orders(sponsorship_purchase_id,status,paid_at)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS wallets_account ON wallets(account_id)');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_session ON orders(stripe_session_id) WHERE stripe_session_id IS NOT NULL');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS orders_nowpayments_invoice ON orders(nowpayments_invoice_id) WHERE nowpayments_invoice_id IS NOT NULL');

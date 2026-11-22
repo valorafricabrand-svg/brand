@@ -90,6 +90,125 @@
     }
   }
 
+  function renderSponsorDelivery(delivery) {
+    const card = document.createElement('article');
+    card.className = 'partnership-application-status';
+    const title = document.createElement('h3');
+    title.textContent = `${delivery.brandName} · ${delivery.tier} sponsorship`;
+    card.appendChild(title);
+    const state = document.createElement('p');
+    state.textContent = `Report status: ${delivery.status || 'not submitted'}`;
+    card.appendChild(state);
+    if (delivery.status === 'verified') {
+      const metrics = document.createElement('p');
+      metrics.textContent = `Organizer-reported: ${Number(delivery.attendanceCount).toLocaleString('en-KE')} attendees · ${Number(delivery.checkInCount).toLocaleString('en-KE')} check-ins · ${Number(delivery.samplesRedeemed).toLocaleString('en-KE')} samples redeemed`;
+      card.appendChild(metrics);
+      if (delivery.otherDeliverables) {
+        const other = document.createElement('p');
+        other.textContent = `Other deliverables: ${delivery.otherDeliverables}`;
+        card.appendChild(other);
+      }
+      const verified = document.createElement('p');
+      verified.textContent = `Verified by ${delivery.verifiedBy || 'Valor Africa'} on ${new Date(delivery.verifiedAt).toLocaleString('en-KE')}. ${delivery.verificationNote || ''}`.trim();
+      card.appendChild(verified);
+      return card;
+    }
+
+    if (delivery.status === 'rejected' && delivery.verificationNote) {
+      const note = document.createElement('p');
+      note.textContent = `Valor review: ${delivery.verificationNote}`;
+      card.appendChild(note);
+    }
+    const form = document.createElement('form');
+    form.className = 'sponsor-delivery-form service-form';
+    form.dataset.campaignId = delivery.campaignId;
+    [
+      ['Attendance', 'attendanceCount'],
+      ['Check-ins', 'checkInCount'],
+      ['Samples redeemed', 'samplesRedeemed']
+    ].forEach(([labelText, name]) => {
+      const label = document.createElement('label');
+      label.textContent = labelText;
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.name = name;
+      input.min = '0';
+      input.max = '10000000';
+      input.step = '1';
+      input.value = delivery[name] ?? 0;
+      input.required = true;
+      label.appendChild(input);
+      form.appendChild(label);
+    });
+    const otherLabel = document.createElement('label');
+    otherLabel.textContent = 'Other agreed deliverables or notes';
+    const otherInput = document.createElement('textarea');
+    otherInput.name = 'otherDeliverables';
+    otherInput.maxLength = 2000;
+    otherInput.rows = 3;
+    otherInput.value = delivery.otherDeliverables || '';
+    otherLabel.appendChild(otherInput);
+    const submit = document.createElement('button');
+    submit.type = 'submit';
+    submit.className = 'button button-primary';
+    submit.textContent = delivery.status === 'rejected' ? 'Resubmit report' : 'Submit report for verification';
+    const feedback = document.createElement('p');
+    feedback.className = 'page-feedback';
+    feedback.setAttribute('role', 'status');
+    feedback.setAttribute('aria-live', 'polite');
+    form.append(otherLabel, submit, feedback);
+    form.addEventListener('submit', async (submitEvent) => {
+      submitEvent.preventDefault();
+      submit.disabled = true;
+      try {
+        const values = new FormData(form);
+        await window.valorEventsApi(`/api/events/mine/${encodeURIComponent(delivery.eventId)}/sponsorship-deliveries`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            campaignId: delivery.campaignId,
+            attendanceCount: Number(values.get('attendanceCount')),
+            checkInCount: Number(values.get('checkInCount')),
+            samplesRedeemed: Number(values.get('samplesRedeemed')),
+            otherDeliverables: values.get('otherDeliverables')
+          })
+        });
+        await loadSponsorDeliveries(delivery.eventId, form.closest('.sponsor-deliveries-panel'));
+      } catch (error) {
+        feedback.textContent = error.message;
+        feedback.classList.add('error');
+        submit.disabled = false;
+      }
+    });
+    card.appendChild(form);
+    return card;
+  }
+
+  async function loadSponsorDeliveries(eventId, panel) {
+    panel.replaceChildren();
+    try {
+      const result = await window.valorEventsApi(
+        `/api/events/mine/${encodeURIComponent(eventId)}/sponsorship-deliveries`,
+        { headers }
+      );
+      if (!result.deliveries.length) {
+        const empty = document.createElement('p');
+        empty.textContent = 'No sponsorship campaign is linked to this event. Ask the sponsor to add it in their campaign dashboard.';
+        panel.appendChild(empty);
+        return;
+      }
+      result.deliveries.forEach((delivery) => panel.appendChild(renderSponsorDelivery({
+        ...delivery,
+        eventId
+      })));
+    } catch (error) {
+      const message = document.createElement('p');
+      message.className = 'page-feedback error';
+      message.textContent = error.message;
+      panel.appendChild(message);
+    }
+  }
+
   async function loadEvents() {
     if (!token) {
       showSignIn('Sign in to manage events submitted from this account.');
@@ -126,6 +245,23 @@
         const metrics = document.createElement('p');
         metrics.textContent = `Tickets sold: ${event.ticketsSold} · Checked in: ${event.checkedIn} · Gross sales: KES ${Number(event.grossKes).toLocaleString('en-KE')}`;
         card.append(title, status, details, metrics);
+        if (Date.parse(event.endsAt) <= Date.now()) {
+          const deliveryToggle = document.createElement('button');
+          deliveryToggle.type = 'button';
+          deliveryToggle.className = 'button secondary';
+          deliveryToggle.textContent = 'Report sponsor deliverables';
+          const deliveryPanel = document.createElement('div');
+          deliveryPanel.className = 'sponsor-deliveries-panel';
+          deliveryPanel.hidden = true;
+          deliveryToggle.addEventListener('click', async () => {
+            deliveryPanel.hidden = !deliveryPanel.hidden;
+            deliveryToggle.textContent = deliveryPanel.hidden
+              ? 'Report sponsor deliverables'
+              : 'Hide sponsor deliverables';
+            if (!deliveryPanel.hidden) await loadSponsorDeliveries(event.id, deliveryPanel);
+          });
+          card.append(deliveryToggle, deliveryPanel);
+        }
         const adAnalyticsToggle = document.createElement('button');
         adAnalyticsToggle.type = 'button';
         adAnalyticsToggle.className = 'button secondary ad-analytics-toggle';

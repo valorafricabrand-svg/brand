@@ -930,7 +930,8 @@
               giftMessage: form.elements.deliveryType.value === 'gift' ? form.elements.giftMessage.value : '',
               showtimeAt: isMovie ? form.elements.showtimeAt.value : '',
               seatLabels: isMovie ? selectedSeats : [],
-              affiliateReferralToken: window.valorAffiliateReferralToken()
+              affiliateReferralToken: window.valorAffiliateReferralToken(),
+              sponsorshipClickId: window.valorSponsorshipClickId(event.id)
             })
           });
           saveAccess(order);
@@ -1002,7 +1003,8 @@
                   giftMessage: form.elements.deliveryType.value === 'gift' ? form.elements.giftMessage.value : '',
                   showtimeAt: isMovie ? form.elements.showtimeAt.value : '',
                   seatLabels: isMovie ? selectedSeats : [],
-                  affiliateReferralToken: window.valorAffiliateReferralToken()
+                  affiliateReferralToken: window.valorAffiliateReferralToken(),
+                  sponsorshipClickId: window.valorSponsorshipClickId(event.id)
                 })
               });
               saveAccess(order);
@@ -1102,7 +1104,8 @@
           giftMessage: form.elements.deliveryType.value === 'gift' ? form.elements.giftMessage.value : '',
           showtimeAt: isMovie ? form.elements.showtimeAt.value : '',
           seatLabels: isMovie ? selectedSeats : [],
-          affiliateReferralToken: window.valorAffiliateReferralToken()
+          affiliateReferralToken: window.valorAffiliateReferralToken(),
+          sponsorshipClickId: window.valorSponsorshipClickId(event.id)
         }, document.getElementById('pageFeedback'), currentAccountToken);
         button.disabled = false;
       });

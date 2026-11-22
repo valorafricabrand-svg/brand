@@ -799,6 +799,8 @@ function createApp(options = {}) {
   const partnerApplicationLimiter = createSubmissionLimiter(10, 'partnership applications');
   const partnerReferralLimiter = createSubmissionLimiter(1000, 'referral visits');
   const sponsorshipImpressionLimiter = createSubmissionLimiter(1000, 'sponsorship impressions');
+  const sponsorshipClickLimiter = createSubmissionLimiter(1000, 'sponsorship clicks');
+  const sponsorshipDeliveryLimiter = createSubmissionLimiter(20, 'sponsorship delivery reports');
   const eventViewLimiter = createSubmissionLimiter(1000, 'event views');
   const giftPurchaseLimiter = createSubmissionLimiter(8, 'gift purchases');
   const giftCodeAttemptLimiter = createSubmissionLimiter(10, 'gift-code attempts');
@@ -2726,6 +2728,58 @@ function createApp(options = {}) {
     res.json({ sponsors: rows });
   });
 
+  app.get('/api/sponsorships/:id/click', sponsorshipClickLimiter, (req, res) => {
+    const placement = typeof req.query.placement === 'string' ? req.query.placement : '';
+    if (placement !== 'home-sponsor-strip') return res.status(400).json({ error: 'Choose a supported sponsorship placement.' });
+    const purchase = db.prepare(`
+      SELECT id,website_url AS websiteUrl FROM sponsorship_purchases
+      WHERE id=? AND status='active' AND julianday(starts_at) <= julianday('now')
+        AND julianday(ends_at) > julianday('now')
+    `).get(req.params.id);
+    if (!purchase || !purchase.websiteUrl) return res.status(404).json({ error: 'Active sponsor website not found.' });
+    let destination;
+    try {
+      destination = new URL(purchase.websiteUrl);
+    } catch (error) {
+      return res.status(409).json({ error: 'This sponsor website is not a valid approved destination.' });
+    }
+    if (destination.protocol !== 'https:' || destination.username || destination.password) {
+      return res.status(409).json({ error: 'This sponsor website is not a valid approved destination.' });
+    }
+    db.prepare(`
+      INSERT INTO sponsorship_clicks (id,sponsorship_purchase_id,placement)
+      VALUES (?,?,?)
+    `).run(crypto.randomUUID(), purchase.id, placement);
+    res.set('Cache-Control', 'no-store');
+    res.redirect(302, destination.href);
+  });
+
+  app.get('/api/sponsorships/:id/events/:eventId/click', sponsorshipClickLimiter, (req, res) => {
+    const campaignEvent = db.prepare(`
+      SELECT p.id AS purchaseId,e.id AS eventId,e.slug
+      FROM sponsorship_purchases p
+      JOIN sponsorship_campaign_events ce ON ce.sponsorship_purchase_id=p.id
+        AND ce.event_id=? AND ce.active=1
+      JOIN events e ON e.id=ce.event_id
+      WHERE p.id=? AND p.status='active'
+        AND julianday(p.starts_at) <= julianday('now') AND julianday(p.ends_at) > julianday('now')
+        AND e.status='approved' AND e.deleted_at IS NULL
+        AND julianday(e.starts_at) > julianday('now')
+    `).get(req.params.eventId, req.params.id);
+    if (!campaignEvent) return res.status(404).json({ error: 'This sponsorship event link is no longer active.' });
+    const clickId = crypto.randomUUID();
+    db.prepare(`
+      INSERT INTO sponsorship_clicks (id,sponsorship_purchase_id,event_id,placement)
+      VALUES (?,?,?,'event-referral')
+    `).run(clickId, campaignEvent.purchaseId, campaignEvent.eventId);
+    const destination = new URL('/event.html', publicSiteUrl);
+    destination.searchParams.set('slug', campaignEvent.slug);
+    destination.searchParams.set('sponsor_click', clickId);
+    destination.searchParams.set('sponsor_event', campaignEvent.eventId);
+    res.set('Cache-Control', 'no-store');
+    res.redirect(302, destination.href);
+  });
+
   app.post('/api/sponsorships/:id/viewable-impressions', sponsorshipImpressionLimiter, (req, res) => {
     const impressionId = typeof req.body?.impressionId === 'string' ? req.body.impressionId.trim() : '';
     const placement = typeof req.body?.placement === 'string' ? req.body.placement.trim() : '';
@@ -2749,6 +2803,148 @@ function createApp(options = {}) {
     res.status(202).json({ recorded: result.changes === 1 });
   });
 
+  app.put('/api/sponsorships/:id/events', requireAccount, requirePartnerTermsAcknowledgement, (req, res) => {
+    const purchase = db.prepare(`
+      SELECT id FROM sponsorship_purchases
+      WHERE id=? AND account_id=? AND status='active'
+        AND julianday(starts_at) <= julianday('now') AND julianday(ends_at) > julianday('now')
+    `).get(req.params.id, req.account.id);
+    if (!purchase) return res.status(404).json({ error: 'Active sponsorship not found in your account.' });
+    const eventIds = req.body?.eventIds;
+    if (!Array.isArray(eventIds) || eventIds.length > 10 ||
+        eventIds.some((id) => typeof id !== 'string' || !id.trim()) ||
+        new Set(eventIds).size !== eventIds.length) {
+      return res.status(400).json({ error: 'Choose up to 10 unique events for this campaign.' });
+    }
+    const eligibleEvents = eventIds.length
+      ? db.prepare(`
+          SELECT id FROM events
+          WHERE id IN (${eventIds.map(() => '?').join(',')})
+            AND status='approved' AND deleted_at IS NULL
+            AND julianday(starts_at) > julianday('now')
+        `).all(...eventIds)
+      : [];
+    if (eligibleEvents.length !== eventIds.length) {
+      return res.status(400).json({ error: 'Choose only published upcoming events.' });
+    }
+    db.transaction(() => {
+      db.prepare(`
+        UPDATE sponsorship_campaign_events SET active=0,updated_at=datetime('now')
+        WHERE sponsorship_purchase_id=?
+      `).run(purchase.id);
+      const upsert = db.prepare(`
+        INSERT INTO sponsorship_campaign_events (sponsorship_purchase_id,event_id)
+        VALUES (?,?)
+        ON CONFLICT(sponsorship_purchase_id,event_id)
+        DO UPDATE SET active=1,updated_at=datetime('now')
+      `);
+      eventIds.forEach((eventId) => upsert.run(purchase.id, eventId));
+    })();
+    res.json({ eventIds });
+  });
+
+  app.get('/api/sponsorships/:id/report', requireAccount, (req, res) => {
+    const campaign = db.prepare(`
+      SELECT id,tier,brand_name AS brandName,amount_kes AS amountKes,status,
+        starts_at AS startsAt,ends_at AS endsAt,created_at AS createdAt
+      FROM sponsorship_purchases WHERE id=? AND account_id=?
+    `).get(req.params.id, req.account.id);
+    if (!campaign) return res.status(404).json({ error: 'Sponsorship campaign not found in your account.' });
+    const defaultStart = (campaign.startsAt || campaign.createdAt).slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    const defaultEnd = campaign.endsAt && campaign.endsAt.slice(0, 10) < today
+      ? campaign.endsAt.slice(0, 10)
+      : today;
+    const startDate = typeof req.query.startDate === 'string' ? req.query.startDate : defaultStart;
+    const endDate = typeof req.query.endDate === 'string' ? req.query.endDate : defaultEnd;
+    const validDate = (value) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+      const date = new Date(`${value}T00:00:00.000Z`);
+      return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+    };
+    if (!validDate(startDate) || !validDate(endDate) || startDate > endDate) {
+      return res.status(400).json({ error: 'Choose a valid date range.' });
+    }
+    if ((Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86400000 > 365) {
+      return res.status(400).json({ error: 'Campaign reports can cover up to 366 days at a time.' });
+    }
+
+    const impressions = db.prepare(`
+      SELECT placement,COUNT(*) AS count
+      FROM sponsorship_viewable_impressions
+      WHERE sponsorship_purchase_id=? AND date(created_at) BETWEEN ? AND ?
+      GROUP BY placement
+    `).all(campaign.id, startDate, endDate);
+    const clicks = db.prepare(`
+      SELECT placement,COUNT(*) AS count
+      FROM sponsorship_clicks
+      WHERE sponsorship_purchase_id=? AND date(created_at) BETWEEN ? AND ?
+      GROUP BY placement
+    `).all(campaign.id, startDate, endDate);
+    const placements = new Map();
+    impressions.forEach((row) => placements.set(row.placement, { placement: row.placement, impressions: row.count, clicks: 0 }));
+    clicks.forEach((row) => {
+      const entry = placements.get(row.placement) || { placement: row.placement, impressions: 0, clicks: 0 };
+      entry.clicks = row.count;
+      placements.set(row.placement, entry);
+    });
+    const placementReport = Array.from(placements.values()).map((entry) => ({
+      ...entry,
+      clickThroughRate: entry.impressions ? entry.clicks / entry.impressions : null
+    }));
+    const homePlacement = placements.get('home-sponsor-strip') || { impressions: 0, clicks: 0 };
+    const eventLinkClicks = db.prepare(`
+      SELECT COUNT(*) AS count FROM sponsorship_clicks
+      WHERE sponsorship_purchase_id=? AND placement='event-referral'
+        AND date(created_at) BETWEEN ? AND ?
+    `).get(campaign.id, startDate, endDate).count;
+    const sales = db.prepare(`
+      SELECT COUNT(*) AS paidOrders,COALESCE(SUM(quantity),0) AS tickets,
+        COALESCE(SUM(amount_kes),0) AS salesKes
+      FROM orders
+      WHERE sponsorship_purchase_id=? AND order_type='ticket' AND status='paid'
+        AND amount_kes>0 AND date(paid_at) BETWEEN ? AND ?
+    `).get(campaign.id, startDate, endDate);
+    const events = db.prepare(`
+      SELECT ce.event_id AS eventId,e.title,e.slug,e.city,e.starts_at AS startsAt,ce.active
+      FROM sponsorship_campaign_events ce JOIN events e ON e.id=ce.event_id
+      WHERE ce.sponsorship_purchase_id=?
+      ORDER BY e.starts_at
+    `).all(campaign.id);
+    const deliveries = db.prepare(`
+      SELECT d.id,d.event_id AS eventId,e.title AS eventTitle,
+        d.attendance_count AS attendanceCount,d.check_in_count AS checkInCount,
+        d.samples_redeemed AS samplesRedeemed,d.other_deliverables AS otherDeliverables,
+        d.status,d.submitted_at AS submittedAt,d.verified_at AS verifiedAt,
+        d.verification_note AS verificationNote,a.username AS verifiedBy
+      FROM sponsorship_event_deliveries d
+      JOIN events e ON e.id=d.event_id
+      LEFT JOIN admins a ON a.id=d.verified_by_admin_id
+      WHERE d.sponsorship_purchase_id=?
+      ORDER BY e.starts_at DESC
+    `).all(campaign.id);
+    const totalClicks = placementReport.reduce((total, entry) => total + entry.clicks, 0);
+    const paidOrders = sales.paidOrders;
+    res.json({
+      campaign,
+      range: { startDate, endDate },
+      placements: placementReport,
+      metrics: {
+        impressions: placementReport.reduce((total, entry) => total + entry.impressions, 0),
+        clicks: totalClicks,
+        homepageClickThroughRate: homePlacement.impressions ? homePlacement.clicks / homePlacement.impressions : null,
+        eventLinkClicks,
+        attributedPaidOrders: paidOrders,
+        attributedTickets: sales.tickets,
+        attributedSalesKes: sales.salesKes,
+        ticketConversionRate: eventLinkClicks ? paidOrders / eventLinkClicks : null,
+        costPerClickKes: totalClicks ? campaign.amountKes / totalClicks : null
+      },
+      events,
+      deliveries
+    });
+  });
+
   app.get('/api/sponsorships/me', requireAccount, (req, res) => {
     const purchases = db.prepare(`
       SELECT id AS purchaseId,tier,brand_name AS brandName,status,
@@ -2762,7 +2958,26 @@ function createApp(options = {}) {
       ORDER BY created_at DESC
       LIMIT 100
     `).all(req.account.id);
-    res.json({ purchases });
+    const campaignEvents = db.prepare(`
+      SELECT ce.sponsorship_purchase_id AS purchaseId,e.id AS eventId,e.title,e.slug,
+        e.city,e.starts_at AS startsAt,ce.active
+      FROM sponsorship_campaign_events ce JOIN events e ON e.id=ce.event_id
+      JOIN sponsorship_purchases p ON p.id=ce.sponsorship_purchase_id
+      WHERE p.account_id=?
+      ORDER BY e.starts_at
+    `).all(req.account.id);
+    const eventsByPurchase = new Map();
+    campaignEvents.forEach((event) => {
+      const events = eventsByPurchase.get(event.purchaseId) || [];
+      events.push(event);
+      eventsByPurchase.set(event.purchaseId, events);
+    });
+    res.json({
+      purchases: purchases.map((purchase) => ({
+        ...purchase,
+        events: eventsByPurchase.get(purchase.purchaseId) || []
+      }))
+    });
   });
 
   app.get('/api/partnership-applications/me', requireAccount, (req, res) => {
@@ -3200,6 +3415,103 @@ function createApp(options = {}) {
       daily,
       totals
     });
+  });
+
+  app.get('/api/events/mine/:id/sponsorship-deliveries', requireAccount, (req, res) => {
+    const event = db.prepare(`
+      SELECT id,starts_at AS startsAt,ends_at AS endsAt
+      FROM events WHERE id=? AND organizer_account_id=? AND deleted_at IS NULL
+    `).get(req.params.id, req.account.id);
+    if (!event) return res.status(404).json({ error: 'Event not found in your organizer account.' });
+    const deliveries = db.prepare(`
+      SELECT p.id AS campaignId,p.brand_name AS brandName,p.tier,
+        d.id AS deliveryId,d.attendance_count AS attendanceCount,
+        d.check_in_count AS checkInCount,d.samples_redeemed AS samplesRedeemed,
+        d.other_deliverables AS otherDeliverables,d.status,d.submitted_at AS submittedAt,
+        d.verified_at AS verifiedAt,d.verification_note AS verificationNote,
+        a.username AS verifiedBy
+      FROM sponsorship_campaign_events ce
+      JOIN sponsorship_purchases p ON p.id=ce.sponsorship_purchase_id
+      JOIN events e ON e.id=ce.event_id
+      LEFT JOIN sponsorship_event_deliveries d
+        ON d.sponsorship_purchase_id=p.id AND d.event_id=ce.event_id
+      LEFT JOIN admins a ON a.id=d.verified_by_admin_id
+      WHERE ce.event_id=? AND p.status IN ('active','cancelled')
+        AND julianday(e.starts_at) <= julianday('now')
+      ORDER BY p.created_at DESC
+    `).all(event.id);
+    res.json({
+      event: { id: event.id, startsAt: event.startsAt, endsAt: event.endsAt },
+      deliveries
+    });
+  });
+
+  app.post('/api/events/mine/:id/sponsorship-deliveries', requireAccount, sponsorshipDeliveryLimiter, (req, res) => {
+    const event = db.prepare(`
+      SELECT id,starts_at AS startsAt,ends_at AS endsAt
+      FROM events WHERE id=? AND organizer_account_id=? AND deleted_at IS NULL
+    `).get(req.params.id, req.account.id);
+    if (!event) return res.status(404).json({ error: 'Event not found in your organizer account.' });
+    if (Date.parse(event.endsAt) > Date.now() ||
+        Date.parse(event.endsAt) < Date.now() - 90 * 86400000) {
+      return res.status(409).json({ error: 'Sponsor delivery reports can be submitted after the event and within 90 days.' });
+    }
+    const { campaignId, attendanceCount, checkInCount, samplesRedeemed, otherDeliverables = '' } = req.body || {};
+    if (typeof campaignId !== 'string' || !campaignId) return res.status(400).json({ error: 'Choose a sponsorship campaign.' });
+    for (const [label, value] of [
+      ['Attendance', attendanceCount],
+      ['Check-ins', checkInCount],
+      ['Samples redeemed', samplesRedeemed]
+    ]) {
+      if (!Number.isSafeInteger(value) || value < 0 || value > 10000000) {
+        return res.status(400).json({ error: `${label} must be a whole number from 0 to 10,000,000.` });
+      }
+    }
+    if (typeof otherDeliverables !== 'string' || otherDeliverables.length > 2000) {
+      return res.status(400).json({ error: 'Other deliverables must be 2,000 characters or fewer.' });
+    }
+    const campaignEvent = db.prepare(`
+      SELECT ce.sponsorship_purchase_id AS campaignId
+      FROM sponsorship_campaign_events ce
+      JOIN sponsorship_purchases p ON p.id=ce.sponsorship_purchase_id
+      WHERE ce.sponsorship_purchase_id=? AND ce.event_id=?
+        AND p.status IN ('active','cancelled')
+        AND julianday(?) BETWEEN julianday(p.starts_at) AND julianday(p.ends_at)
+    `).get(campaignId, event.id, event.startsAt);
+    if (!campaignEvent) return res.status(404).json({ error: 'This event is not linked to that sponsorship campaign.' });
+
+    const existing = db.prepare(`
+      SELECT id,status,submitted_by_account_id AS submittedBy
+      FROM sponsorship_event_deliveries
+      WHERE sponsorship_purchase_id=? AND event_id=?
+    `).get(campaignEvent.campaignId, event.id);
+    if (existing?.status === 'verified') {
+      return res.status(409).json({ error: 'This delivery report has already been verified and cannot be changed.' });
+    }
+    const deliveryId = existing ? existing.id : crypto.randomUUID();
+    if (existing) {
+      db.prepare(`
+        UPDATE sponsorship_event_deliveries
+        SET submitted_by_account_id=?,attendance_count=?,check_in_count=?,samples_redeemed=?,
+          other_deliverables=?,status='pending',submitted_at=datetime('now'),
+          verified_by_admin_id=NULL,verified_at=NULL,verification_note=''
+        WHERE id=?
+      `).run(
+        req.account.id, attendanceCount, checkInCount, samplesRedeemed,
+        otherDeliverables.trim(), deliveryId
+      );
+    } else {
+      db.prepare(`
+        INSERT INTO sponsorship_event_deliveries
+          (id,sponsorship_purchase_id,event_id,submitted_by_account_id,
+           attendance_count,check_in_count,samples_redeemed,other_deliverables)
+        VALUES (?,?,?,?,?,?,?,?)
+      `).run(
+        deliveryId, campaignEvent.campaignId, event.id, req.account.id,
+        attendanceCount, checkInCount, samplesRedeemed, otherDeliverables.trim()
+      );
+    }
+    res.status(existing ? 200 : 201).json({ deliveryId, status: 'pending' });
   });
 
   function eventHasActiveOrders(eventId) {
@@ -4033,6 +4345,58 @@ function createApp(options = {}) {
     res.json({ id: req.params.id, status: 'cancelled' });
   });
 
+  app.get('/api/sponsorship-deliveries/admin', requireAdmin, (req, res) => {
+    const status = typeof req.query.status === 'string' ? req.query.status : 'pending';
+    if (!['pending','verified','rejected','all'].includes(status)) {
+      return res.status(400).json({ error: 'Choose a valid delivery report status.' });
+    }
+    const deliveries = db.prepare(`
+      SELECT d.id,d.sponsorship_purchase_id AS campaignId,p.brand_name AS brandName,p.tier,
+        d.event_id AS eventId,e.title AS eventTitle,e.starts_at AS eventStartsAt,
+        a.email AS organizerEmail,d.attendance_count AS attendanceCount,
+        d.check_in_count AS checkInCount,d.samples_redeemed AS samplesRedeemed,
+        d.other_deliverables AS otherDeliverables,d.status,d.submitted_at AS submittedAt,
+        d.verified_at AS verifiedAt,d.verification_note AS verificationNote,
+        admin.username AS verifiedBy
+      FROM sponsorship_event_deliveries d
+      JOIN sponsorship_purchases p ON p.id=d.sponsorship_purchase_id
+      JOIN events e ON e.id=d.event_id
+      JOIN accounts a ON a.id=d.submitted_by_account_id
+      LEFT JOIN admins admin ON admin.id=d.verified_by_admin_id
+      WHERE (?='all' OR d.status=?)
+      ORDER BY CASE d.status WHEN 'pending' THEN 0 WHEN 'rejected' THEN 1 ELSE 2 END,
+        d.submitted_at DESC
+      LIMIT 500
+    `).all(status, status);
+    res.json({ deliveries });
+  });
+
+  app.patch('/api/sponsorship-deliveries/admin/:id', requireAdmin, (req, res) => {
+    const { status, verificationNote = '' } = req.body || {};
+    if (!['verified','rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Choose verified or rejected as the review result.' });
+    }
+    if (typeof verificationNote !== 'string' || verificationNote.length > 1000) {
+      return res.status(400).json({ error: 'Verification notes must be 1,000 characters or fewer.' });
+    }
+    const note = verificationNote.trim();
+    if (status === 'rejected' && !note) {
+      return res.status(400).json({ error: 'Add a note explaining why the report was rejected.' });
+    }
+    const result = db.prepare(`
+      UPDATE sponsorship_event_deliveries
+      SET status=?,verified_by_admin_id=?,verified_at=datetime('now'),verification_note=?
+      WHERE id=? AND status='pending'
+    `).run(status, req.admin.sub, note, req.params.id);
+    if (!result.changes) {
+      const exists = db.prepare('SELECT status FROM sponsorship_event_deliveries WHERE id=?').get(req.params.id);
+      return exists
+        ? res.status(409).json({ error: 'Only pending delivery reports can be reviewed.' })
+        : res.status(404).json({ error: 'Sponsorship delivery report not found.' });
+    }
+    res.json({ id: req.params.id, status });
+  });
+
   app.get('/api/ads/admin/packages', requireAdmin, (req, res) => {
     res.json({
       packages: db.prepare(`
@@ -4105,6 +4469,7 @@ function createApp(options = {}) {
     orderType, eventId = null, adBookingId = null, accountId = null, buyerName, phone,
     ticketType = '', quantity = 1, amountKes, paymentMethod = 'mpesa',
     affiliatePartnerId = null, affiliateCommissionPercent = null, affiliateReferralTokenHash = null,
+    sponsorshipPurchaseId = null, sponsorshipClickId = null,
     giftRecipientName = '', giftRecipientContact = '', giftMessage = ''
   }) {
     const id = crypto.randomUUID();
@@ -4114,13 +4479,15 @@ function createApp(options = {}) {
         id,access_token_hash,order_type,event_id,ad_booking_id,account_id,buyer_name,phone,
         ticket_type,quantity,amount_kes,payment_method,ticket_email_status,
         affiliate_partner_id,affiliate_commission_percent,affiliate_referral_token_hash,
+        sponsorship_purchase_id,sponsorship_click_id,
         gift_recipient_name,gift_recipient_contact,gift_message
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(
       id, sha256(accessToken), orderType, eventId, adBookingId, accountId, buyerName.trim(),
       phone, ticketType, quantity, amountKes, paymentMethod,
       orderType === 'ticket' ? 'not_sent' : 'not_applicable',
       affiliatePartnerId, affiliateCommissionPercent, affiliateReferralTokenHash,
+      sponsorshipPurchaseId, sponsorshipClickId,
       giftRecipientName, giftRecipientContact, giftMessage
     );
     return { id, accessToken };
@@ -4482,6 +4849,24 @@ function createApp(options = {}) {
         req.body.affiliateReferralToken.length <= 100
         ? req.body.affiliateReferralToken
         : '';
+      const sponsorshipClickId = typeof req.body?.sponsorshipClickId === 'string'
+        ? req.body.sponsorshipClickId.trim()
+        : '';
+      let sponsorshipAttribution = null;
+      if (sponsorshipClickId) {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sponsorshipClickId)) {
+          return res.status(400).json({ error: 'The sponsorship referral link is invalid.' });
+        }
+        sponsorshipAttribution = db.prepare(`
+          SELECT sponsorship_purchase_id AS purchaseId,id AS clickId
+          FROM sponsorship_clicks
+          WHERE id=? AND event_id=? AND placement='event-referral'
+            AND datetime(created_at) >= datetime('now','-30 days')
+        `).get(sponsorshipClickId, eventId);
+        if (!sponsorshipAttribution) {
+          return res.status(409).json({ error: 'This sponsorship referral link has expired or does not match this event. Reopen the event using the sponsor link.' });
+        }
+      }
 
       let order;
       try {
@@ -4517,6 +4902,8 @@ function createApp(options = {}) {
             affiliatePartnerId: affiliate?.id || null,
             affiliateCommissionPercent: affiliate?.commission_percent ?? null,
             affiliateReferralTokenHash: affiliate?.token_hash || null,
+            sponsorshipPurchaseId: sponsorshipAttribution?.purchaseId || null,
+            sponsorshipClickId: sponsorshipAttribution?.clickId || null,
             giftRecipientName, giftRecipientContact, giftMessage
           });
           if (price === 0) {

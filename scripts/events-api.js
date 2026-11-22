@@ -215,4 +215,31 @@
       return '';
     }
   };
+
+  const sponsorshipReferralStorageKey = 'valor-sponsorship-referral';
+  const sponsorshipClickId = new URLSearchParams(window.location.search).get('sponsor_click');
+  const sponsorshipEventId = new URLSearchParams(window.location.search).get('sponsor_event');
+  const isUuid = (value) => typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  if (isUuid(sponsorshipClickId) && isUuid(sponsorshipEventId)) {
+    window.localStorage.setItem(sponsorshipReferralStorageKey, JSON.stringify({
+      clickId: sponsorshipClickId,
+      eventId: sponsorshipEventId,
+      expiresAt: Date.now() + 30 * 86400000
+    }));
+  }
+  window.valorSponsorshipClickId = function (eventId) {
+    try {
+      const referral = JSON.parse(window.localStorage.getItem(sponsorshipReferralStorageKey) || 'null');
+      if (!referral || !isUuid(referral.clickId) || !isUuid(referral.eventId) ||
+          !Number.isFinite(referral.expiresAt) || referral.expiresAt <= Date.now()) {
+        window.localStorage.removeItem(sponsorshipReferralStorageKey);
+        return '';
+      }
+      return referral.eventId === eventId ? referral.clickId : '';
+    } catch (error) {
+      console.error('Could not read the saved sponsorship referral.', error);
+      return '';
+    }
+  };
 })();

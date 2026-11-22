@@ -17,7 +17,9 @@
         const chip = document.createElement(sponsor.websiteUrl ? 'a' : 'span');
         chip.className = `sponsor-strip-chip sponsor-strip-chip-${sponsor.tier}`;
         if (sponsor.websiteUrl) {
-          chip.href = sponsor.websiteUrl;
+          chip.href = sponsor.trackingId && window.valorEventsApiBase
+            ? `${window.valorEventsApiBase}/api/sponsorships/${encodeURIComponent(sponsor.trackingId)}/click?placement=home-sponsor-strip`
+            : sponsor.websiteUrl;
           chip.target = '_blank';
           chip.rel = 'noopener noreferrer sponsored';
         }
