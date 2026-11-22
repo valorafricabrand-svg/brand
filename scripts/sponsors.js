@@ -32,6 +32,7 @@
         name.textContent = sponsor.brandName;
         chip.appendChild(name);
         track.appendChild(chip);
+        observeViewableImpression(chip, sponsor);
       });
       mount.replaceChildren(track);
       mount.hidden = false;
@@ -39,6 +40,61 @@
       console.error('Could not load active sponsors:', error.message);
       mount.hidden = true;
     }
+  }
+
+  function observeViewableImpression(element, sponsor) {
+    if (!('IntersectionObserver' in window) || !window.crypto?.randomUUID || !sponsor.trackingId) return;
+    let timer = null;
+    let recorded = false;
+    let isViewable = false;
+    let observer;
+
+    function stopTimer() {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    }
+
+    function startTimer() {
+      if (recorded || timer !== null || !isViewable || document.visibilityState !== 'visible') return;
+      timer = window.setTimeout(async () => {
+        timer = null;
+        if (recorded || !isViewable || document.visibilityState !== 'visible') return;
+        recorded = true;
+        observer.disconnect();
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        try {
+          await window.valorEventsApi(
+            `/api/sponsorships/${encodeURIComponent(sponsor.trackingId)}/viewable-impressions`,
+            {
+              method: 'POST',
+              keepalive: true,
+              body: JSON.stringify({
+                impressionId: window.crypto.randomUUID(),
+                placement: 'home-sponsor-strip'
+              })
+            }
+          );
+        } catch (error) {
+          console.error(`Could not record the viewable impression for ${sponsor.brandName}:`, error.message);
+        }
+      }, 1000);
+    }
+
+    observer = new IntersectionObserver(([entry]) => {
+      isViewable = entry.isIntersecting && entry.intersectionRatio >= 0.5;
+      if (isViewable) startTimer();
+      else stopTimer();
+    }, { threshold: [0, 0.5] });
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') startTimer();
+      else stopTimer();
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    observer.observe(element);
   }
 
   loadSponsorStrip();

@@ -116,7 +116,11 @@
         : purchase.status === 'pending'
           ? 'Your campaign will go live after payment is confirmed.'
           : purchase.resultDescription || `Created ${formatDate(purchase.createdAt)}`;
-      item.append(heading, status, period);
+      const impressions = document.createElement('p');
+      impressions.textContent = `Platform-measured viewable impressions (campaign total): ${Number(purchase.viewableImpressions || 0).toLocaleString('en-KE')}`;
+      const impressionNote = document.createElement('p');
+      impressionNote.textContent = 'Counted when at least half of this placement is visible for one continuous second while the page is visible. This does not guarantee human attention.';
+      item.append(heading, status, period, impressions, impressionNote);
       sponsorshipList.appendChild(item);
     });
   }

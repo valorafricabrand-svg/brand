@@ -676,6 +676,15 @@ db.exec(`
     ON sponsorship_purchases(nowpayments_invoice_id) WHERE nowpayments_invoice_id IS NOT NULL;
   CREATE UNIQUE INDEX IF NOT EXISTS sponsorship_purchases_paypal_order
     ON sponsorship_purchases(paypal_order_id) WHERE paypal_order_id IS NOT NULL;
+
+  CREATE TABLE IF NOT EXISTS sponsorship_viewable_impressions (
+    impression_id TEXT PRIMARY KEY,
+    sponsorship_purchase_id TEXT NOT NULL REFERENCES sponsorship_purchases(id) ON DELETE CASCADE,
+    placement TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS sponsorship_viewable_impressions_purchase
+    ON sponsorship_viewable_impressions(sponsorship_purchase_id,created_at);
 `);
 
 if (db.prepare('SELECT COUNT(*) AS count FROM hero_slides').get().count === 0) {

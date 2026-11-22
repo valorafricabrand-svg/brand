@@ -798,6 +798,7 @@ function createApp(options = {}) {
   const submissionLimiter = createSubmissionLimiter();
   const partnerApplicationLimiter = createSubmissionLimiter(10, 'partnership applications');
   const partnerReferralLimiter = createSubmissionLimiter(1000, 'referral visits');
+  const sponsorshipImpressionLimiter = createSubmissionLimiter(1000, 'sponsorship impressions');
   const eventViewLimiter = createSubmissionLimiter(1000, 'event views');
   const giftPurchaseLimiter = createSubmissionLimiter(8, 'gift purchases');
   const giftCodeAttemptLimiter = createSubmissionLimiter(10, 'gift-code attempts');
@@ -2715,7 +2716,8 @@ function createApp(options = {}) {
 
   app.get('/api/sponsorships/active', (req, res) => {
     const rows = db.prepare(`
-      SELECT tier,brand_name AS brandName,website_url AS websiteUrl,logo_url AS logoUrl,ends_at AS endsAt
+      SELECT id AS trackingId,tier,brand_name AS brandName,
+        website_url AS websiteUrl,logo_url AS logoUrl,ends_at AS endsAt
       FROM sponsorship_purchases
       WHERE status='active' AND julianday(ends_at) > julianday('now')
       ORDER BY CASE tier WHEN 'premium' THEN 0 WHEN 'city' THEN 1 ELSE 2 END, paid_at DESC
@@ -2724,12 +2726,37 @@ function createApp(options = {}) {
     res.json({ sponsors: rows });
   });
 
+  app.post('/api/sponsorships/:id/viewable-impressions', sponsorshipImpressionLimiter, (req, res) => {
+    const impressionId = typeof req.body?.impressionId === 'string' ? req.body.impressionId.trim() : '';
+    const placement = typeof req.body?.placement === 'string' ? req.body.placement.trim() : '';
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(impressionId)) {
+      return res.status(400).json({ error: 'A valid impression ID is required.' });
+    }
+    if (placement !== 'home-sponsor-strip') {
+      return res.status(400).json({ error: 'Choose a supported sponsorship placement.' });
+    }
+    const sponsorship = db.prepare(`
+      SELECT id FROM sponsorship_purchases
+      WHERE id=? AND status='active' AND julianday(starts_at) <= julianday('now')
+        AND julianday(ends_at) > julianday('now')
+    `).get(req.params.id);
+    if (!sponsorship) return res.status(404).json({ error: 'Active sponsorship not found.' });
+    const result = db.prepare(`
+      INSERT OR IGNORE INTO sponsorship_viewable_impressions
+        (impression_id,sponsorship_purchase_id,placement)
+      VALUES (?,?,?)
+    `).run(impressionId, sponsorship.id, placement);
+    res.status(202).json({ recorded: result.changes === 1 });
+  });
+
   app.get('/api/sponsorships/me', requireAccount, (req, res) => {
     const purchases = db.prepare(`
       SELECT id AS purchaseId,tier,brand_name AS brandName,status,
         payment_method AS paymentMethod,amount_kes AS amountKes,
         result_description AS resultDescription,starts_at AS startsAt,
-        ends_at AS endsAt,created_at AS createdAt
+        ends_at AS endsAt,created_at AS createdAt,
+        (SELECT COUNT(*) FROM sponsorship_viewable_impressions i
+          WHERE i.sponsorship_purchase_id=sponsorship_purchases.id) AS viewableImpressions
       FROM sponsorship_purchases
       WHERE account_id=?
       ORDER BY created_at DESC

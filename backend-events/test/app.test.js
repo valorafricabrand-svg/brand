@@ -2957,15 +2957,38 @@ test('signed-in sponsors can pay directly for packages and manage their own spon
   assert.equal(mpesaPurchase.body.status, 'pending');
   const beforeActive = await request(app).get('/api/sponsorships/active');
   assert.ok(!beforeActive.body.sponsors.some((sponsor) => sponsor.brandName === 'Acme Coffee'));
+  const pendingImpression = await request(app)
+    .post(`/api/sponsorships/${mpesaPurchase.body.purchaseId}/viewable-impressions`)
+    .send({ impressionId: crypto.randomUUID(), placement: 'home-sponsor-strip' });
+  assert.equal(pendingImpression.status, 404);
 
   await completePayment(...realSponsorshipCheckoutIds(mpesaPurchase.body.purchaseId), 25000, 'SPONSOR001');
   const purchaseStatus = await request(app).get(`/api/sponsorships/${mpesaPurchase.body.purchaseId}`)
     .set('X-Order-Access', mpesaPurchase.body.accessToken);
   assert.equal(purchaseStatus.status, 200);
   assert.equal(purchaseStatus.body.status, 'active');
+  const publicSponsors = await request(app).get('/api/sponsorships/active');
+  const activeSponsor = publicSponsors.body.sponsors.find((sponsor) => sponsor.brandName === 'Acme Coffee');
+  assert.equal(activeSponsor.trackingId, mpesaPurchase.body.purchaseId);
+  const impressionId = crypto.randomUUID();
+  const impression = await request(app)
+    .post(`/api/sponsorships/${activeSponsor.trackingId}/viewable-impressions`)
+    .send({ impressionId, placement: 'home-sponsor-strip' });
+  assert.equal(impression.status, 202);
+  assert.equal(impression.body.recorded, true);
+  const duplicateImpression = await request(app)
+    .post(`/api/sponsorships/${activeSponsor.trackingId}/viewable-impressions`)
+    .send({ impressionId, placement: 'home-sponsor-strip' });
+  assert.equal(duplicateImpression.status, 202);
+  assert.equal(duplicateImpression.body.recorded, false);
+  const invalidPlacement = await request(app)
+    .post(`/api/sponsorships/${activeSponsor.trackingId}/viewable-impressions`)
+    .send({ impressionId: crypto.randomUUID(), placement: 'unsupported' });
+  assert.equal(invalidPlacement.status, 400);
   const ownedPurchases = await request(app).get('/api/sponsorships/me').set(sponsorAuth);
   assert.equal(ownedPurchases.status, 200);
   assert.deepEqual(ownedPurchases.body.purchases.map((purchase) => purchase.purchaseId), [mpesaPurchase.body.purchaseId]);
+  assert.equal(ownedPurchases.body.purchases[0].viewableImpressions, 1);
   assert.deepEqual((await request(app).get('/api/sponsorships/me')
     .set(createTestAccountAuth('other-sponsorship-account@example.com'))).body.purchases, []);
   const afterActive = await request(app).get('/api/sponsorships/active');
