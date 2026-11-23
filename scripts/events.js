@@ -1003,6 +1003,18 @@
   const allCategories = document.getElementById('allCategories');
   const allCities = document.getElementById('allCities');
   const allSearch = document.getElementById('eventSearch');
+  if (allCategories) {
+    const requestedCategory = new URLSearchParams(window.location.search).get('category');
+    const requestedCategoryChip = Array.from(allCategories.querySelectorAll('button[data-category]'))
+      .find((button) => button.dataset.category === requestedCategory);
+    if (requestedCategoryChip) {
+      allCategories.querySelectorAll('button[data-category]').forEach((chip) => {
+        const isActive = chip === requestedCategoryChip;
+        chip.classList.toggle('is-active', isActive);
+        chip.setAttribute('aria-pressed', String(isActive));
+      });
+    }
+  }
   let refreshAllEvents = () => {};
   if (allCategories && allEvents) {
     const filterAllEvents = () => {

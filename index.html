@@ -67,7 +67,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/events.css?v=nav-labels-1">
+  <link rel="stylesheet" href="styles/events.css?v=category-marquee-1">
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=local-live-read-fallback-1" defer></script>
@@ -110,10 +110,42 @@
   </header>
   <nav class="explore-nav" aria-label="Explore events">
     <div class="wrap explore-nav-inner">
-      <a class="explore-link is-active" href="#events" data-home-category="All" aria-current="true">All events</a>
-      <a class="explore-link" href="#events" data-home-category="Festivals" aria-current="false">Festivals</a>
-      <a class="explore-link" href="#events" data-home-category="Community" aria-current="false">Community</a>
-      <a class="explore-link" href="events.html">Browse all events <span aria-hidden="true">→</span></a>
+      <a class="explore-link is-active explore-all-link" href="#events" aria-current="true">All events</a>
+      <div class="explore-marquee-window" role="group" aria-label="Event categories">
+        <div class="explore-marquee-track">
+          <div class="explore-marquee-sequence">
+            <a class="explore-link" href="events.html?category=Business">Business</a>
+            <a class="explore-link" href="events.html?category=Comedy">Comedy</a>
+            <a class="explore-link" href="events.html?category=Conferences%20%26%20Networking">Networking</a>
+            <a class="explore-link" href="gifts.html">Giftcards</a>
+            <a class="explore-link" href="events.html?category=Workshops%20%26%20Classes">Workshops</a>
+            <a class="explore-link" href="events.html?category=Movies%20%26%20Cinema">Movies and cinema</a>
+            <a class="explore-link" href="events.html?category=Food%20%26%20Drink">Food &amp; Drinks</a>
+            <a class="explore-link" href="events.html?category=Sports">Sports</a>
+            <a class="explore-link" href="events.html?category=Religious%20%26%20Faith">Religious and Faith</a>
+            <a class="explore-link" href="events.html?category=Arts%20%26%20Culture">Arts &amp; Culture</a>
+            <a class="explore-link" href="events.html?category=Conferences%20%26%20Networking">Conference</a>
+            <a class="explore-link" href="events.html?category=Festivals">Festivals</a>
+            <a class="explore-link" href="events.html?category=Community">Community</a>
+          </div>
+          <div class="explore-marquee-sequence" aria-hidden="true">
+            <span class="explore-link">Business</span>
+            <span class="explore-link">Comedy</span>
+            <span class="explore-link">Networking</span>
+            <span class="explore-link">Giftcards</span>
+            <span class="explore-link">Workshops</span>
+            <span class="explore-link">Movies and cinema</span>
+            <span class="explore-link">Food &amp; Drinks</span>
+            <span class="explore-link">Sports</span>
+            <span class="explore-link">Religious and Faith</span>
+            <span class="explore-link">Arts &amp; Culture</span>
+            <span class="explore-link">Conference</span>
+            <span class="explore-link">Festivals</span>
+            <span class="explore-link">Community</span>
+          </div>
+        </div>
+      </div>
+      <a class="explore-link explore-browse-link" href="events.html">Browse all events <span aria-hidden="true">→</span></a>
     </div>
   </nav>
 

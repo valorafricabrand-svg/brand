@@ -323,9 +323,16 @@ img { display: block; max-width: 100%; }
 .eyebrow { display: inline-flex; align-items: center; gap: 9px; color: var(--green); font-size: 11px; font-weight: 800; letter-spacing: .13em; }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #17a878; box-shadow: 0 0 0 4px #ddf5e9; }
 .explore-nav { border-bottom: 1px solid #e7eaf0; background: #fff7f6; }
-.explore-nav-inner { display: flex; min-height: 48px; align-items: center; gap: clamp(18px, 3vw, 38px); overflow-x: auto; scrollbar-width: thin; }
+.explore-nav-inner { display: flex; min-height: 48px; align-items: center; gap: clamp(10px, 1.5vw, 18px); overflow: hidden; }
 .explore-link { display: inline-flex; min-height: 48px; align-items: center; gap: 6px; flex: 0 0 auto; border-bottom: 2px solid transparent; color: #536174; font-size: 13px; font-weight: 700; }
 .explore-link:hover, .explore-link.is-active { border-color: var(--green); color: var(--green); }
+.explore-all-link, .explore-browse-link { white-space: nowrap; }
+.explore-marquee-window { min-width: 0; flex: 1 1 auto; overflow: hidden; }
+.explore-marquee-track { display: flex; width: max-content; animation: explore-category-scroll 42s linear infinite; }
+.explore-marquee-sequence { display: flex; flex: 0 0 auto; align-items: center; gap: clamp(18px, 3vw, 36px); padding-right: clamp(18px, 3vw, 36px); }
+.explore-marquee-window:hover .explore-marquee-track,
+.explore-marquee-window:focus-within .explore-marquee-track { animation-play-state: paused; }
+@keyframes explore-category-scroll { to { transform: translateX(-50%); } }
 .hero-promo { padding-top: clamp(18px, 3vw, 28px); }
 .hero-promo-window { position: relative; overflow: hidden; border-radius: 26px; box-shadow: 0 20px 50px rgba(20, 39, 58, .14); }
 .hero-promo-track { display: flex; }
@@ -963,7 +970,7 @@ img { display: block; max-width: 100%; }
   .wallet-filters .button { width: 100%; }
   .wallet-transactions-heading { flex-wrap: wrap; }
   .account-auth-actions { grid-template-columns: 1fr; }
-  .explore-nav-inner { width: 100%; padding-inline: 16px; gap: 23px; }
+  .explore-nav-inner { width: 100%; padding-inline: 16px; gap: 10px; }
   .explore-link { min-height: 44px; font-size: 12px; }
   .valor-ads { padding-top: 16px; }
   .ad-strip { margin-bottom: 12px; padding: 12px; border-radius: 13px; }
@@ -1094,6 +1101,9 @@ img { display: block; max-width: 100%; }
   .community-events-window { overflow-x: auto; scrollbar-width: thin; }
   .community-events-track { animation: none !important; }
   .community-event-group[aria-hidden="true"] { display: none; }
+  .explore-marquee-window { overflow-x: auto; scrollbar-width: thin; }
+  .explore-marquee-track { animation: none; }
+  .explore-marquee-sequence[aria-hidden="true"] { display: none; }
   .community-event-card:hover .community-event-media img, .community-event-card:hover .community-event-media video { transform: none; }
 }
 @keyframes ad-drift {
