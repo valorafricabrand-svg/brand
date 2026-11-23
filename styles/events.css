@@ -350,7 +350,7 @@ img { display: block; max-width: 100%; }
 .ad-strip-heading { display: flex; min-width: 172px; align-items: center; gap: 10px; }
 .ad-mark { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: 12px; color: #fff; background: var(--green); font: 800 20px Manrope, sans-serif; }
 .ad-strip-heading .section-kicker { margin: 0 0 1px; font-size: 9px; }
-.ad-strip-heading h1 { font: 800 15px Manrope, sans-serif; }
+.ad-strip-heading h1, .ad-strip-heading h2 { font: 800 15px Manrope, sans-serif; }
 .ad-topics { display: flex; min-width: 0; flex: 1; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: thin; }
 .ad-topic { display: inline-flex; min-height: 42px; align-items: center; gap: 7px; flex: 0 0 auto; padding: 0 13px; border: 1px solid #e8edf2; border-radius: 12px; color: #46566b; background: #f7f9fb; font-size: 12px; font-weight: 800; white-space: nowrap; }
 .ad-topic > span { color: var(--green); font-size: 15px; }
@@ -470,7 +470,8 @@ img { display: block; max-width: 100%; }
 .event-finder { display: flex; align-items: center; gap: 28px; margin-top: 16px; margin-bottom: 12px; padding: 18px 20px; border: 1px solid #e7edf3; border-radius: 14px; background: #fff; box-shadow: 0 5px 20px rgba(20,39,58,.04); }
 .finder-heading { flex: 0 0 auto; }
 .finder-heading .section-kicker { margin-bottom: 3px; }
-.finder-heading h2 { font: 800 19px Manrope, sans-serif; }
+.finder-heading h1, .finder-heading h2 { margin: 0; font: 800 clamp(16px, 1.55vw, 19px)/1.25 Manrope, sans-serif; }
+.finder-heading > p:not(.section-kicker) { max-width: 34ch; margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .hero-search { display: grid; width: 100%; grid-template-columns: 1fr 1fr auto; gap: 10px; }
 .hero-search-field { display: flex; min-width: 0; min-height: 47px; align-items: center; gap: 9px; padding: 0 12px; border: 1px solid #dbe2e9; border-radius: 8px; color: #566579; background: #fff; }
 .hero-search-field > span[aria-hidden], .hero-search-field svg { width: 16px; height: 16px; flex: 0 0 auto; color: var(--green); font-size: 20px; }
@@ -996,7 +997,7 @@ img { display: block; max-width: 100%; }
   .ad-arrow { width: 34px; height: 34px; }
   .advertise-link { margin-left: 3px; padding-inline: 3px; font-size: 10px; }
   .event-finder { gap: 10px; margin-top: 8px; margin-bottom: 2px; padding: 15px; }
-  .finder-heading h2 { font-size: 18px; }
+  .finder-heading h1, .finder-heading h2 { font-size: 18px; }
   .hero-search { grid-template-columns: 1fr; gap: 8px; }
   .hero-search .button-primary { width: 100%; }
   .event-hub { padding: 31px 0 38px; }
