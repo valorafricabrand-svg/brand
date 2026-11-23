@@ -7,9 +7,9 @@ Valor Africa is an event discovery, publishing, ticketing, and event-promotion p
 - `index.html` — a two-panel "hero promo" carousel at the very top showing the admin-managed homepage highlights (`GET /api/ads/hero`), the paid Valor Ads carousel just below it, event discovery and approved event listings, a "What people are saying" strip of real reviews from sold-out events, and a pausable right-to-left showcase of branding examples.
 - `events.html` — searchable and filterable event listings with M-Pesa and wallet checkout, a top-selling events section ranked by confirmed ticket sales, and the same branding showcase.
 - `account.html` — Google/email account sign-in, account session management, and sign-out. Sign-in links return users to the page they came from; the account session is maintained for the current browser tab.
-- `my-tickets.html`, `event.html`, and `organizer-dashboard.html` — account-linked ticket QR passes with a dedicated event feedback dashboard for ticket holders, event favorites, organizer sales summaries, and event editing/removal when there are no active ticket orders or promotions.
+- `my-tickets.html`, `event.html`, and `organizer-dashboard.html` — account-linked ticket QR passes with a dedicated event feedback dashboard for ticket holders, event favorites, organizer sales summaries, a visible ticket-commission disclosure, and event editing/removal when there are no active ticket orders or promotions.
 - `wallet.html` — one-time phone-wallet linking, M-Pesa deposits, and transaction history.
-- `host.html` — organizer event submission and local draft saving.
+- `host.html` — organizer event submission and local draft saving, with a 5% ticket-commission disclosure and required acknowledgement before publishing.
 - `partnership.html` — creator applications and tracking, plus signed-in organizer and sponsor inquiries with follow-up status alongside investor information.
 - `partners.html` — a showcase landing page listing all five partnership programs (event sponsors, event organizers, affiliates, artists & DJs, branding services) as independently expandable cards, each linking into its real flow.
 - `gifts.html` — Valor gift credit redeemable to a linked wallet and approved merchants' one-time voucher offers, with buyer and merchant tools.
