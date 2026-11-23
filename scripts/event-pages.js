@@ -182,6 +182,11 @@
     });
     reviewForm.addEventListener('submit', (submitEvent) => {
       submitEvent.preventDefault();
+      if (!starInput.getValue() && !reviewInput.value.trim()) {
+        status.textContent = 'Choose a star rating or write a review before saving.';
+        status.classList.add('error');
+        return;
+      }
       saveFeedback(loveButton.getAttribute('aria-pressed') === 'true', () => 'Your review has been saved.');
     });
     feedback.append(loveButton, reviewForm);
@@ -251,8 +256,11 @@
       const signIn = document.createElement('a');
       signIn.className = 'ticket-love event-detail-love';
       signIn.href = 'account.html?returnTo=' + encodeURIComponent(window.location.pathname + window.location.search + window.location.hash);
-      signIn.textContent = '♡ Favorite this event';
-      root.appendChild(signIn);
+      signIn.textContent = 'Sign in to leave feedback';
+      const note = document.createElement('p');
+      note.className = 'ticket-review-pending';
+      note.textContent = 'Ticket holders can rate and review this event after it ends.';
+      root.append(signIn, note);
       return;
     }
     const status = document.createElement('p');
@@ -260,10 +268,22 @@
     status.setAttribute('role', 'status');
     status.textContent = 'Loading your event feedback…';
     root.appendChild(status);
-    // Rating and review-writing lives on My Tickets, limited to attendees after the event ends
-    // (see createTicketFeedback) — the event page itself only offers a quick bookmark toggle.
     api('/api/account/events/' + encodeURIComponent(event.id) + '/feedback', { headers: { Authorization: 'Bearer ' + token } }).then((saved) => {
       status.remove();
+      if (saved.hasTicket) {
+        const feedback = createTicketFeedback({
+          eventId: event.id,
+          eventTitle: event.title,
+          loved: saved.loved,
+          rating: saved.rating,
+          review: saved.review,
+          endsAt: saved.endsAt || event.endsAt
+        });
+        feedback.classList.add('event-detail-feedback');
+        root.appendChild(feedback);
+        return;
+      }
+
       const { loveButton, loveText } = createLoveButton(saved.loved);
       loveButton.classList.add('event-detail-love');
       loveButton.addEventListener('click', async () => {
@@ -287,7 +307,14 @@
           loveButton.disabled = false;
         }
       });
-      root.appendChild(loveButton);
+      const note = document.createElement('p');
+      note.className = 'ticket-review-pending';
+      note.append('Ticket holders can leave a rating or review after the event ends. ');
+      const ticketsLink = document.createElement('a');
+      ticketsLink.href = 'my-tickets.html';
+      ticketsLink.textContent = 'Open tickets & feedback';
+      note.appendChild(ticketsLink);
+      root.append(loveButton, note);
     }).catch((error) => { status.textContent = error.message; status.classList.add('error'); });
   }
 

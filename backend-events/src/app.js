@@ -5410,20 +5410,38 @@ function createApp(options = {}) {
     }
   });
 
+  const accountHasTicketForEvent = (eventId, accountId) => Boolean(db.prepare(`
+    SELECT 1 FROM tickets t
+    JOIN orders o ON o.id=t.order_id
+    WHERE t.event_id=? AND o.order_type='ticket' AND o.status IN ('paid','confirmed')
+      AND (
+        o.account_id=? OR (
+          o.account_id IS NULL AND EXISTS (
+            SELECT 1 FROM wallets w WHERE w.account_id=?
+              AND substr(replace(replace(replace(replace(replace(o.phone,'+',''),' ',''),'-',''),'(',''),')',''),-9)
+                = substr(w.phone,-9)
+          )
+        )
+      )
+    LIMIT 1
+  `).get(eventId, accountId, accountId));
+
   app.get('/api/account/events/:eventId/feedback', requireAccount, (req, res, next) => {
-    const eventExists = db.prepare(`SELECT 1 FROM events WHERE id=? LIMIT 1`).get(req.params.eventId);
-    if (!eventExists) return res.status(404).json({ error: 'This event is not available.' });
+    const event = db.prepare(`SELECT ends_at FROM events WHERE id=? LIMIT 1`).get(req.params.eventId);
+    if (!event) return res.status(404).json({ error: 'This event is not available.' });
     try {
       const feedback = db.prepare(`
         SELECT loved,rating,review
         FROM event_feedback
         WHERE account_id=? AND event_id=?
       `).get(req.account.id, req.params.eventId);
-      res.json(feedback ? {
-        loved: Boolean(feedback.loved),
-        rating: feedback.rating,
-        review: feedback.review || ''
-      } : { loved: false, rating: null, review: '' });
+      res.json({
+        loved: Boolean(feedback && feedback.loved),
+        rating: feedback ? feedback.rating : null,
+        review: feedback ? feedback.review || '' : '',
+        hasTicket: accountHasTicketForEvent(req.params.eventId, req.account.id),
+        endsAt: event.ends_at
+      });
     } catch (error) {
       next(error);
     }
@@ -5446,21 +5464,7 @@ function createApp(options = {}) {
 
     const trimmedReview = review.trim();
     if (normalizedRating !== null || trimmedReview !== '') {
-      const attended = db.prepare(`
-        SELECT 1 FROM tickets t
-        JOIN orders o ON o.id=t.order_id
-        WHERE t.event_id=? AND o.order_type='ticket' AND o.status IN ('paid','confirmed')
-          AND (
-            o.account_id=? OR (
-              o.account_id IS NULL AND EXISTS (
-                SELECT 1 FROM wallets w WHERE w.account_id=?
-                  AND substr(replace(replace(replace(replace(replace(o.phone,'+',''),' ',''),'-',''),'(',''),')',''),-9)
-                    = substr(w.phone,-9)
-              )
-            )
-          )
-        LIMIT 1
-      `).get(req.params.eventId, req.account.id, req.account.id);
+      const attended = accountHasTicketForEvent(req.params.eventId, req.account.id);
       if (!attended) {
         return res.status(403).json({ error: 'You can only rate and review events you attended.' });
       }

@@ -1412,6 +1412,17 @@ test('free registrations require an account but do not require M-Pesa', async ()
   assert.match(accountTicket.qr, /^data:image\/png;base64,/);
 
   const unrelatedAuth = createTestAccountAuth('unrelated-ticket-owner@example.com');
+  const noTicketFeedback = await request(app).get(`/api/account/events/${submitted.body.id}/feedback`)
+    .set(unrelatedAuth);
+  assert.equal(noTicketFeedback.status, 200);
+  assert.equal(noTicketFeedback.body.hasTicket, false);
+
+  const ticketFeedback = await request(app).get(`/api/account/events/${submitted.body.id}/feedback`)
+    .set(accountAuth);
+  assert.equal(ticketFeedback.status, 200);
+  assert.equal(ticketFeedback.body.hasTicket, true);
+  assert.ok(ticketFeedback.body.endsAt);
+
   const noTicketReview = await request(app).post(`/api/account/events/${submitted.body.id}/feedback`)
     .set(unrelatedAuth).send({ loved: true, rating: 5, review: 'I was not even there.' });
   assert.equal(noTicketReview.status, 403);
