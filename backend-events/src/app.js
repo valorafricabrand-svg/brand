@@ -3194,11 +3194,17 @@ function createApp(options = {}) {
 
   app.get('/api/events', (req, res) => {
     const rows = db.prepare(`
-      SELECT * FROM events WHERE status = 'approved' AND deleted_at IS NULL
-        AND julianday(starts_at) > julianday('now') AND julianday(ends_at) > julianday('now')
-      ORDER BY starts_at ASC LIMIT 100
+      SELECT e.*,
+        COALESCE((
+          SELECT SUM(o.quantity) FROM orders o
+          WHERE o.event_id=e.id AND o.order_type='ticket' AND o.status IN ('paid','confirmed')
+        ),0) AS tickets_sold
+      FROM events e
+      WHERE e.status = 'approved' AND e.deleted_at IS NULL
+        AND julianday(e.starts_at) > julianday('now') AND julianday(e.ends_at) > julianday('now')
+      ORDER BY e.starts_at ASC LIMIT 100
     `).all();
-    res.json({ events: rows.map(publicEvent) });
+    res.json({ events: rows.map((row) => ({ ...publicEvent(row), ticketsSold: row.tickets_sold })) });
   });
 
   app.get('/api/events/:eventId/reviews', (req, res, next) => {

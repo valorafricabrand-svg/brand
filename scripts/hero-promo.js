@@ -133,7 +133,11 @@
     video.preload = 'auto';
     if (!video.src) video.src = video.dataset.src;
     video.setAttribute('autoplay', '');
-    video.play().catch(() => {});
+    video.play().catch((error) => {
+      if (error.name !== 'AbortError') {
+        console.warn('Homepage highlight video could not start:', error.message);
+      }
+    });
   }
 
   function showSlide(index, playVideoImmediately = false) {
@@ -144,7 +148,7 @@
       slide.classList.toggle('is-active', isActive);
       const video = slide.querySelector('video');
       if (video) {
-        if (isActive && (playVideoImmediately || video.src)) {
+        if (isActive && (playVideoImmediately || !document.hidden)) {
           startActiveVideo(video);
         } else {
           video.pause();
@@ -201,7 +205,7 @@
     });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) track.querySelectorAll('video').forEach((video) => video.pause());
-      else showSlide(active);
+      else showSlide(active, true);
     });
     scheduleVideoPlayback();
 

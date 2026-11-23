@@ -623,19 +623,48 @@
   function renderEvents(container, list) {
     if (!container) return;
     const cards = list.map(createEventCard);
-    if (container.id === 'featuredEvents' || container.id === 'allEvents') {
+    if (container.id === 'featuredEvents') {
       cards.splice(Math.min(2, cards.length), 0, createSponsoredAdRail());
-      if (list.length >= 8) {
-        cards.splice(Math.min(8, cards.length), 0, createSponsoredEventsRail());
-      }
+    } else if (container.id === 'allEvents' && list.length >= 8) {
+      cards.splice(Math.min(8, cards.length), 0, createSponsoredEventsRail());
     }
     container.replaceChildren(...cards);
+  }
+
+  function renderTopSellingEvents() {
+    if (!topSellingEventsSection || !topSellingEventsGrid) return;
+    const topEvents = events
+      .filter((event) => Number(event.ticketsSold) > 0 && Array.isArray(event.tickets) && event.tickets.length)
+      .sort((left, right) => Number(right.ticketsSold) - Number(left.ticketsSold) ||
+        Date.parse(left.startsAt) - Date.parse(right.startsAt))
+      .slice(0, 3);
+    topSellingEventsGrid.replaceChildren(...topEvents.map((event) => {
+      const card = createEventCard(event);
+      card.classList.add('top-selling-event-card');
+      const body = card.querySelector('.event-card-body');
+      if (body) {
+        const sales = document.createElement('p');
+        sales.className = 'top-selling-event-sales';
+        const count = Number(event.ticketsSold).toLocaleString('en-KE');
+        sales.textContent = `${count} confirmed ${Number(event.ticketsSold) === 1 ? 'ticket' : 'tickets'} sold`;
+        body.insertBefore(sales, body.querySelector('.event-countdown'));
+      }
+      return card;
+    }));
+    topSellingEventsSection.hidden = topEvents.length === 0;
+  }
+
+  function renderFeaturedOffers() {
+    if (featuredOffers) featuredOffers.replaceChildren(createSponsoredAdRail());
   }
 
   const featured = document.getElementById('featuredEvents');
   renderSkeletonCards(featured, 4);
   const allEvents = document.getElementById('allEvents');
   renderSkeletonCards(allEvents, 6);
+  const topSellingEventsSection = document.getElementById('topSellingEventsSection');
+  const topSellingEventsGrid = document.getElementById('topSellingEventsGrid');
+  const featuredOffers = document.getElementById('featuredOffers');
 
   const adSlides = document.getElementById('adSlides');
   const adStage = document.getElementById('adStage');
@@ -1099,6 +1128,8 @@
 
     if (featured) renderEvents(featured, events);
     if (allEvents) renderEvents(allEvents, events);
+    renderTopSellingEvents();
+    renderFeaturedOffers();
     applyHomeFilters();
     refreshAllEvents();
     updateNextCountdown();
@@ -1122,6 +1153,8 @@
     if (data.featuredError) console.warn('Sponsored event listings could not be loaded:', data.featuredError);
     if (featured) renderEvents(featured, events);
     if (allEvents) renderEvents(allEvents, events);
+    renderTopSellingEvents();
+    renderFeaturedOffers();
     applyHomeFilters();
     refreshAllEvents();
     refreshPromotionalCarousel();

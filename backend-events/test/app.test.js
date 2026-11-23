@@ -415,6 +415,7 @@ test('signed-in event submissions publish immediately and admins can unpublish t
   const publicEvents = await request(app).get('/api/events');
   assert.equal(publicEvents.body.events.length, 1);
   assert.equal(publicEvents.body.events[0].title, 'Test Live Festival');
+  assert.equal(publicEvents.body.events[0].ticketsSold, 0);
   assert.equal((await request(app).get(`/api/events/by-slug/${created.body.slug}`)).status, 200);
 
   assert.equal((await request(app).get('/api/events/mine')).status, 401);
@@ -1347,6 +1348,13 @@ test('events with ticket orders cannot be edited or removed by organizers', asyn
     INSERT INTO orders (id,access_token_hash,order_type,event_id,buyer_name,phone,ticket_type,quantity,amount_kes)
     VALUES (?,?,?,?,?,?,?,?,?)
   `).run(crypto.randomUUID(), 'test-access-hash', 'ticket', created.id, 'Ticket Buyer', '254712345678', 'Regular', 1, 1200);
+  const pendingPublicEvent = (await request(app).get('/api/events')).body.events
+    .find((event) => event.id === created.id);
+  assert.equal(pendingPublicEvent.ticketsSold, 0);
+  db.prepare("UPDATE orders SET status='paid' WHERE event_id=?").run(created.id);
+  const paidPublicEvent = (await request(app).get('/api/events')).body.events
+    .find((event) => event.id === created.id);
+  assert.equal(paidPublicEvent.ticketsSold, 1);
   const ownerEvent = (await request(app).get('/api/events/mine').set(owner)).body.events
     .find((event) => event.id === created.id);
   assert.equal(ownerEvent.hasActiveOrders, true);
