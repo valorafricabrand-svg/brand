@@ -231,6 +231,15 @@ img { display: block; max-width: 100%; }
 .ticket-review-pending { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .ticket-feedback-status { min-height: 1.5em; color: #067647; }
 .ticket-feedback-status.error { color: #b42318; }
+.ticket-feedback-dashboard { margin-bottom: 30px; }
+.ticket-feedback-dashboard > h2, .ticket-pass-list > h2 { margin: 0 0 8px; font: 800 24px/1.2 Manrope, sans-serif; }
+.ticket-feedback-dashboard > p { margin: 0 0 16px; color: var(--muted); }
+.ticket-feedback-dashboard-list { display: grid; gap: 14px; }
+.ticket-feedback-dashboard-item { padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: #fbfcfd; }
+.ticket-feedback-dashboard-item > h3 { margin: 0 0 4px; font: 800 18px/1.3 Manrope, sans-serif; }
+.ticket-feedback-dashboard-item > p { margin: 0; color: var(--muted); font-size: 13px; }
+.ticket-feedback-dashboard-item .ticket-feedback { justify-items: start; width: 100%; max-width: none; }
+.ticket-pass-list > h2 { margin-bottom: 14px; }
 .star-rating-field { display: grid; gap: 6px; }
 .star-rating-field > span:first-child { color: #35445a; font-size: 13px; font-weight: 700; }
 .star-rating-input { display: inline-flex; gap: 4px; }

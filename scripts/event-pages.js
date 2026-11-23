@@ -1441,6 +1441,22 @@
       const fragment = document.createDocumentFragment();
       const emailNotices = new Set();
       const feedbackEvents = new Set();
+      const feedbackDashboard = document.createElement('section');
+      feedbackDashboard.className = 'ticket-feedback-dashboard';
+      feedbackDashboard.setAttribute('aria-labelledby', 'ticketFeedbackHeading');
+      const feedbackHeading = document.createElement('h2');
+      feedbackHeading.id = 'ticketFeedbackHeading';
+      feedbackHeading.textContent = 'Your event feedback';
+      const feedbackIntro = document.createElement('p');
+      feedbackIntro.textContent = 'Rate and review events you attended. Feedback opens after the event ends.';
+      const feedbackList = document.createElement('div');
+      feedbackList.className = 'ticket-feedback-dashboard-list';
+      feedbackDashboard.append(feedbackHeading, feedbackIntro, feedbackList);
+      const ticketList = document.createElement('section');
+      ticketList.className = 'ticket-pass-list';
+      const ticketHeading = document.createElement('h2');
+      ticketHeading.textContent = 'Your tickets';
+      ticketList.appendChild(ticketHeading);
       result.tickets.forEach((ticket) => {
         const section = document.createElement('article');
         section.className = 'issued-ticket';
@@ -1463,6 +1479,12 @@
         section.append(title, details, code, qr, eventLink);
         if (!feedbackEvents.has(ticket.eventId)) {
           feedbackEvents.add(ticket.eventId);
+          const feedbackItem = document.createElement('article');
+          feedbackItem.className = 'ticket-feedback-dashboard-item';
+          const feedbackTitle = document.createElement('h3');
+          feedbackTitle.textContent = ticket.eventTitle;
+          const feedbackDate = document.createElement('p');
+          feedbackDate.textContent = `${escapeDate(ticket.startsAt)} · ${ticket.venueName || ticket.city}`;
           const feedback = createTicketFeedback({
             eventId: ticket.eventId,
             eventTitle: ticket.eventTitle,
@@ -1471,7 +1493,8 @@
             review: ticket.review,
             endsAt: ticket.endsAt
           });
-          section.appendChild(feedback);
+          feedbackItem.append(feedbackTitle, feedbackDate, feedback);
+          feedbackList.appendChild(feedbackItem);
         }
         if (['not_sent','sending','failed'].includes(ticket.ticketEmailStatus) && !emailNotices.has(ticket.orderId)) {
           const notice = document.createElement('p');
@@ -1479,8 +1502,9 @@
           section.appendChild(notice);
           emailNotices.add(ticket.orderId);
         }
-        fragment.appendChild(section);
+        ticketList.appendChild(section);
       });
+      fragment.append(feedbackDashboard, ticketList);
       root.replaceChildren(fragment);
     } catch (error) {
       if (/sign in|session has expired/i.test(error.message)) {
