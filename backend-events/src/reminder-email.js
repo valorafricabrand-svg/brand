@@ -1,3 +1,5 @@
+const { emailBrandHeader } = require('./email-brand');
+
 function isConfigured() {
   return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
 }
@@ -61,6 +63,7 @@ async function sendTicketCountdown({
       : `${daysRemaining} days until ${eventTitle}`;
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17221e">
+      ${emailBrandHeader()}
       <h1 style="color:#087f5b;font-size:24px">Your event is ${label}</h1>
       <p>${greeting} just a reminder that your tickets for <strong>${name}</strong> are coming up ${label}.</p>
       <table style="width:100%;border-collapse:collapse;font-size:14px">
@@ -100,6 +103,7 @@ async function sendViewReminder({
   const subject = `Still interested in ${eventTitle}?`;
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17221e">
+      ${emailBrandHeader()}
       <h1 style="color:#087f5b;font-size:24px">Still thinking about it?</h1>
       <p>${greeting} you checked out <strong>${name}</strong> on Valor Africa. It's happening ${label} — tickets are still available.</p>
       <table style="width:100%;border-collapse:collapse;font-size:14px">

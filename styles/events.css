@@ -124,11 +124,11 @@ img { display: block; max-width: 100%; }
   .event-review-list { grid-template-columns: 1fr; }
 }
 .button.secondary { border: 1px solid var(--border); color: #35445a; background: #fff; }
-.service-nav { display: flex; align-items: center; gap: 16px; color: var(--green-dark); font-size: 14px; font-weight: 800; }
-.service-nav a:hover { color: var(--green); }
+.service-nav { display: flex; align-items: center; gap: 16px; color: #edf5f0; font-size: 14px; font-weight: 800; }
+.service-nav a:hover { color: #ffd663; }
 .nav-account-signout { padding: 0; border: 0; color: inherit; background: transparent; font: inherit; cursor: pointer; }
-.nav-account-signout:hover { color: var(--green); }
-.nav-account-status { flex-basis: 100%; color: #a3261a; font-size: 12px; font-weight: 600; }
+.nav-account-signout:hover { color: #ffd663; }
+.nav-account-status { flex-basis: 100%; color: #ffb4a9; font-size: 12px; font-weight: 600; }
 .nav-account-signout[hidden], .nav-account-status[hidden] { display: none; }
 .wallet-page > h1 { margin: 4px 0 12px; font: 800 clamp(30px, 5vw, 46px)/1.1 Manrope, sans-serif; }
 .wallet-dashboard { display: grid; gap: 24px; }
@@ -176,7 +176,7 @@ img { display: block; max-width: 100%; }
 .auth-hero-backdrop::after { position: absolute; inset: 0; content: ""; background-image: radial-gradient(rgba(255,255,255,.14) 1px, transparent 1px); background-size: 22px 22px; opacity: .5; }
 .auth-hero-inner { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 22px; }
 .auth-logo { display: inline-flex; }
-.auth-logo .brand-mark { width: 56px; height: 56px; font-size: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.auth-logo .brand-mark { width: 56px; height: 56px; box-shadow: none; }
 .auth-card { width: min(440px, 100%); padding: clamp(28px, 4vw, 40px); border-radius: 22px; background: #fff; box-shadow: 0 30px 80px rgba(3,20,16,.35); }
 .auth-card-heading { margin-bottom: 22px; text-align: center; }
 .auth-card-heading h1 { margin: 10px 0 8px; color: #10251f; font: 800 clamp(26px, 4vw, 32px)/1.15 Manrope, sans-serif; letter-spacing: -.03em; }
@@ -292,18 +292,22 @@ img { display: block; max-width: 100%; }
 .skip-link:focus { left: 12px; top: 12px; }
 :focus-visible { outline: 3px solid #efaa21; outline-offset: 3px; }
 
-.site-header { position: sticky; z-index: 30; top: 0; background: rgba(255,255,255,.96); border-bottom: 1px solid #e7edf3; backdrop-filter: blur(12px); }
+.site-header { position: sticky; z-index: 30; top: 0; background: #10251f; border-bottom: 1px solid rgba(255,255,255,.12); }
 .nav { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-.brand { display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.brand-mark { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; color: #fff; background: var(--green); font: 800 22px Manrope, sans-serif; }
-.brand-copy { display: flex; flex-direction: column; color: var(--ink); font: 800 17px Manrope, sans-serif; line-height: 1.15; }
+.brand { display: inline-flex; align-items: center; gap: 0; flex-shrink: 0; }
+.brand-mark { width: 40px; height: 40px; display: block; border-radius: 0; color: transparent; background: url("../images/valor-africa-symbol.png") center / contain no-repeat; font-size: 0; }
+.brand .brand-mark { width: 220px; height: 54px; background-image: url("../images/valor-africa-logo-light.png"); }
+.brand-copy { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .brand-copy small { margin-top: 4px; color: var(--green); font: 700 9px "DM Sans", sans-serif; letter-spacing: .13em; }
-.nav-links { display: flex; align-items: center; gap: 30px; color: #455268; font-size: 14px; font-weight: 700; }
-.nav-links > a:not(.nav-host):hover, .footer-links a:hover { color: var(--green); }
+.nav-links { display: flex; align-items: center; gap: 30px; color: #edf5f0; font-size: 14px; font-weight: 700; }
+.nav-links > a:not(.nav-host):hover { color: #ffd663; }
+.footer-links a:hover { color: var(--green); }
 .nav-host { padding: 11px 17px; border-radius: 999px; color: #fff; background: var(--green); }
 .nav-host:hover, .button-primary:hover { background: #056d4e; }
-.menu-toggle { display: none; width: 42px; height: 42px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: white; }
-.menu-toggle span { display: block; height: 2px; margin: 4px 0; background: var(--ink); }
+.site-header .nav-host { color: #10251f; background: #ffd663; }
+.site-header .nav-host:hover { background: #e7b93f; }
+.menu-toggle { display: none; width: 42px; height: 42px; padding: 10px; border: 1px solid rgba(255,255,255,.35); border-radius: 10px; background: rgba(255,255,255,.08); }
+.menu-toggle span { display: block; height: 2px; margin: 4px 0; background: #fff; }
 
 .site-history-nav { position: fixed; z-index: 900; left: 14px; bottom: 14px; display: flex; overflow: hidden; border-radius: 999px; background: rgba(6, 20, 16, .88); backdrop-filter: blur(10px); box-shadow: 0 10px 26px rgba(0,0,0,.25); }
 .site-history-button { display: flex; width: 46px; height: 46px; align-items: center; justify-content: center; padding: 0; border: 0; color: #fff; background: transparent; cursor: pointer; transition: background .15s ease; }
@@ -641,7 +645,7 @@ img { display: block; max-width: 100%; }
 .site-footer { margin-top: 64px; padding: 54px 0 20px; color: #c8d3df; background: #10251f; }
 .footer-inner { display: grid; grid-template-columns: minmax(220px, 1.35fr) repeat(3, minmax(135px, .75fr)); gap: 42px; }
 .footer-brand-block > p { max-width: 290px; margin: 18px 0 12px; color: #b4c4be; font-size: 14px; }
-.footer-brand .brand-mark { width: 38px; height: 38px; font-size: 19px; }
+.footer-brand .brand-mark { width: 220px; height: 54px; background-image: url("../images/valor-africa-logo-light.png"); }
 .footer-brand .brand-copy { color: #fff; font-size: 15px; }
 .footer-brand .brand-copy small { color: #76d7ad; font-size: 8px; }
 .footer-email { color: #fff; font-size: 13px; font-weight: 700; }
@@ -952,7 +956,7 @@ img { display: block; max-width: 100%; }
   .wallet-transactions-heading { flex-wrap: wrap; }
   .account-auth-actions { grid-template-columns: 1fr; }
   .menu-toggle { display: block; }
-  .nav-links { position: absolute; top: calc(100% - 1px); right: 0; left: 0; display: none; align-items: stretch; gap: 0; padding: 10px 16px 17px; border-bottom: 1px solid var(--border); background: #fff; box-shadow: 0 12px 18px rgba(20,39,58,.08); }
+  .nav-links { position: absolute; top: calc(100% - 1px); right: 0; left: 0; display: none; align-items: stretch; gap: 0; padding: 10px 16px 17px; border-bottom: 1px solid rgba(255,255,255,.12); background: #10251f; box-shadow: 0 12px 18px rgba(0,0,0,.24); }
   .nav-links.is-open { display: flex; flex-direction: column; }
   .nav-links > a, .nav-links > .nav-account-signout { padding: 12px 8px; text-align: left; }
   .nav-links .nav-host { margin-top: 4px; text-align: center; }

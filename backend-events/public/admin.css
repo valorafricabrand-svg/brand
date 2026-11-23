@@ -6,9 +6,9 @@ button{cursor:pointer}
 [hidden]{display:none!important}
 .admin-shell{width:min(1080px,calc(100% - 32px));margin:0 auto;padding:20px 0 60px}
 .admin-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:34px}
-.admin-brand{display:flex;align-items:center;gap:10px;color:var(--ink);font-weight:800;text-decoration:none}
+.admin-brand{display:flex;align-items:center;gap:12px;color:var(--ink);font-weight:800;text-decoration:none}
+.admin-brand img{display:block;width:220px;height:54px;object-fit:contain}
 .admin-brand small{display:block;color:var(--green);font-size:9px;letter-spacing:.13em}
-.brand-mark{display:grid;width:40px;height:40px;place-items:center;border-radius:12px;background:var(--green);color:#fff;font-size:20px}
 .card{padding:clamp(20px,4vw,32px);border:1px solid var(--border);border-radius:16px;background:#fff;box-shadow:0 10px 30px rgba(20,39,58,.05)}
 .login-card{width:min(100%,450px);margin:8vh auto 0}
 h1,h2,p{margin-top:0}

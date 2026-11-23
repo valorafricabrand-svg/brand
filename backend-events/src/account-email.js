@@ -1,3 +1,5 @@
+const { emailBrandHeader, escapeHtml } = require('./email-brand');
+
 function isConfigured() {
   return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
 }
@@ -14,6 +16,10 @@ async function sendCode(email, code, purpose, context = {}) {
     : purpose === 'wallet_link'
       ? `Your Valor Africa code to link phone ${context.phone} to your wallet is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email and your wallet will remain unchanged.`
       : `Your Valor Africa verification code is ${code}. It expires in 10 minutes.`;
+  const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17221e">
+    ${emailBrandHeader()}
+    <p>${escapeHtml(message)}</p>
+  </div>`;
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -24,6 +30,7 @@ async function sendCode(email, code, purpose, context = {}) {
       from: process.env.RESEND_FROM_EMAIL,
       to: [email],
       subject,
+      html,
       text: message
     }),
     signal: AbortSignal.timeout(12000)

@@ -1,5 +1,6 @@
 const QRCode = require('qrcode');
 const db = require('./db');
+const { emailBrandHeader } = require('./email-brand');
 
 function isConfigured() {
   return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
@@ -59,6 +60,7 @@ async function sendConfirmation(orderId, publicSiteUrl) {
   ).join('\n');
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17221e">
+      ${emailBrandHeader()}
       <h1 style="color:#087f5b;font-size:24px">Your tickets are confirmed</h1>
       <p>Thanks for booking with Valor Africa. Your individual QR entry passes are attached.</p>
       <table style="width:100%;border-collapse:collapse;font-size:14px">

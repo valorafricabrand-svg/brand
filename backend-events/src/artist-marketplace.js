@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { normalizeKenyanPhone } = require('./kenyan-phone');
 const artistBookingEmail = require('./artist-booking-email');
+const { emailBrandHeader } = require('./email-brand');
 
 const CREATOR_COMMISSION_PERCENT = 5;
 const DEPOSIT_PERCENT = 40;
@@ -191,6 +192,7 @@ function registerArtistMarketplaceRoutes(app, {
     }).join('');
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#17221e">
+        ${emailBrandHeader()}
         <h1 style="color:#087f5b;font-size:24px">${escapeHtml(content.heading)}</h1>
         <p>${escapeHtml(greeting)} ${escapeHtml(content.message)}</p>
         <table style="width:100%;border-collapse:collapse;font-size:14px">
