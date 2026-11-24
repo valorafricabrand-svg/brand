@@ -140,6 +140,12 @@ function normalizePhone(value) {
   return normalizeKenyanPhone(value);
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'
+  }[char]));
+}
+
 function validImage(buffer) {
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'jpg';
   if (buffer.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) return 'png';
@@ -3335,6 +3341,55 @@ function createApp(options = {}) {
         soldOut: row.capacity !== null && row.tickets_sold >= row.capacity
       }
     });
+  });
+
+  // Social apps (WhatsApp, Facebook, X, Slack, Telegram) fetch a shared link's HTML directly and
+  // read its <meta> tags without running JavaScript, so event.html's client-rendered Event meta
+  // never reaches them — every shared event looked like the generic homepage. This endpoint
+  // server-renders the real title/description/image for that one event, then sends a human
+  // visitor straight on to the interactive page; share links should point here, not at event.html.
+  app.get('/share/event/:slug', (req, res) => {
+    const row = db.prepare(`
+      SELECT title, description, poster_url, starts_at, venue_name, city
+      FROM events WHERE slug = ? AND status = 'approved' AND deleted_at IS NULL
+    `).get(req.params.slug);
+    const eventUrl = `${publicSiteUrl}/event.html?slug=${encodeURIComponent(req.params.slug)}`;
+    if (!row) {
+      res.redirect(302, `${publicSiteUrl}/events.html`);
+      return;
+    }
+    const title = `${row.title} | Valor Africa Events`;
+    const description = (row.description && row.description.trim())
+      || `Event details and tickets for ${row.title} on Valor Africa Events.`;
+    const imageUrl = row.poster_url
+      ? `${req.protocol}://${req.get('host')}${row.poster_url}`
+      : `${publicSiteUrl}/images/og-image.png`;
+    res.type('html').send(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(title)}</title>
+<meta name="description" content="${escapeHtml(description)}">
+<meta name="robots" content="noindex, follow">
+<link rel="canonical" href="${escapeHtml(eventUrl)}">
+<meta property="og:type" content="event">
+<meta property="og:site_name" content="Valor Africa Events">
+<meta property="og:title" content="${escapeHtml(title)}">
+<meta property="og:description" content="${escapeHtml(description)}">
+<meta property="og:url" content="${escapeHtml(eventUrl)}">
+<meta property="og:image" content="${escapeHtml(imageUrl)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${escapeHtml(title)}">
+<meta name="twitter:description" content="${escapeHtml(description)}">
+<meta name="twitter:image" content="${escapeHtml(imageUrl)}">
+<meta http-equiv="refresh" content="0; url=${escapeHtml(eventUrl)}">
+</head>
+<body>
+<p>Loading <a href="${escapeHtml(eventUrl)}">${escapeHtml(row.title)}</a>&hellip;</p>
+<script>location.replace(${JSON.stringify(eventUrl)});</script>
+</body>
+</html>
+`);
   });
 
   app.post('/api/events/:id/views', eventViewLimiter, (req, res) => {

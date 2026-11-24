@@ -562,8 +562,47 @@
       secureNote.className = 'event-detail-secure-note';
       secureNote.textContent = 'Secure checkout · Free tickets require no payment; paid tickets are confirmed after payment.';
       copy.append(categories, heading, details, priceLabel, tickets);
-      if (slug) copy.append(bookLink, secureNote);
-      else {
+      if (slug) {
+        copy.append(bookLink, secureNote);
+        // Pasting this page's own address-bar URL into WhatsApp/Facebook/X shows only the
+        // generic site preview, since those apps never run the script that fills in this
+        // event's real title, description, and poster. /share/event/:slug (also used by the
+        // listing page's Share buttons) server-renders those tags for this one event.
+        const shareUrl = window.valorEventsApiBase
+          ? `${window.valorEventsApiBase}/share/event/${encodeURIComponent(slug)}`
+          : canonical.href;
+        const shareActions = document.createElement('div');
+        shareActions.className = 'event-card-actions';
+        const shareButton = document.createElement('button');
+        shareButton.type = 'button';
+        shareButton.className = 'event-share-button';
+        shareButton.textContent = 'Share this event';
+        const feedback = document.createElement('span');
+        feedback.className = 'event-share-feedback';
+        feedback.setAttribute('role', 'status');
+        feedback.setAttribute('aria-live', 'polite');
+        shareButton.addEventListener('click', async () => {
+          const shareText = `Check out ${event.title} on Valor Africa`;
+          try {
+            if (navigator.share) {
+              await navigator.share({ title: event.title, text: shareText, url: shareUrl });
+            } else {
+              await navigator.clipboard.writeText(shareUrl);
+              feedback.textContent = 'Event link copied.';
+            }
+          } catch (error) {
+            if (error.name !== 'AbortError') feedback.textContent = `Could not share this event: ${error.message}`;
+          }
+        });
+        const whatsappLink = document.createElement('a');
+        whatsappLink.className = 'event-share-button';
+        whatsappLink.href = `https://wa.me/?text=${encodeURIComponent(`Check out ${event.title} on Valor Africa: ${shareUrl}`)}`;
+        whatsappLink.target = '_blank';
+        whatsappLink.rel = 'noopener noreferrer';
+        whatsappLink.textContent = 'WhatsApp';
+        shareActions.append(shareButton, whatsappLink, feedback);
+        copy.appendChild(shareActions);
+      } else {
         const previewNote = document.createElement('p');
         previewNote.className = 'event-detail-secure-note';
         previewNote.textContent = 'This is a preview listing. Ticket checkout is available for events published through Valor Africa.';

@@ -3275,6 +3275,31 @@ test('the events sitemap lists only approved events as absolute public-site URLs
   assert.equal(sitemap.text.includes('city=Malindi'), false);
 });
 
+test('the share preview page server-renders event-specific meta tags and redirects browsers onward', async () => {
+  const owner = createTestAccountAuth('share-owner@example.com');
+  const approved = createStoredTestEvent('Share Preview Festival', owner);
+  db.prepare("UPDATE events SET description=? WHERE id=?").run('A real description for sharing.', approved.id);
+
+  const page = await request(app).get(`/share/event/${approved.slug}`);
+  assert.equal(page.status, 200);
+  assert.match(page.headers['content-type'], /html/);
+  assert.match(page.text, /<title>Share Preview Festival \| Valor Africa Events<\/title>/);
+  assert.match(page.text, /<meta property="og:title" content="Share Preview Festival \| Valor Africa Events">/);
+  assert.match(page.text, /<meta property="og:description" content="A real description for sharing\.">/);
+  assert.match(
+    page.text,
+    new RegExp(`<meta property="og:url" content="https://valorafrica\\.co\\.ke/event\\.html\\?slug=${approved.slug}">`)
+  );
+  assert.match(page.text, /<meta name="robots" content="noindex, follow">/);
+  assert.match(page.text, new RegExp(`location\\.replace\\("https://valorafrica\\.co\\.ke/event\\.html\\?slug=${approved.slug}"\\)`));
+
+  const pending = createStoredTestEvent('Share Pending Festival', owner);
+  db.prepare("UPDATE events SET status='pending' WHERE id=?").run(pending.id);
+  const missing = await request(app).get(`/share/event/${pending.slug}`);
+  assert.equal(missing.status, 302);
+  assert.equal(missing.headers.location, 'https://valorafrica.co.ke/events.html');
+});
+
 after(() => {
   db.close();
   fs.rmSync(path.join(__dirname, '..', '.test-uploads'), { recursive: true, force: true });

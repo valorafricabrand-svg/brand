@@ -419,6 +419,13 @@
   }
 
   function eventShareUrl(event) {
+    if (event.slug && window.valorEventsApiBase) {
+      // A shared link needs to be readable by WhatsApp/Facebook/X preview bots, which fetch the
+      // URL's raw HTML and never run event.html's client-side script that fills in the real
+      // title, description, and poster image. /share/event/:slug server-renders those tags for
+      // that one event, then sends a human visitor straight on to the interactive page.
+      return `${window.valorEventsApiBase}/share/event/${encodeURIComponent(event.slug)}`;
+    }
     const url = new URL('event.html', window.location.href);
     if (event.slug) {
       url.searchParams.set('slug', event.slug);
