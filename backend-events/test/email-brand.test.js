@@ -29,7 +29,7 @@ test('account emails include the logo and keep their plain-text content', async 
   const email = await captureEmail(t, () => sendCode('buyer@example.test', '482913', 'wallet_link', {
     phone: '+254 <123>'
   }));
-  assert.match(email.html, /src="https:\/\/valorafrica\.co\.ke\/images\/valor-africa-logo\.png"/);
+  assert.match(email.html, /src="https:\/\/valorafrica\.co\.ke\/images\/valor-africa-logo-light\.png"/);
   assert.match(email.html, /&lt;123&gt;/);
   assert.match(email.text, /482913/);
   assert.match(email.text, /<123>/);
@@ -49,6 +49,6 @@ test('ticket reminders include the logo while retaining ticket links in plain te
     daysRemaining: 1,
     publicSiteUrl: 'https://valorafrica.co.ke'
   }));
-  assert.match(email.html, /images\/valor-africa-logo\.png/);
+  assert.match(email.html, /images\/valor-africa-logo-light\.png/);
   assert.match(email.text, /View your tickets: https:\/\/valorafrica\.co\.ke\/my-tickets\.html/);
 });

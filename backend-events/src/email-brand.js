@@ -1,8 +1,8 @@
-const LOGO_URL = 'https://valorafrica.co.ke/images/valor-africa-logo.png';
+const LOGO_URL = 'https://valorafrica.co.ke/images/valor-africa-logo-light.png';
 
 function emailBrandHeader() {
-  return `<div style="margin:0 0 24px;text-align:center">
-    <img src="${LOGO_URL}" alt="Valor Africa Events &amp; Tickets" width="220" style="display:block;width:220px;max-width:100%;height:auto;margin:auto;border:0">
+  return `<div style="margin:0 0 24px;text-align:center;background-color:#10251f;padding:22px 16px;border-radius:12px">
+    <img src="${LOGO_URL}" alt="Valor Africa Events &amp; Tickets" width="200" style="display:block;width:200px;max-width:100%;height:auto;margin:auto;border:0">
   </div>`;
 }
 
