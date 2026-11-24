@@ -3359,8 +3359,9 @@ function createApp(options = {}) {
       return;
     }
     const title = `${row.title} | Valor Africa Events`;
-    const description = (row.description && row.description.trim())
+    const rawDescription = (row.description && row.description.trim().replace(/\s+/g, ' '))
       || `Event details and tickets for ${row.title} on Valor Africa Events.`;
+    const description = rawDescription.length > 300 ? `${rawDescription.slice(0, 299)}…` : rawDescription;
     const imageUrl = row.poster_url
       ? `${req.protocol}://${req.get('host')}${row.poster_url}`
       : `${publicSiteUrl}/images/og-image.png`;
