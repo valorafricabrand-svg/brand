@@ -3256,6 +3256,23 @@ test('event pages report sold-out status and homepage review highlights include 
   assert.ok(afterReschedule.body.highlights.some((item) => item.eventSlug === soldOutEvent.slug));
 });
 
+test('the events sitemap lists only approved events as absolute public-site URLs', async () => {
+  const owner = createTestAccountAuth('sitemap-owner@example.com');
+  const approved = createStoredTestEvent('Sitemap Test Festival', owner);
+  const pending = createStoredTestEvent('Sitemap Pending Festival', owner);
+  db.prepare("UPDATE events SET status='pending' WHERE id=?").run(pending.id);
+
+  const sitemap = await request(app).get('/sitemap-events.xml');
+  assert.equal(sitemap.status, 200);
+  assert.match(sitemap.headers['content-type'], /xml/);
+  assert.match(sitemap.text, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
+  assert.match(
+    sitemap.text,
+    new RegExp(`<loc>https://valorafrica\\.co\\.ke/event\\.html\\?slug=${approved.slug}</loc>`)
+  );
+  assert.equal(sitemap.text.includes(pending.slug), false);
+});
+
 after(() => {
   db.close();
   fs.rmSync(path.join(__dirname, '..', '.test-uploads'), { recursive: true, force: true });
