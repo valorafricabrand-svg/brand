@@ -1,6 +1,6 @@
-const QRCode = require('qrcode');
 const db = require('./db');
 const { emailBrandHeader } = require('./email-brand');
+const { renderTicketImage } = require('./ticket-image');
 
 function isConfigured() {
   return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL);
@@ -50,9 +50,9 @@ async function sendConfirmation(orderId, publicSiteUrl) {
   const total = Number(order.amountKes) === 0 ? 'Free' : `KES ${Number(order.amountKes).toLocaleString('en-KE')}`;
   const attachments = await Promise.all(tickets.map(async (ticket, index) => ({
     filename: `valor-ticket-${index + 1}.png`,
-    content: (await QRCode.toBuffer(
+    content: (await renderTicketImage(
       `${baseUrl}/ticket.html?code=${encodeURIComponent(ticket.code)}`,
-      { errorCorrectionLevel: 'M', margin: 2, width: 400 }
+      ticket.code
     )).toString('base64')
   })));
   const ticketLines = tickets.map((ticket, index) =>
