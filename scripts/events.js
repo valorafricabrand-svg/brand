@@ -1015,6 +1015,36 @@
       });
     }
   }
+  if (allCities) {
+    const requestedCity = new URLSearchParams(window.location.search).get('city');
+    const requestedCityChip = requestedCity
+      ? Array.from(allCities.querySelectorAll('button[data-city]'))
+        .find((button) => button.dataset.city.toLowerCase() === requestedCity.toLowerCase())
+      : null;
+    if (requestedCityChip) {
+      allCities.querySelectorAll('button[data-city]').forEach((chip) => {
+        const isActive = chip === requestedCityChip;
+        chip.classList.toggle('is-active', isActive);
+        chip.setAttribute('aria-pressed', String(isActive));
+      });
+      const cityName = requestedCityChip.dataset.city;
+      const cityDescription = `Browse upcoming events in ${cityName}, Kenya with Valor Africa Events & Tickets. Find concerts, festivals, sports, arts, and community gatherings, then check available ticket options.`;
+      const canonicalHref = `https://valorafrica.co.ke/events.html?city=${encodeURIComponent(cityName)}`;
+      document.title = `Events & Tickets in ${cityName}, Kenya | Valor Africa`;
+      const setMetaContent = (selector, content) => {
+        const element = document.head.querySelector(selector);
+        if (element) element.setAttribute('content', content);
+      };
+      setMetaContent('meta[name="description"]', cityDescription);
+      setMetaContent('meta[property="og:title"]', document.title);
+      setMetaContent('meta[property="og:description"]', cityDescription);
+      setMetaContent('meta[property="og:url"]', canonicalHref);
+      const canonicalLink = document.head.querySelector('link[rel="canonical"]');
+      if (canonicalLink) canonicalLink.href = canonicalHref;
+      const heading = document.querySelector('.page-intro h1');
+      if (heading) heading.textContent = `Upcoming events & tickets in ${cityName}, Kenya`;
+    }
+  }
   let refreshAllEvents = () => {};
   if (allCategories && allEvents) {
     const filterAllEvents = () => {

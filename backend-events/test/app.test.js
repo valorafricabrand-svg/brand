@@ -3271,6 +3271,8 @@ test('the events sitemap lists only approved events as absolute public-site URLs
     new RegExp(`<loc>https://valorafrica\\.co\\.ke/event\\.html\\?slug=${approved.slug}</loc>`)
   );
   assert.equal(sitemap.text.includes(pending.slug), false);
+  assert.match(sitemap.text, /<loc>https:\/\/valorafrica\.co\.ke\/events\.html\?city=Nairobi<\/loc>/);
+  assert.equal(sitemap.text.includes('city=Malindi'), false);
 });
 
 after(() => {

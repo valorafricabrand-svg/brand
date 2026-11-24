@@ -3198,8 +3198,12 @@ function createApp(options = {}) {
   });
 
   app.get('/sitemap-events.xml', (req, res) => {
+    // Keep in sync with the city filter chips in events.html (#allCities) — a city
+    // outside this list has no matching chip, so a landing page for it wouldn't
+    // get the city-specific title/description events.js applies on load.
+    const knownCities = ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Naivasha', 'Nyeri', 'Kitale', 'Malindi'];
     const rows = db.prepare(`
-      SELECT slug, starts_at, created_at, reviewed_at
+      SELECT slug, city, starts_at, created_at, reviewed_at
       FROM events
       WHERE status = 'approved' AND deleted_at IS NULL
       ORDER BY starts_at DESC
@@ -3208,11 +3212,24 @@ function createApp(options = {}) {
     const escapeXml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'
     }[char]));
-    const urls = rows.map((row) => {
+    const eventUrls = rows.map((row) => {
       const lastmod = (row.reviewed_at || row.created_at || '').slice(0, 10);
       const loc = `${publicSiteUrl}/event.html?slug=${encodeURIComponent(row.slug)}`;
       return `  <url>\n    <loc>${escapeXml(loc)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <priority>0.7</priority>\n  </url>`;
-    }).join('\n');
+    });
+    const upcomingRows = db.prepare(`
+      SELECT DISTINCT city FROM events
+      WHERE status = 'approved' AND deleted_at IS NULL
+        AND julianday(starts_at) > julianday('now') AND julianday(ends_at) > julianday('now')
+    `).all();
+    const liveCities = new Set(upcomingRows.map((row) => row.city));
+    const cityUrls = knownCities
+      .filter((city) => liveCities.has(city))
+      .map((city) => {
+        const loc = `${publicSiteUrl}/events.html?city=${encodeURIComponent(city)}`;
+        return `  <url>\n    <loc>${escapeXml(loc)}</loc>\n    <priority>0.6</priority>\n  </url>`;
+      });
+    const urls = [...eventUrls, ...cityUrls].join('\n');
     res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`);
   });
 
