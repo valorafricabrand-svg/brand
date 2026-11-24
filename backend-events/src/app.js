@@ -4248,12 +4248,17 @@ function createApp(options = {}) {
   app.get('/api/ads/hero', listActiveHeroSlides);
   app.get('/api/hero-highlights', listActiveHeroSlides);
 
-  app.get('/api/ads/admin/hero-slides', requireAdmin, (req, res) => {
+  // Registered at both /api/ads/admin/... and /api/admin/... (same handlers): many ad
+  // blockers (uBlock Origin, Brave Shields, AdGuard) silently drop any request whose path
+  // contains "/ads/", matching common ad-network filter rules — the admin dashboard's own
+  // fetch calls were getting blocked client-side with a bare "Failed to fetch", no server
+  // error at all. The public hero-read endpoint already had this same fix (/api/hero-highlights).
+  app.get(['/api/ads/admin/hero-slides', '/api/admin/hero-slides'], requireAdmin, (req, res) => {
     const slides = db.prepare('SELECT * FROM hero_slides ORDER BY position ASC,created_at ASC').all();
     res.json({ slides: slides.map(heroSlideFromRow) });
   });
 
-  app.post('/api/ads/admin/hero-slides/reorder', requireAdmin, (req, res) => {
+  app.post(['/api/ads/admin/hero-slides/reorder', '/api/admin/hero-slides/reorder'], requireAdmin, (req, res) => {
     const { ids } = req.body || {};
     const currentIds = db.prepare('SELECT id FROM hero_slides ORDER BY position ASC,created_at ASC')
       .all().map((slide) => slide.id);
@@ -4327,7 +4332,7 @@ function createApp(options = {}) {
     };
   }
 
-  app.post('/api/ads/admin/hero-slides', requireAdmin, heroMediaUpload, (req, res, next) => {
+  app.post(['/api/ads/admin/hero-slides', '/api/admin/hero-slides'], requireAdmin, heroMediaUpload, (req, res, next) => {
     const videoFile = req.files?.videoFile?.[0];
     const imageFile = req.files?.imageFile?.[0];
     const validated = validateHeroSlideFields(req.body || {}, null, videoFile, imageFile);
@@ -4371,7 +4376,7 @@ function createApp(options = {}) {
     }
   });
 
-  app.patch('/api/ads/admin/hero-slides/:id', requireAdmin, heroMediaUpload, (req, res, next) => {
+  app.patch(['/api/ads/admin/hero-slides/:id', '/api/admin/hero-slides/:id'], requireAdmin, heroMediaUpload, (req, res, next) => {
     const existing = db.prepare('SELECT * FROM hero_slides WHERE id=?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Hero slide not found.' });
     const videoFile = req.files?.videoFile?.[0];
@@ -4500,7 +4505,7 @@ function createApp(options = {}) {
     res.json({ id: req.params.id, status });
   });
 
-  app.get('/api/ads/admin/packages', requireAdmin, (req, res) => {
+  app.get(['/api/ads/admin/packages', '/api/admin/packages'], requireAdmin, (req, res) => {
     res.json({
       packages: db.prepare(`
         SELECT id,name,description,placement,price_per_day_kes AS pricePerDayKes,
@@ -4521,7 +4526,7 @@ function createApp(options = {}) {
     return null;
   }
 
-  app.post('/api/ads/admin/packages', requireAdmin, (req, res) => {
+  app.post(['/api/ads/admin/packages', '/api/admin/packages'], requireAdmin, (req, res) => {
     const error = validateAdTierFields(req.body);
     if (error) return res.status(400).json({ error });
     const { name, description = '', placement, pricePerDayKes, minDays, maxDays } = req.body;
@@ -4536,7 +4541,7 @@ function createApp(options = {}) {
     });
   });
 
-  app.patch('/api/ads/admin/packages/:id', requireAdmin, (req, res) => {
+  app.patch(['/api/ads/admin/packages/:id', '/api/admin/packages/:id'], requireAdmin, (req, res) => {
     const existing = db.prepare('SELECT * FROM ad_packages WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Ad package not found.' });
     const merged = {

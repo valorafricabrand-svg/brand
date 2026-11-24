@@ -3300,6 +3300,32 @@ test('the share preview page server-renders event-specific meta tags and redirec
   assert.equal(missing.headers.location, 'https://valorafrica.co.ke/events.html');
 });
 
+test('hero-slide and ad-package admin routes are also reachable without "/ads/" in the path', async () => {
+  // Ad blockers commonly drop any request whose path contains "/ads/", so the admin
+  // dashboard's own fetch calls need a path that avoids that pattern entirely.
+  assert.equal((await request(app).get('/api/admin/hero-slides')).status, 401);
+  const createdSlide = await request(app).post('/api/admin/hero-slides').set(admin).send({
+    title: 'Ad-blocker-safe slide',
+    category: 'Featured events',
+    description: 'Reachable without /ads/ in the path.',
+    mediaType: 'image',
+    mediaUrl: 'images/weekend-festival.jpg',
+    posterUrl: '',
+    linkUrl: 'events.html',
+    ctaLabel: 'Browse events'
+  });
+  assert.equal(createdSlide.status, 201);
+  const listed = await request(app).get('/api/admin/hero-slides').set(admin);
+  assert.ok(listed.body.slides.some((slide) => slide.id === createdSlide.body.slide.id));
+
+  const createdPackage = await request(app).post('/api/admin/packages').set(admin).send({
+    name: 'Ad-blocker-safe tier', placement: 'listing', pricePerDayKes: 500, minDays: 1, maxDays: 30
+  });
+  assert.equal(createdPackage.status, 201);
+  const listedPackages = await request(app).get('/api/admin/packages').set(admin);
+  assert.ok(listedPackages.body.packages.some((pkg) => pkg.id === createdPackage.body.id));
+});
+
 after(() => {
   db.close();
   fs.rmSync(path.join(__dirname, '..', '.test-uploads'), { recursive: true, force: true });

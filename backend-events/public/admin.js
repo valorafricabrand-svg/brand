@@ -147,7 +147,7 @@
   async function loadPackages() {
     const list = document.getElementById('packagesList');
     list.replaceChildren();
-    const { packages } = await api('/api/ads/admin/packages');
+    const { packages } = await api('/api/admin/packages');
     if (!packages.length) return addText(list, 'p', 'empty', 'Add a tier and set its per-day KES price before organizers can book ads.');
     packages.forEach((item) => {
       const card = document.createElement('article');
@@ -208,7 +208,7 @@
   async function loadHeroSlides() {
     const list = document.getElementById('heroSlidesList');
     list.replaceChildren();
-    const { slides } = await api('/api/ads/admin/hero-slides');
+    const { slides } = await api('/api/admin/hero-slides');
     if (!slides.length) return addText(list, 'p', 'empty', 'No homepage slides yet. Add a video or image above.');
     slides.forEach((slide, index) => {
       const card = document.createElement('article');
@@ -1070,7 +1070,7 @@
     const submit = form.querySelector('[type=submit]');
     submit.disabled = true;
     try {
-      await api('/api/ads/admin/hero-slides', { method: 'POST', body: data });
+      await api('/api/admin/hero-slides', { method: 'POST', body: data });
       form.reset();
       updateHeroMediaFields();
       setFeedback(feedback, 'Homepage hero slide added.');
@@ -1101,13 +1101,13 @@
           }
         });
         data.set('active', card.dataset.active);
-        await api(`/api/ads/admin/hero-slides/${encodeURIComponent(save.dataset.saveHeroSlide)}`, {
+        await api(`/api/admin/hero-slides/${encodeURIComponent(save.dataset.saveHeroSlide)}`, {
           method: 'PATCH',
           body: data
         });
         setFeedback(feedback, 'Homepage hero slide saved.');
       } else if (toggle) {
-        await api(`/api/ads/admin/hero-slides/${encodeURIComponent(toggle.dataset.toggleHeroSlide)}`, {
+        await api(`/api/admin/hero-slides/${encodeURIComponent(toggle.dataset.toggleHeroSlide)}`, {
           method: 'PATCH',
           body: JSON.stringify({ active: toggle.dataset.active !== 'true' })
         });
@@ -1121,7 +1121,7 @@
         const target = button.dataset.moveHeroSlide === 'up' ? index - 1 : index + 1;
         if (target < 0 || target >= ids.length) return;
         [ids[index], ids[target]] = [ids[target], ids[index]];
-        await api('/api/ads/admin/hero-slides/reorder', {
+        await api('/api/admin/hero-slides/reorder', {
           method: 'POST',
           body: JSON.stringify({ ids })
         });
@@ -1360,7 +1360,7 @@
     const packageForm = event.currentTarget;
     const data = new FormData(packageForm);
     try {
-      await api('/api/ads/admin/packages', {
+      await api('/api/admin/packages', {
         method: 'POST',
         body: JSON.stringify({
           name: data.get('name'),
@@ -1451,7 +1451,7 @@
       : { active: toggle.dataset.active !== 'true' };
     button.disabled = true;
     try {
-      await api(`/api/ads/admin/packages/${encodeURIComponent(button.dataset.savePackage || button.dataset.togglePackage)}`, {
+      await api(`/api/admin/packages/${encodeURIComponent(button.dataset.savePackage || button.dataset.togglePackage)}`, {
         method: 'PATCH',
         body: JSON.stringify(body)
       });
