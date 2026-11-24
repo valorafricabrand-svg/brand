@@ -212,7 +212,7 @@ img { display: block; max-width: 100%; }
 .page-feedback.error, .service-card.error { color: #a3261a; }
 .issued-ticket { display: grid; justify-items: center; gap: 8px; margin-top: 20px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; text-align: center; }
 .issued-ticket h2, .issued-ticket p { margin: 0; }
-.issued-ticket img { width: 220px; height: 220px; margin-top: 8px; image-rendering: pixelated; }
+.issued-ticket img { width: 220px; height: 220px; margin-top: 8px; border-radius: 10px; }
 .ticket-delivery-note { margin: 16px 0 0; }
 .service-card .whatsapp-ticket-share { display: inline-flex; width: auto; margin: 16px 0 0; justify-content: center; text-decoration: none; }
 .ticket-whatsapp-note { margin: 10px 0 0; color: #64748b; font-size: 12px; line-height: 1.5; }

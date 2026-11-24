@@ -4,7 +4,6 @@ const path = require('path');
 const cors = require('cors');
 const express = require('express');
 const multer = require('multer');
-const QRCode = require('qrcode');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const db = require('./db');
@@ -16,6 +15,7 @@ const paypal = require('./paypal');
 const braintree = require('./braintree');
 const walletSms = require('./wallet-sms');
 const accountEmail = require('./account-email');
+const { renderBrandedQr } = require('./ticket-image');
 const { normalizeKenyanPhone } = require('./kenyan-phone');
 const { PARTNER_APPLICATION_TYPES, PARTNER_TERMS_VERSION } = require('./partner-terms');
 const { registerArtistMarketplaceRoutes } = require('./artist-marketplace');
@@ -272,6 +272,11 @@ function safeOrderAccess(order, suppliedToken) {
   const actual = Buffer.from(order.access_token_hash, 'hex');
   const expected = Buffer.from(sha256(suppliedToken), 'hex');
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+async function brandedQrDataUrl(url) {
+  const buffer = await renderBrandedQr(url);
+  return `data:image/png;base64,${buffer.toString('base64')}`;
 }
 
 function createApp(options = {}) {
@@ -5399,10 +5404,7 @@ function createApp(options = {}) {
       res.json({
         tickets: await Promise.all(tickets.map(async (ticket) => ({
           ...ticket,
-          qr: await QRCode.toDataURL(
-            `${publicSiteUrl}/ticket.html?code=${encodeURIComponent(ticket.code)}`,
-            { errorCorrectionLevel: 'M', margin: 1, width: 220 }
-          )
+          qr: await brandedQrDataUrl(`${publicSiteUrl}/ticket.html?code=${encodeURIComponent(ticket.code)}`)
         })))
       });
     } catch (error) {
@@ -5526,7 +5528,7 @@ function createApp(options = {}) {
         `).all(order.id);
         result.tickets = await Promise.all(tickets.map(async (ticket) => ({
           ...ticket,
-          qr: await QRCode.toDataURL(`${publicSiteUrl}/ticket.html?code=${encodeURIComponent(ticket.code)}`, { errorCorrectionLevel: 'M', margin: 1, width: 220 })
+          qr: await brandedQrDataUrl(`${publicSiteUrl}/ticket.html?code=${encodeURIComponent(ticket.code)}`)
         })));
       }
       if (order.order_type === 'ad' && order.ad_booking_id) {
