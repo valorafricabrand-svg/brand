@@ -658,7 +658,7 @@ db.exec(`
     logo_url TEXT NOT NULL DEFAULT '',
     buyer_name TEXT NOT NULL,
     phone TEXT NOT NULL DEFAULT '',
-    amount_kes INTEGER NOT NULL CHECK (amount_kes > 0),
+    amount_kes INTEGER NOT NULL CHECK (amount_kes >= 0),
     payment_method TEXT NOT NULL DEFAULT 'mpesa',
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','expired','failed','review','cancelled')),
     checkout_request_id TEXT UNIQUE,
@@ -671,7 +671,11 @@ db.exec(`
     starts_at TEXT,
     ends_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    paid_at TEXT
+    paid_at TEXT,
+    video_url TEXT NOT NULL DEFAULT '',
+    video_poster_url TEXT NOT NULL DEFAULT '',
+    tagline TEXT NOT NULL DEFAULT '',
+    is_trial INTEGER NOT NULL DEFAULT 0 CHECK (is_trial IN (0,1))
   );
   CREATE INDEX IF NOT EXISTS sponsorship_purchases_active ON sponsorship_purchases(status,ends_at);
   CREATE UNIQUE INDEX IF NOT EXISTS sponsorship_purchases_nowpayments_invoice
@@ -802,6 +806,73 @@ if (!sponsorshipPurchaseColumns.some((column) => column.name === 'video_poster_u
 if (!sponsorshipPurchaseColumns.some((column) => column.name === 'tagline')) {
   db.exec("ALTER TABLE sponsorship_purchases ADD COLUMN tagline TEXT NOT NULL DEFAULT ''");
 }
+
+// Free trials are recorded at KES 0, which the original amount_kes > 0 check rejects; SQLite
+// can't relax a CHECK in place, so rebuild the table once (foreign keys off so the drop doesn't
+// cascade-delete the clicks, impressions, and delivery reports that reference it).
+const sponsorshipPurchaseSchema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='sponsorship_purchases'").get().sql;
+if (sponsorshipPurchaseSchema.includes('amount_kes > 0')) {
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    db.exec(`
+      BEGIN IMMEDIATE;
+      CREATE TABLE sponsorship_purchases_new (
+        id TEXT PRIMARY KEY,
+        access_token_hash TEXT NOT NULL,
+        account_id TEXT REFERENCES accounts(id),
+        tier TEXT NOT NULL CHECK (tier IN ('community','city','premium')),
+        brand_name TEXT NOT NULL,
+        website_url TEXT NOT NULL DEFAULT '',
+        logo_url TEXT NOT NULL DEFAULT '',
+        buyer_name TEXT NOT NULL,
+        phone TEXT NOT NULL DEFAULT '',
+        amount_kes INTEGER NOT NULL CHECK (amount_kes >= 0),
+        payment_method TEXT NOT NULL DEFAULT 'mpesa',
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','expired','failed','review','cancelled')),
+        checkout_request_id TEXT UNIQUE,
+        merchant_request_id TEXT,
+        nowpayments_invoice_id TEXT,
+        nowpayments_price_amount_usd REAL,
+        paypal_order_id TEXT,
+        paypal_amount_usd REAL,
+        result_description TEXT NOT NULL DEFAULT '',
+        starts_at TEXT,
+        ends_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        paid_at TEXT,
+        video_url TEXT NOT NULL DEFAULT '',
+        video_poster_url TEXT NOT NULL DEFAULT '',
+        tagline TEXT NOT NULL DEFAULT '',
+        is_trial INTEGER NOT NULL DEFAULT 0 CHECK (is_trial IN (0,1))
+      );
+      INSERT INTO sponsorship_purchases_new (
+        id,access_token_hash,account_id,tier,brand_name,website_url,logo_url,buyer_name,phone,amount_kes,
+        payment_method,status,checkout_request_id,merchant_request_id,nowpayments_invoice_id,
+        nowpayments_price_amount_usd,paypal_order_id,paypal_amount_usd,result_description,starts_at,ends_at,
+        created_at,paid_at,video_url,video_poster_url,tagline
+      )
+      SELECT id,access_token_hash,account_id,tier,brand_name,website_url,logo_url,buyer_name,phone,amount_kes,
+        payment_method,status,checkout_request_id,merchant_request_id,nowpayments_invoice_id,
+        nowpayments_price_amount_usd,paypal_order_id,paypal_amount_usd,result_description,starts_at,ends_at,
+        created_at,paid_at,video_url,video_poster_url,tagline
+      FROM sponsorship_purchases;
+      DROP TABLE sponsorship_purchases;
+      ALTER TABLE sponsorship_purchases_new RENAME TO sponsorship_purchases;
+      CREATE INDEX sponsorship_purchases_active ON sponsorship_purchases(status,ends_at);
+      CREATE UNIQUE INDEX sponsorship_purchases_nowpayments_invoice
+        ON sponsorship_purchases(nowpayments_invoice_id) WHERE nowpayments_invoice_id IS NOT NULL;
+      CREATE UNIQUE INDEX sponsorship_purchases_paypal_order
+        ON sponsorship_purchases(paypal_order_id) WHERE paypal_order_id IS NOT NULL;
+      COMMIT;
+    `);
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS sponsorship_purchases_one_trial ON sponsorship_purchases(account_id) WHERE is_trial = 1');
 
 const walletColumns = db.prepare('PRAGMA table_info(wallets)').all();
 if (!walletColumns.some((column) => column.name === 'account_id')) {

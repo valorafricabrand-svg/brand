@@ -164,6 +164,78 @@ function validHeroVideo(buffer) {
   return null;
 }
 
+function optionalHttpsUrl(value, label) {
+  const url = typeof value === 'string' ? value.trim() : '';
+  if (!url) return { url };
+  if (url.length > 2048) return { error: `${label} link must be 2,048 characters or fewer.` };
+  try {
+    if (new URL(url).protocol !== 'https:') return { error: `${label} links must use HTTPS.` };
+  } catch (error) {
+    return { error: `Enter a valid HTTPS ${label.toLowerCase()} link.` };
+  }
+  return { url };
+}
+
+// Shared by paid checkout and the free trial. Uploaded files are only validated here; their
+// final paths depend on the purchase id, so storeSponsorshipMedia assigns and writes them.
+function validateSponsorshipFields(body, files, tierInfo) {
+  const { brandName, buyerName } = body || {};
+  if (typeof brandName !== 'string' || !brandName.trim() || brandName.length > 160) {
+    return { error: 'Enter the brand or organization name.' };
+  }
+  const website = optionalHttpsUrl(body?.websiteUrl, 'Website');
+  if (website.error) return website;
+  const logo = optionalHttpsUrl(body?.logoUrl, 'Logo');
+  if (logo.error) return logo;
+  if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) {
+    return { error: 'Enter your name.' };
+  }
+  const videoFile = files?.videoFile?.[0];
+  const posterFile = files?.imageFile?.[0];
+  const tagline = typeof body?.tagline === 'string' ? body.tagline.trim() : '';
+  if (tagline.length > 160) return { error: 'Billboard tagline must be 160 characters or fewer.' };
+  if ((videoFile || posterFile || tagline || body?.videoUrl || body?.posterUrl) && tierInfo.rank < 3) {
+    return { error: 'Homepage billboard video is only available on the Premium Partner package.' };
+  }
+  if (videoFile && !validHeroVideo(videoFile.buffer)) return { error: 'The uploaded file is not a supported MP4 or WebM video.' };
+  if (posterFile && !validImage(posterFile.buffer)) return { error: 'The uploaded poster is not a supported image.' };
+  const video = videoFile ? { url: '' } : optionalHttpsUrl(body?.videoUrl, 'Video');
+  if (video.error) return video;
+  const poster = posterFile ? { url: '' } : optionalHttpsUrl(body?.posterUrl, 'Poster');
+  if (poster.error) return poster;
+  if ((video.url || videoFile) && !website.url) {
+    return { error: 'Add a website link so people who click your billboard ad have somewhere to go.' };
+  }
+  return {
+    fields: {
+      brandName: brandName.trim(), buyerName: buyerName.trim(), websiteUrl: website.url, logoUrl: logo.url,
+      tagline, videoUrl: video.url, videoPosterUrl: poster.url, videoFile, posterFile
+    }
+  };
+}
+
+function storeSponsorshipMedia(id, fields) {
+  if (fields.videoFile) fields.videoUrl = `/uploads/sponsorships/${id}.${validHeroVideo(fields.videoFile.buffer)}`;
+  if (fields.posterFile) fields.videoPosterUrl = `/uploads/sponsorships/${id}-poster.${validImage(fields.posterFile.buffer)}`;
+  if (fields.videoFile) {
+    fs.writeFileSync(path.join(sponsorshipUploadDirectory, path.basename(fields.videoUrl)), fields.videoFile.buffer, { flag: 'wx' });
+  }
+  if (fields.posterFile) {
+    fs.writeFileSync(path.join(sponsorshipUploadDirectory, path.basename(fields.videoPosterUrl)), fields.posterFile.buffer, { flag: 'wx' });
+  }
+}
+
+function removeSponsorshipMedia(fields) {
+  for (const [file, url] of [[fields.videoFile, fields.videoUrl], [fields.posterFile, fields.videoPosterUrl]]) {
+    if (!file || !url) continue;
+    try {
+      fs.unlinkSync(path.join(sponsorshipUploadDirectory, path.basename(url)));
+    } catch (error) {
+      if (error.code !== 'ENOENT') console.error('Could not remove an unused sponsorship media file:', error.message);
+    }
+  }
+}
+
 function validateHeroMediaUrl(value, field, { required = false } = {}) {
   if (typeof value !== 'string' || !value.trim()) return required ? `${field} is required.` : null;
   const url = value.trim();
@@ -2736,6 +2808,7 @@ function createApp(options = {}) {
     });
   });
 
+  const SPONSORSHIP_TRIAL_DAYS = 7;
   const sponsorshipTiers = {
     community: { label: 'Community Sponsor', priceKes: 25000, days: 14, rank: 1 },
     city: { label: 'City Sponsor', priceKes: 75000, days: 30, rank: 2 },
@@ -2762,7 +2835,7 @@ function createApp(options = {}) {
         website_url AS websiteUrl,logo_url AS logoUrl,ends_at AS endsAt
       FROM sponsorship_purchases
       WHERE status='active' AND julianday(ends_at) > julianday('now')
-      ORDER BY CASE tier WHEN 'premium' THEN 0 WHEN 'city' THEN 1 ELSE 2 END, paid_at DESC
+      ORDER BY is_trial, CASE tier WHEN 'premium' THEN 0 WHEN 'city' THEN 1 ELSE 2 END, paid_at DESC
       LIMIT 30
     `).all();
     res.json({ sponsors: rows });
@@ -2774,7 +2847,7 @@ function createApp(options = {}) {
         video_url AS videoUrl,video_poster_url AS videoPosterUrl
       FROM sponsorship_purchases
       WHERE status='active' AND julianday(ends_at) > julianday('now') AND video_url != ''
-      ORDER BY paid_at DESC
+      ORDER BY is_trial, COALESCE(paid_at, starts_at) DESC
       LIMIT 10
     `).all();
     const absolutize = (value) => (value && value.startsWith('/') ? `${req.protocol}://${req.get('host')}${value}` : value);
@@ -2903,7 +2976,7 @@ function createApp(options = {}) {
   app.get('/api/sponsorships/:id/report', requireAccount, (req, res) => {
     const campaign = db.prepare(`
       SELECT id,tier,brand_name AS brandName,amount_kes AS amountKes,status,
-        starts_at AS startsAt,ends_at AS endsAt,created_at AS createdAt
+        starts_at AS startsAt,ends_at AS endsAt,created_at AS createdAt,is_trial AS isTrial
       FROM sponsorship_purchases WHERE id=? AND account_id=?
     `).get(req.params.id, req.account.id);
     if (!campaign) return res.status(404).json({ error: 'Sponsorship campaign not found in your account.' });
@@ -2995,7 +3068,7 @@ function createApp(options = {}) {
         attributedTickets: sales.tickets,
         attributedSalesKes: sales.salesKes,
         ticketConversionRate: eventLinkClicks ? paidOrders / eventLinkClicks : null,
-        costPerClickKes: totalClicks ? campaign.amountKes / totalClicks : null
+        costPerClickKes: totalClicks && !campaign.isTrial ? campaign.amountKes / totalClicks : null
       },
       events,
       deliveries
@@ -3008,7 +3081,8 @@ function createApp(options = {}) {
         payment_method AS paymentMethod,amount_kes AS amountKes,
         result_description AS resultDescription,starts_at AS startsAt,
         ends_at AS endsAt,created_at AS createdAt,
-        video_url AS videoUrl,video_poster_url AS videoPosterUrl,tagline,
+        website_url AS websiteUrl,logo_url AS logoUrl,
+        video_url AS videoUrl,video_poster_url AS videoPosterUrl,tagline,is_trial AS isTrial,
         (SELECT COUNT(*) FROM sponsorship_viewable_impressions i
           WHERE i.sponsorship_purchase_id=sponsorship_purchases.id) AS viewableImpressions
       FROM sponsorship_purchases
@@ -4481,7 +4555,7 @@ function createApp(options = {}) {
         buyer_name AS buyerName,phone,amount_kes AS amountKes,payment_method AS paymentMethod,
         status,result_description AS resultDescription,starts_at AS startsAt,ends_at AS endsAt,
         created_at AS createdAt,paid_at AS paidAt,
-        video_url AS videoUrl,video_poster_url AS videoPosterUrl,tagline
+        video_url AS videoUrl,video_poster_url AS videoPosterUrl,tagline,is_trial AS isTrial
       FROM sponsorship_purchases
       ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'pending' THEN 1 WHEN 'review' THEN 2 ELSE 3 END,created_at DESC
       LIMIT 500
@@ -5297,71 +5371,12 @@ function createApp(options = {}) {
       if (paymentMethod === 'paypal' && !paypalGateway.isConfigured()) {
         return res.status(503).json({ error: 'PayPal checkout is not enabled yet. Choose M-Pesa or Valor Wallet.' });
       }
-      const {
-        tier, brandName, websiteUrl: inputWebsite, logoUrl: inputLogo, buyerName, phone: inputPhone,
-        videoUrl: inputVideoUrl, posterUrl: inputPosterUrl, tagline: inputTagline
-      } = req.body || {};
+      const { tier, phone: inputPhone } = req.body || {};
       const tierInfo = sponsorshipTiers[tier];
       if (!tierInfo) return res.status(400).json({ error: 'Choose a sponsorship package.' });
-      if (typeof brandName !== 'string' || !brandName.trim() || brandName.length > 160) {
-        return res.status(400).json({ error: 'Enter the brand or organization name.' });
-      }
-      const websiteUrl = typeof inputWebsite === 'string' ? inputWebsite.trim() : '';
-      if (websiteUrl) {
-        if (websiteUrl.length > 2048) return res.status(400).json({ error: 'Website link must be 2,048 characters or fewer.' });
-        try {
-          if (new URL(websiteUrl).protocol !== 'https:') return res.status(400).json({ error: 'Website links must use HTTPS.' });
-        } catch (error) {
-          return res.status(400).json({ error: 'Enter a valid HTTPS website link.' });
-        }
-      }
-      const logoUrl = typeof inputLogo === 'string' ? inputLogo.trim() : '';
-      if (logoUrl) {
-        if (logoUrl.length > 2048) return res.status(400).json({ error: 'Logo link must be 2,048 characters or fewer.' });
-        try {
-          if (new URL(logoUrl).protocol !== 'https:') return res.status(400).json({ error: 'Logo links must use HTTPS.' });
-        } catch (error) {
-          return res.status(400).json({ error: 'Enter a valid HTTPS logo image link.' });
-        }
-      }
-      if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) {
-        return res.status(400).json({ error: 'Enter your name.' });
-      }
-      const videoFile = req.files?.videoFile?.[0];
-      const posterFile = req.files?.imageFile?.[0];
-      const tagline = typeof inputTagline === 'string' ? inputTagline.trim() : '';
-      if (tagline.length > 160) return res.status(400).json({ error: 'Billboard tagline must be 160 characters or fewer.' });
-      const wantsBillboard = Boolean(videoFile || posterFile || tagline || inputVideoUrl || inputPosterUrl);
-      if (wantsBillboard && tierInfo.rank < 3) {
-        return res.status(400).json({ error: 'Homepage billboard video is only available on the Premium Partner package.' });
-      }
-      let videoUrl = '';
-      if (videoFile) {
-        if (!validHeroVideo(videoFile.buffer)) return res.status(400).json({ error: 'The uploaded file is not a supported MP4 or WebM video.' });
-      } else if (typeof inputVideoUrl === 'string' && inputVideoUrl.trim()) {
-        videoUrl = inputVideoUrl.trim();
-        if (videoUrl.length > 2048) return res.status(400).json({ error: 'Video link must be 2,048 characters or fewer.' });
-        try {
-          if (new URL(videoUrl).protocol !== 'https:') return res.status(400).json({ error: 'Video links must use HTTPS.' });
-        } catch (error) {
-          return res.status(400).json({ error: 'Enter a valid HTTPS video link.' });
-        }
-      }
-      let videoPosterUrl = '';
-      if (posterFile) {
-        if (!validImage(posterFile.buffer)) return res.status(400).json({ error: 'The uploaded poster is not a supported image.' });
-      } else if (typeof inputPosterUrl === 'string' && inputPosterUrl.trim()) {
-        videoPosterUrl = inputPosterUrl.trim();
-        if (videoPosterUrl.length > 2048) return res.status(400).json({ error: 'Poster link must be 2,048 characters or fewer.' });
-        try {
-          if (new URL(videoPosterUrl).protocol !== 'https:') return res.status(400).json({ error: 'Poster links must use HTTPS.' });
-        } catch (error) {
-          return res.status(400).json({ error: 'Enter a valid HTTPS poster image link.' });
-        }
-      }
-      if ((videoUrl || videoFile) && !websiteUrl) {
-        return res.status(400).json({ error: 'Add a website link so people who click your billboard ad have somewhere to go.' });
-      }
+      const validated = validateSponsorshipFields(req.body, req.files, tierInfo);
+      if (validated.error) return res.status(400).json({ error: validated.error });
+      const media = validated.fields;
       req.wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
       if (paymentMethod === 'wallet' && !req.wallet) return res.status(409).json({ error: 'Verify and link your phone number before paying from your wallet.' });
       const phone = paymentMethod === 'wallet'
@@ -5373,17 +5388,15 @@ function createApp(options = {}) {
 
       const id = crypto.randomUUID();
       const accessToken = crypto.randomBytes(32).toString('base64url');
-      const brandNameTrimmed = brandName.trim();
-      const buyerNameTrimmed = buyerName.trim();
-
-      if (videoFile) videoUrl = `/uploads/sponsorships/${id}.${validHeroVideo(videoFile.buffer)}`;
-      if (posterFile) videoPosterUrl = `/uploads/sponsorships/${id}-poster.${validImage(posterFile.buffer)}`;
       try {
-        if (videoFile) fs.writeFileSync(path.join(sponsorshipUploadDirectory, path.basename(videoUrl)), videoFile.buffer, { flag: 'wx' });
-        if (posterFile) fs.writeFileSync(path.join(sponsorshipUploadDirectory, path.basename(videoPosterUrl)), posterFile.buffer, { flag: 'wx' });
+        storeSponsorshipMedia(id, media);
       } catch (error) {
+        removeSponsorshipMedia(media);
         return next(error);
       }
+      const {
+        brandName: brandNameTrimmed, buyerName: buyerNameTrimmed, websiteUrl, logoUrl, tagline, videoUrl, videoPosterUrl
+      } = media;
 
       function activateNow() {
         const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
@@ -5419,8 +5432,7 @@ function createApp(options = {}) {
           }
         })();
       } catch (error) {
-        if (videoFile) { try { fs.unlinkSync(path.join(sponsorshipUploadDirectory, path.basename(videoUrl))); } catch {} }
-        if (posterFile) { try { fs.unlinkSync(path.join(sponsorshipUploadDirectory, path.basename(videoPosterUrl))); } catch {} }
+        removeSponsorshipMedia(media);
         if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
         throw error;
       }
@@ -5516,6 +5528,51 @@ function createApp(options = {}) {
     } catch (error) {
       return next(error);
     }
+  });
+
+  app.post('/api/sponsorships/trial', requireAccount, requirePartnerTermsAcknowledgement, sponsorshipMediaUpload, (req, res, next) => {
+    const alreadyUsed = 'This account has already used its free 7-day Premium trial. Choose a package to keep your campaign running.';
+    if (db.prepare('SELECT 1 FROM sponsorship_purchases WHERE account_id=? AND is_trial=1').get(req.account.id)) {
+      return res.status(409).json({ error: alreadyUsed });
+    }
+    const validated = validateSponsorshipFields(req.body, req.files, sponsorshipTiers.premium);
+    if (validated.error) return res.status(400).json({ error: validated.error });
+    const media = validated.fields;
+    const id = crypto.randomUUID();
+    const accessToken = crypto.randomBytes(32).toString('base64url');
+    try {
+      storeSponsorshipMedia(id, media);
+    } catch (error) {
+      removeSponsorshipMedia(media);
+      return next(error);
+    }
+    const startsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+    const endsAt = new Date(startsAt.getTime() + SPONSORSHIP_TRIAL_DAYS * 86400000);
+    try {
+      db.prepare(`
+        INSERT INTO sponsorship_purchases
+          (id,access_token_hash,account_id,tier,brand_name,website_url,logo_url,buyer_name,amount_kes,payment_method,
+           status,starts_at,ends_at,video_url,video_poster_url,tagline,is_trial)
+        VALUES (?,?,?,'premium',?,?,?,?,0,'trial','active',?,?,?,?,?,1)
+      `).run(
+        id, sha256(accessToken), req.account.id, media.brandName, media.websiteUrl, media.logoUrl, media.buyerName,
+        startsAt.toISOString(), endsAt.toISOString(), media.videoUrl, media.videoPosterUrl, media.tagline
+      );
+    } catch (error) {
+      removeSponsorshipMedia(media);
+      if (error.errcode === 2067 || /UNIQUE constraint failed/.test(error.message)) {
+        return res.status(409).json({ error: alreadyUsed });
+      }
+      return next(error);
+    }
+    res.status(201).json({
+      purchaseId: id,
+      accessToken,
+      status: 'active',
+      isTrial: true,
+      endsAt: endsAt.toISOString(),
+      message: `Your free ${SPONSORSHIP_TRIAL_DAYS}-day Premium trial is live. Track it in your campaign report below.`
+    });
   });
 
   app.get('/api/sponsorships/:id', (req, res) => {

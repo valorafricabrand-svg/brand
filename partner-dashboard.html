@@ -18,8 +18,8 @@
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
   <script src="scripts/partnership.js?v=partner-auto-2" defer></script>
-  <script src="scripts/sponsorship.js?v=billboard-video-1" defer></script>
-  <script src="scripts/partner-dashboard.js?v=billboard-video-1" defer></script>
+  <script src="scripts/sponsorship.js?v=premium-trial-1" defer></script>
+  <script src="scripts/partner-dashboard.js?v=premium-trial-1" defer></script>
   <script src="scripts/artist-marketplace-dashboard.js?v=1" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
@@ -140,6 +140,10 @@
             <label>Safaricom M-Pesa number<input name="phone" id="sponsorPhone" type="tel" autocomplete="tel" placeholder="07…, 011…, or +254…"></label>
             <p class="checkout-note">Sponsorship starts after payment confirmation. Review the <a href="refund-policy.html">refund policy</a> before you pay.</p>
             <button class="button button-primary" type="submit" id="sponsorCheckoutSubmit">Pay with M-Pesa</button>
+            <div id="sponsorTrialOffer" hidden>
+              <p class="checkout-note">Not ready to pay yet? Run Premium Partner free for 7 days: your billboard video, top billing in the sponsor strip, and the full campaign report with impressions and clicks. One free trial per account, no payment needed.</p>
+              <button class="button secondary" type="button" id="sponsorTrialSubmit">Start my free 7-day trial</button>
+            </div>
             <p class="page-feedback" id="sponsorCheckoutFeedback" aria-live="polite"></p>
           </form>
           <div class="partnership-member-area">

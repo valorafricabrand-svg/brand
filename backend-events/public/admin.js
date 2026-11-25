@@ -847,7 +847,9 @@
       const card = document.createElement('article');
       card.className = 'record';
       card.dataset.sponsorshipId = purchase.id;
-      addText(card, 'h3', '', `${sponsorshipTierLabelsAdmin[purchase.tier] || purchase.tier} · ${purchase.brandName}`);
+      addText(card, 'h3', '', purchase.isTrial
+        ? `Free 7-day Premium trial · ${purchase.brandName}`
+        : `${sponsorshipTierLabelsAdmin[purchase.tier] || purchase.tier} · ${purchase.brandName}`);
       addText(card, 'p', 'record-meta',
         `${purchase.status.toUpperCase()} · KES ${Number(purchase.amountKes).toLocaleString('en-KE')} · ${purchase.paymentMethod} · ${purchase.buyerName} · Submitted ${new Date(purchase.createdAt).toLocaleString()}`);
       if (purchase.websiteUrl) addText(card, 'p', 'record-contact', purchase.websiteUrl);

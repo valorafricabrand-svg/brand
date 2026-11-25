@@ -97,10 +97,33 @@
     return value === null ? '—' : `${(Number(value) * 100).toFixed(2)}%`;
   }
 
+  function startPremiumUpgrade(purchase) {
+    const form = document.getElementById('sponsorCheckoutForm');
+    if (!form) return;
+    const premium = form.querySelector('input[name="tier"][value="premium"]');
+    premium.checked = true;
+    premium.dispatchEvent(new Event('change', { bubbles: true }));
+    // The trial's uploaded files are served by the API, so pass them back as HTTPS links
+    // instead of making the sponsor upload the same video again.
+    const absolute = (value) => (value && value.startsWith('/') && window.valorEventsApiBase
+      ? `${window.valorEventsApiBase}${value}`
+      : value || '');
+    form.elements.brandName.value = purchase.brandName;
+    form.elements.websiteUrl.value = purchase.websiteUrl || '';
+    form.elements.logoUrl.value = purchase.logoUrl || '';
+    form.elements.tagline.value = purchase.tagline || '';
+    form.elements.videoUrl.value = absolute(purchase.videoUrl);
+    form.elements.posterUrl.value = absolute(purchase.videoPosterUrl);
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    form.elements.buyerName.focus({ preventScroll: true });
+  }
+
   function renderSponsorReport(report, mount) {
     mount.replaceChildren();
     const range = document.createElement('p');
-    range.textContent = `Report range: ${report.range.startDate} to ${report.range.endDate} · ${report.campaign.tier} package · KES ${Number(report.campaign.amountKes).toLocaleString('en-KE')}`;
+    range.textContent = report.campaign.isTrial
+      ? `Report range: ${report.range.startDate} to ${report.range.endDate} · free 7-day Premium trial`
+      : `Report range: ${report.range.startDate} to ${report.range.endDate} · ${report.campaign.tier} package · KES ${Number(report.campaign.amountKes).toLocaleString('en-KE')}`;
     mount.appendChild(range);
 
     const metrics = document.createElement('div');
@@ -115,7 +138,7 @@
       ['Attributed ticket sales', `KES ${Number(report.metrics.attributedSalesKes).toLocaleString('en-KE')}`],
       ['Ticket conversion from event-link clicks', formatRate(report.metrics.ticketConversionRate)],
       ['Campaign fee per click', report.metrics.costPerClickKes === null
-        ? '—'
+        ? report.campaign.isTrial ? '— (free trial)' : '—'
         : `KES ${Number(report.metrics.costPerClickKes).toLocaleString('en-KE', { maximumFractionDigits: 2 })}`]
     ].forEach(([label, value]) => {
       const metric = document.createElement('p');
@@ -192,10 +215,16 @@
     purchases.forEach((purchase) => {
       const item = document.createElement('article');
       item.className = 'partnership-application-status';
+      const campaignRunning = purchase.status === 'active' &&
+        Date.parse(purchase.endsAt) > Date.now();
       const heading = document.createElement('strong');
-      heading.textContent = `${purchase.brandName} · ${purchase.tier} package`;
+      heading.textContent = purchase.isTrial
+        ? `${purchase.brandName} · free 7-day Premium trial`
+        : `${purchase.brandName} · ${purchase.tier} package`;
       const status = document.createElement('p');
-      status.textContent = `Status: ${purchase.status} · KES ${Number(purchase.amountKes).toLocaleString('en-KE')} · ${purchase.paymentMethod}`;
+      status.textContent = purchase.isTrial
+        ? `Status: ${campaignRunning ? 'active' : 'trial ended'} · no charge`
+        : `Status: ${purchase.status} · KES ${Number(purchase.amountKes).toLocaleString('en-KE')} · ${purchase.paymentMethod}`;
       const period = document.createElement('p');
       period.textContent = purchase.status === 'active'
         ? `Visible until ${formatDate(purchase.endsAt)}`
@@ -209,14 +238,21 @@
       item.append(heading, status, period, impressions, impressionNote);
       if (purchase.videoUrl) {
         const billboard = document.createElement('p');
+        const state = campaignRunning ? 'live' : 'ended';
         billboard.textContent = purchase.tagline
-          ? `Homepage billboard video: live · "${purchase.tagline}"`
-          : 'Homepage billboard video: live';
+          ? `Homepage billboard video: ${state} · "${purchase.tagline}"`
+          : `Homepage billboard video: ${state}`;
         item.appendChild(billboard);
       }
+      if (purchase.isTrial) {
+        const upgrade = document.createElement('button');
+        upgrade.type = 'button';
+        upgrade.className = 'button button-primary';
+        upgrade.textContent = 'Upgrade to Premium Partner';
+        upgrade.addEventListener('click', () => startPremiumUpgrade(purchase));
+        item.appendChild(upgrade);
+      }
 
-      const campaignRunning = purchase.status === 'active' &&
-        Date.parse(purchase.endsAt) > Date.now();
       if (campaignRunning) {
         const eventForm = document.createElement('form');
         eventForm.className = 'sponsor-campaign-events-form service-form';

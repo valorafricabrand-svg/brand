@@ -3268,6 +3268,61 @@ test('premium sponsors can run a tracked homepage billboard video', async () => 
   assert.ok(!afterCancel.body.sponsors.some((sponsor) => sponsor.id === purchaseId));
 });
 
+test('each account gets one free 7-day Premium trial, ranked behind paying sponsors', async () => {
+  const trialAuth = createTestAccountAuth(`trial-sponsor-${crypto.randomUUID()}@example.com`);
+  assert.equal((await request(app).post('/api/sponsorships/trial').send({ brandName: 'Anon', buyerName: 'A' })).status, 401);
+
+  const trial = await request(app).post('/api/sponsorships/trial').set(trialAuth).send({
+    brandName: 'Trial Lager', websiteUrl: 'https://trial-lager.example', buyerName: 'Tess',
+    videoUrl: 'https://trial-lager.example/ad.mp4', tagline: 'Try us for a week'
+  });
+  assert.equal(trial.status, 201);
+  assert.equal(trial.body.status, 'active');
+  assert.equal(trial.body.isTrial, true);
+  const row = db.prepare('SELECT tier,amount_kes,payment_method,is_trial,starts_at,ends_at FROM sponsorship_purchases WHERE id=?')
+    .get(trial.body.purchaseId);
+  assert.deepEqual([row.tier, row.amount_kes, row.payment_method, row.is_trial], ['premium', 0, 'trial', 1]);
+  assert.equal(Date.parse(row.ends_at) - Date.parse(row.starts_at), 7 * 86400000);
+
+  const second = await request(app).post('/api/sponsorships/trial').set(trialAuth).send({
+    brandName: 'Trial Lager Again', buyerName: 'Tess'
+  });
+  assert.equal(second.status, 409);
+  assert.throws(() => db.prepare(`
+    INSERT INTO sponsorship_purchases (id,access_token_hash,account_id,tier,brand_name,buyer_name,amount_kes,payment_method,status,is_trial)
+    VALUES (?,?,?,'premium','Race','Race',0,'trial','active',1)
+  `).run(crypto.randomUUID(), 'hash', db.prepare('SELECT account_id FROM sponsorship_purchases WHERE id=?').get(trial.body.purchaseId).account_id),
+  /UNIQUE/);
+
+  const paidAuth = createTestAccountAuth(`trial-paid-${crypto.randomUUID()}@example.com`);
+  createTestWallet(paidAuth, 500000);
+  const paid = await request(app).post('/api/sponsorships').set(paidAuth).send({
+    tier: 'premium', brandName: 'Paying Brew', websiteUrl: 'https://paying-brew.example',
+    videoUrl: 'https://paying-brew.example/ad.mp4', buyerName: 'Pat', paymentMethod: 'wallet'
+  });
+  assert.equal(paid.status, 201);
+  const billboardIds = (await request(app).get('/api/sponsorships/featured-billboard')).body.sponsors.map((sponsor) => sponsor.id);
+  assert.ok(billboardIds.indexOf(paid.body.purchaseId) < billboardIds.indexOf(trial.body.purchaseId));
+  const stripIds = (await request(app).get('/api/sponsorships/active')).body.sponsors.map((sponsor) => sponsor.trackingId);
+  assert.ok(stripIds.indexOf(paid.body.purchaseId) < stripIds.indexOf(trial.body.purchaseId));
+
+  await request(app).get(`/api/sponsorships/${trial.body.purchaseId}/click?placement=homepage-billboard`);
+  const report = await request(app).get(`/api/sponsorships/${trial.body.purchaseId}/report`).set(trialAuth);
+  assert.equal(report.status, 200);
+  assert.equal(report.body.campaign.isTrial, 1);
+  assert.equal(report.body.metrics.clicks, 1);
+  assert.equal(report.body.metrics.costPerClickKes, null);
+
+  const mine = (await request(app).get('/api/sponsorships/me').set(trialAuth)).body.purchases;
+  assert.equal(mine[0].isTrial, 1);
+  assert.equal(mine[0].websiteUrl, 'https://trial-lager.example');
+  const adminRow = (await request(app).get('/api/sponsorships/admin').set(admin)).body.purchases
+    .find((purchase) => purchase.id === trial.body.purchaseId);
+  assert.equal(adminRow.isTrial, 1);
+
+  db.prepare('UPDATE sponsorship_purchases SET status=? WHERE id IN (?,?)').run('cancelled', trial.body.purchaseId, paid.body.purchaseId);
+});
+
 test('event pages report sold-out status and homepage review highlights include other reviewed events', async () => {
   const soldOutAuth = createTestAccountAuth(`sold-out-attendee-${crypto.randomUUID()}@example.com`);
   const soldOutEvent = createStoredTestEvent('Sold Out Showcase', soldOutAuth);

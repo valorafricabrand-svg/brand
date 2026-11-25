@@ -16,8 +16,22 @@
     const phoneInput = document.getElementById('sponsorPhone');
     const submitButton = document.getElementById('sponsorCheckoutSubmit');
     const billboardFieldset = document.getElementById('billboardVideoFieldset');
+    const trialOffer = document.getElementById('sponsorTrialOffer');
+    const trialButton = document.getElementById('sponsorTrialSubmit');
     const labels = { mpesa: 'M-Pesa', wallet: 'Valor Wallet', nowpayments: 'NOWPayments', paypal: 'PayPal' };
     let paymentsConfigured = false;
+    let trialAvailable = false;
+
+    function updateTrialOffer() {
+      trialOffer.hidden = !(trialAvailable && form.elements.tier.value === 'premium');
+    }
+
+    function buildSponsorshipFormData() {
+      const data = new FormData(form);
+      if (!form.elements.videoFile.files.length) data.delete('videoFile');
+      if (!form.elements.imageFile.files.length) data.delete('imageFile');
+      return data;
+    }
 
     function updatePaymentFields() {
       const needsPhone = paymentMethod.value === 'mpesa';
@@ -32,11 +46,55 @@
       const isPremium = form.elements.tier.value === 'premium';
       billboardFieldset.hidden = !isPremium;
       if (!isPremium) billboardFieldset.querySelectorAll('input').forEach((input) => { input.value = ''; });
+      updateTrialOffer();
     }
     form.querySelectorAll('input[name="tier"]').forEach((radio) => radio.addEventListener('change', updateBillboardFields));
     updateBillboardFields();
 
     api('/api/health').then((health) => { paymentsConfigured = Boolean(health.paymentsConfigured); }).catch(() => {});
+
+    const signedInToken = window.valorAccountToken();
+    if (signedInToken) {
+      api('/api/sponsorships/me', { headers: { Authorization: `Bearer ${signedInToken}` } })
+        .then(({ purchases }) => {
+          trialAvailable = !purchases.some((purchase) => purchase.isTrial);
+          updateTrialOffer();
+        })
+        .catch(() => {});
+    }
+
+    trialButton.addEventListener('click', async () => {
+      feedback.classList.remove('error');
+      const token = window.valorAccountToken();
+      if (!token) {
+        setFeedback(feedback, 'Sign in to your account before starting a free trial.', true);
+        return;
+      }
+      // A trial needs no payment, so the M-Pesa number must not block the browser's own field checks.
+      phoneInput.required = false;
+      const valid = form.reportValidity();
+      updatePaymentFields();
+      if (!valid) return;
+      trialButton.disabled = true;
+      setFeedback(feedback, 'Starting your free 7-day Premium trial…');
+      try {
+        const result = await api('/api/sponsorships/trial', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: buildSponsorshipFormData()
+        });
+        trialAvailable = false;
+        form.reset();
+        updatePaymentFields();
+        updateBillboardFields();
+        setFeedback(feedback, result.message);
+        document.getElementById('refreshSponsorships')?.click();
+      } catch (error) {
+        setFeedback(feedback, error.message, true);
+      } finally {
+        trialButton.disabled = false;
+      }
+    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -54,13 +112,10 @@
       submitButton.disabled = true;
       setFeedback(feedback, 'Starting your sponsorship checkout…');
       try {
-        const data = new FormData(form);
-        if (!form.elements.videoFile.files.length) data.delete('videoFile');
-        if (!form.elements.imageFile.files.length) data.delete('imageFile');
         const result = await api('/api/sponsorships', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
-          body: data
+          body: buildSponsorshipFormData()
         });
         window.sessionStorage.setItem(`valor-sponsorship-${result.purchaseId}`, result.accessToken);
         if (result.checkoutUrl) {
