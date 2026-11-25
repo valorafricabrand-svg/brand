@@ -301,6 +301,9 @@
           loveButton.setAttribute('aria-pressed', String(updated.loved));
           loveButton.setAttribute('aria-label', updated.loved ? 'Remove from favorites' : 'Add to favorites');
           loveText.textContent = updated.loved ? 'You loved this event' : 'I loved this event';
+          window.valorTrack?.('favorite', {
+            eventId: event.id, value: updated.loved ? 'loved' : 'unloved', category: event.category, city: event.city
+          });
         } catch (error) {
           console.error('Could not update favorite:', error.message);
         } finally {
@@ -320,6 +323,7 @@
 
   function recordEventView(event) {
     if (!event.id) return;
+    window.valorTrack?.('event_view', { eventId: event.id, category: event.category, city: event.city });
     api('/api/events/' + encodeURIComponent(event.id) + '/views', { method: 'POST' })
       .catch((error) => { console.error('Could not record this event view:', error.message); });
     const token = window.valorAccountToken();
@@ -557,6 +561,7 @@
         if (typeof window.valorTrackMeta === 'function') {
           window.valorTrackMeta('InitiateCheckout', window.valorMetaContent);
         }
+        window.valorTrack?.('checkout_start', { eventId: event.id });
       });
       const secureNote = document.createElement('p');
       secureNote.className = 'event-detail-secure-note';
@@ -600,6 +605,8 @@
         whatsappLink.target = '_blank';
         whatsappLink.rel = 'noopener noreferrer';
         whatsappLink.textContent = 'WhatsApp';
+        shareButton.addEventListener('click', () => window.valorTrack?.('share', { eventId: event.id, value: 'native' }));
+        whatsappLink.addEventListener('click', () => window.valorTrack?.('share', { eventId: event.id, value: 'whatsapp' }));
         shareActions.append(shareButton, whatsappLink, feedback);
         copy.appendChild(shareActions);
       } else {
@@ -1157,6 +1164,7 @@
           button.disabled = false;
           return;
         }
+        window.valorTrack?.('checkout_submit', { eventId: event.id, value: isFreeTicket ? 'free' : selectedMethod });
         await window.valorAffiliateReferralReady;
         await startCheckout('/api/orders/tickets', {
           eventId: event.id,
@@ -1313,6 +1321,8 @@
     });
   }
 
+  const trackedOrderResults = new Set();
+
   async function loadOrder() {
     const root = document.getElementById('orderStatus');
     if (!root) return;
@@ -1347,6 +1357,10 @@
       const order = await api(`/api/orders/${encodeURIComponent(orderId)}`, { headers });
       if (typeof window.valorTrackPurchase === 'function') {
         window.valorTrackPurchase(order);
+      }
+      if (order.status !== 'pending' && !trackedOrderResults.has(orderId)) {
+        trackedOrderResults.add(orderId);
+        window.valorTrack?.('checkout_result', { eventId: order.eventId, value: order.status });
       }
       const heading = document.createElement('h1');
       heading.textContent = order.status === 'paid' ? 'Payment confirmed' : order.status === 'confirmed' ? 'Free registration confirmed' : order.status === 'failed' ? 'Payment not completed' : order.status === 'review' ? 'Payment needs support review' : order.paymentMethod === 'stripe' ? 'Waiting for Stripe payment confirmation' : order.paymentMethod === 'nowpayments' ? 'Waiting for crypto payment confirmation' : order.paymentMethod === 'paypal' ? 'Waiting for PayPal payment confirmation' : order.paymentMethod === 'googlepay' ? 'Waiting for Google Pay payment confirmation' : order.paymentMethod === 'applepay' ? 'Waiting for Apple Pay payment confirmation' : 'Waiting for M-Pesa payment';

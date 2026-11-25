@@ -439,6 +439,33 @@ db.exec(`
     PRIMARY KEY (event_id, view_date)
   );
 
+  CREATE TABLE IF NOT EXISTS activity_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    visitor_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL,
+    event_type TEXT NOT NULL CHECK (event_type IN (
+      'page_view','search','filter','event_view','favorite','share',
+      'checkout_start','checkout_submit','checkout_result','sign_in'
+    )),
+    path TEXT NOT NULL DEFAULT '',
+    referrer_path TEXT NOT NULL DEFAULT '',
+    event_id TEXT,
+    value TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS activity_events_created ON activity_events(created_at);
+  CREATE INDEX IF NOT EXISTS activity_events_type ON activity_events(event_type,created_at);
+  CREATE INDEX IF NOT EXISTS activity_events_session ON activity_events(session_id,id);
+  CREATE INDEX IF NOT EXISTS activity_events_visitor ON activity_events(visitor_id);
+
+  CREATE TABLE IF NOT EXISTS consent_choice_daily (
+    choice_date TEXT NOT NULL,
+    choice TEXT NOT NULL CHECK (choice IN ('accepted','rejected')),
+    choice_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (choice_date, choice)
+  );
+
   CREATE TABLE IF NOT EXISTS ticket_reminder_log (
     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,

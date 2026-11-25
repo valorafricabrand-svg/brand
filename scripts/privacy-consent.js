@@ -1,9 +1,32 @@
 (function () {
   'use strict';
 
-  const consentKey = 'valor-meta-pixel-consent';
+  // The old key recorded consent to Meta ad measurement only; the current choice also covers
+  // first-party activity tracking and personalisation, so everyone is asked once again.
+  const consentKey = 'valor-cookie-consent';
+  const legacyConsentKey = 'valor-meta-pixel-consent';
   const pixelId = '2071976333431874';
-  const storedConsent = window.localStorage.getItem(consentKey);
+
+  function readStorage(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function writeStorage(key, value) {
+    try {
+      if (value === null) window.localStorage.removeItem(key);
+      else window.localStorage.setItem(key, value);
+    } catch (error) {
+      // Storage can be blocked (private browsing); the choice then lasts for this page only.
+    }
+  }
+
+  writeStorage(legacyConsentKey, null);
+  let sessionChoice = null;
+  const storedConsent = readStorage(consentKey);
   const pageName = window.location.pathname.split('/').pop();
   const privatePages = new Set([
     'account.html',
@@ -32,8 +55,13 @@
   }
 
   function hasConsent() {
-    return window.localStorage.getItem(consentKey) === 'accepted';
+    return (readStorage(consentKey) || sessionChoice) === 'accepted';
   }
+
+  window.valorConsent = {
+    granted: hasConsent,
+    open() {}
+  };
 
   function loadPixel() {
     if (pixelLoaded
@@ -70,13 +98,13 @@
   function trackPendingPurchase() {
     if (!pendingPurchase || !hasConsent() || !hasValidPixelId()) return;
     const dedupeKey = `valor-meta-purchase-${pendingPurchase.orderId}`;
-    if (window.localStorage.getItem(dedupeKey) === 'sent') {
+    if (readStorage(dedupeKey) === 'sent') {
       pendingPurchase = null;
       return;
     }
     loadPixel();
     if (!pixelLoaded || typeof window.fbq !== 'function') return;
-    window.localStorage.setItem(dedupeKey, 'sent');
+    writeStorage(dedupeKey, 'sent');
     window.fbq('track', 'Purchase', {
       value: pendingPurchase.value,
       currency: 'KES'
@@ -108,7 +136,7 @@
   };
 
   function createConsentControls() {
-    if (!hasValidPixelId() || !isEligiblePage()) return;
+    if (!isEligiblePage()) return;
 
     const panel = document.createElement('section');
     panel.className = 'privacy-consent';
@@ -119,10 +147,10 @@
     const message = document.createElement('div');
     message.className = 'privacy-consent-copy';
     const title = document.createElement('strong');
-    title.textContent = 'Your privacy choices';
+    title.textContent = 'Personalise your Valor Africa experience';
     const description = document.createElement('p');
     description.append(
-      document.createTextNode('We use the Meta Pixel for advertising measurement only if you accept. You can change your choice at any time. '),
+      document.createTextNode('If you accept, we remember the events you view to show your “Recently viewed” and “Recommended for you” picks, learn which pages and searches help people find events so we can improve the site, and measure our ads with the Meta Pixel. Rejecting keeps the site fully usable. You can change your choice any time in Cookie settings. '),
       Object.assign(document.createElement('a'), {
         href: 'privacy-policy.html',
         textContent: 'Read our Privacy Policy'
@@ -139,7 +167,7 @@
     const accept = document.createElement('button');
     accept.type = 'button';
     accept.className = 'privacy-consent-primary';
-    accept.textContent = 'Accept optional cookies';
+    accept.textContent = 'Accept and personalise';
     actions.append(reject, accept);
     panel.append(message, actions);
 
@@ -156,7 +184,8 @@
 
     function saveChoice(choice) {
       const alreadyAccepted = hasConsent();
-      window.localStorage.setItem(consentKey, choice);
+      sessionChoice = choice;
+      writeStorage(consentKey, choice);
       if (choice === 'accepted') {
         if (pixelLoaded && typeof window.fbq === 'function') {
           window.fbq('consent', 'grant');
@@ -172,7 +201,17 @@
         window.fbq('consent', 'revoke');
       }
       closePanel();
+      document.dispatchEvent(new CustomEvent('valor:consent-change', {
+        detail: { choice, granted: choice === 'accepted', previouslyGranted: alreadyAccepted }
+      }));
     }
+
+    function openPanel() {
+      panel.hidden = false;
+      settings.setAttribute('aria-expanded', 'true');
+      accept.focus();
+    }
+    window.valorConsent.open = openPanel;
 
     reject.addEventListener('click', function () {
       saveChoice('rejected');
@@ -181,9 +220,8 @@
       saveChoice('accepted');
     });
     settings.addEventListener('click', function () {
-      panel.hidden = !panel.hidden;
-      settings.setAttribute('aria-expanded', String(!panel.hidden));
-      if (!panel.hidden) accept.focus();
+      if (panel.hidden) openPanel();
+      else closePanel();
     });
 
     document.body.append(panel, settings);

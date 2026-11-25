@@ -67,20 +67,21 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/events.css?v=category-marquee-1">
+  <link rel="stylesheet" href="styles/events.css?v=personalised-picks-1">
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <link rel="preconnect" href="https://valor-events-api-odp2.onrender.com">
   <script src="scripts/events-api.js?v=local-live-read-fallback-1" defer></script>
   <script src="scripts/hero-promo.js?v=home-hero-media-fast-3" defer></script>
   <script src="scripts/google-pay.js?v=braintree-google-pay-1" defer></script>
   <script src="scripts/apple-pay.js?v=braintree-apple-pay-1" defer></script>
-  <script src="scripts/events.js?v=billboard-sponsor-video-1" defer></script>
+  <script src="scripts/events.js?v=activity-tracking-1" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/branding-marquee.js?v=branding-perf-1" defer></script>
   <script src="scripts/community-events.js?v=past-events-marquee-1" defer></script>
   <script src="scripts/sponsors.js?v=3" defer></script>
   <script src="scripts/testimonials.js?v=homepage-review-feed-2" defer></script>
-  <script src="scripts/privacy-consent.js" defer></script>
+  <script src="scripts/privacy-consent.js?v=activity-tracking-1" defer></script>
+  <script src="scripts/activity-tracker.js?v=activity-tracking-1" defer></script>
   <script src="scripts/nav-history.js?v=1" defer></script>
 </head>
 <body>
@@ -251,6 +252,24 @@
         <div class="branding-marquee-track" id="brandingMarqueeTrack" aria-describedby="brandingMarqueeStatus"></div>
       </div>
       <p class="branding-marquee-status" id="brandingMarqueeStatus" role="status" aria-live="polite">Loading branding examples…</p>
+    </section>
+
+    <section class="top-selling-events wrap" id="recentlyViewedSection" aria-labelledby="recentlyViewedHeading" hidden>
+      <div class="top-selling-events-heading">
+        <p class="section-kicker">PICK UP WHERE YOU LEFT OFF</p>
+        <h2 id="recentlyViewedHeading">Recently viewed</h2>
+        <p>Upcoming events you opened on this device.</p>
+      </div>
+      <div class="event-grid" id="recentlyViewedGrid" aria-live="polite"></div>
+    </section>
+    <section class="top-selling-events wrap" id="recommendedSection" aria-labelledby="recommendedHeading" hidden>
+      <div class="top-selling-events-heading">
+        <p class="section-kicker">PICKED FOR YOU</p>
+        <h2 id="recommendedHeading">Recommended for you</h2>
+        <p>Based on the events, categories, and cities you have explored.</p>
+      </div>
+      <div class="event-grid" id="recommendedGrid" aria-live="polite"></div>
+      <p class="personalised-prompt" id="personalisedPrompt" hidden>See events matched to what you browse. <button class="button secondary" type="button" id="personalisedPromptButton">Turn on personalised picks</button></p>
     </section>
 
     <section class="event-hub" id="events" aria-labelledby="eventsHeading">

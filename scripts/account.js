@@ -136,8 +136,19 @@
     });
   }
 
+  // account.html is a private page with no tracking; the next page records the sign-in,
+  // and only if the visitor accepted optional cookies (scripts/activity-tracker.js).
+  function markSignInForActivityTracking(method) {
+    try {
+      window.sessionStorage.setItem('valor-pending-sign-in', method);
+    } catch (error) {
+      // Analytics only; nothing to do if storage is blocked.
+    }
+  }
+
   async function accountSignInResult(result) {
     window.valorSetAccountToken(result.accessToken);
+    markSignInForActivityTracking('email');
     emailForm.reset();
     setEmailMode('options');
     await loadAccountSession();
@@ -152,6 +163,7 @@
         body: JSON.stringify({ idToken })
       });
       window.valorSetAccountToken(result.accessToken);
+      markSignInForActivityTracking('google');
       await loadAccountSession();
       setFeedback(document.getElementById('googleFeedback'), '');
       redirectAfterSignIn();

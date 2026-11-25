@@ -3451,6 +3451,96 @@ test('hero-slide and ad-package admin routes are also reachable without "/ads/" 
   assert.ok(listedPackages.body.packages.some((pkg) => pkg.id === createdPackage.body.id));
 });
 
+test('activity analytics records consented visits, strips private query data, forgets, purges, and summarises', async () => {
+  const visitor = crypto.randomUUID();
+  const session = crypto.randomUUID();
+  const otherVisitor = crypto.randomUUID();
+  const otherSession = crypto.randomUUID();
+  const email = `analytics-${crypto.randomUUID()}@example.com`;
+  const auth = createTestAccountAuth(email);
+  const accountId = db.prepare('SELECT id FROM accounts WHERE email=?').get(email).id;
+
+  assert.equal((await request(app).post('/api/analytics/events')
+    .send({ visitorId: 'nope', sessionId: session, events: [{ type: 'page_view', path: '/' }] })).status, 400);
+  assert.equal((await request(app).post('/api/analytics/events')
+    .send({ visitorId: visitor, sessionId: session, events: [] })).status, 400);
+  assert.equal((await request(app).post('/api/analytics/events').send({
+    visitorId: visitor, sessionId: session, events: Array.from({ length: 26 }, () => ({ type: 'page_view', path: '/' }))
+  })).status, 400);
+
+  const signedIn = await request(app).post('/api/analytics/events').set(auth).send({
+    visitorId: visitor,
+    sessionId: session,
+    events: [
+      { type: 'page_view', path: '/index.html' },
+      { type: 'page_view', path: '/events.html?category=Concerts&utm_source=x', referrerPath: '/index.html' },
+      { type: 'search', path: '/events.html', value: '  Amapiano  ' },
+      { type: 'filter', path: '/events.html', value: 'Nairobi' },
+      { type: 'event_view', path: '/event.html?slug=gig&share=secret', eventId: 'evt-analytics' },
+      { type: 'checkout_start', path: '/event.html?slug=gig', eventId: 'evt-analytics' },
+      { type: 'checkout_submit', path: '/event.html?slug=gig', eventId: 'evt-analytics', value: 'mpesa' },
+      { type: 'checkout_result', path: '/order.html?orderId=o1&access=token', value: 'paid' },
+      { type: 'not_allowed', path: '/index.html' }
+    ]
+  });
+  assert.equal(signedIn.status, 202);
+  assert.equal(signedIn.body.recorded, 8);
+  const storedView = db.prepare("SELECT path,account_id AS accountId FROM activity_events WHERE visitor_id=? AND event_type='event_view'").get(visitor);
+  assert.equal(storedView.path, '/event.html?slug=gig');
+  assert.equal(storedView.accountId, accountId);
+  assert.equal(db.prepare("SELECT path FROM activity_events WHERE visitor_id=? AND event_type='checkout_result'").get(visitor).path, '/order.html');
+  assert.equal(db.prepare("SELECT value FROM activity_events WHERE visitor_id=? AND event_type='search'").get(visitor).value, 'Amapiano');
+
+  const anonymous = await request(app).post('/api/analytics/events').set('Authorization', 'Bearer expired-token').send({
+    visitorId: otherVisitor,
+    sessionId: otherSession,
+    events: [
+      { type: 'page_view', path: '/' },
+      { type: 'page_view', path: '/events.html', referrerPath: '/' },
+      { type: 'search', path: '/events.html', value: 'amapiano' },
+      { type: 'event_view', path: '/event.html?slug=gig', eventId: 'evt-analytics' }
+    ]
+  });
+  assert.equal(anonymous.status, 202);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM activity_events WHERE visitor_id=? AND account_id IS NOT NULL').get(otherVisitor).n, 0);
+
+  for (const choice of ['accepted', 'accepted', 'accepted', 'rejected']) {
+    assert.equal((await request(app).post('/api/analytics/consent').send({ choice })).status, 204);
+  }
+  assert.equal((await request(app).post('/api/analytics/consent').send({ choice: 'maybe' })).status, 400);
+
+  assert.equal((await request(app).get('/api/analytics/admin/summary')).status, 401);
+  const summary = await request(app).get('/api/analytics/admin/summary?days=7').set(admin);
+  assert.equal(summary.status, 200);
+  assert.deepEqual(summary.body.totals, { visitors: 2, sessions: 2, pageViews: 4, signedInVisitors: 1 });
+  assert.equal(summary.body.daily.length, 7);
+  assert.equal(summary.body.daily.at(-1).pageViews, 4);
+  assert.ok(summary.body.topPages.some((page) => page.path === '/index.html' && page.views === 2 && page.visitors === 2));
+  assert.ok(summary.body.navigation.some((step) => step.fromPath === '/index.html' && step.toPath === '/events.html?category=Concerts'));
+  assert.ok(summary.body.navigation.some((step) => step.fromPath === '/index.html' && step.toPath === '/events.html'));
+  assert.deepEqual(summary.body.funnel.map((step) => step.sessions), [2, 1, 1, 1]);
+  assert.equal(summary.body.funnel[1].fromPrevious, 0.5);
+  assert.deepEqual(summary.body.searches[0], { value: 'amapiano', count: 2 });
+  assert.deepEqual(summary.body.filters[0], { value: 'nairobi', count: 1 });
+  assert.equal(summary.body.topEvents[0].eventId, 'evt-analytics');
+  assert.equal(summary.body.topEvents[0].views, 2);
+  assert.deepEqual(summary.body.consent, { accepted: 3, rejected: 1, acceptanceRate: 0.75 });
+
+  assert.equal((await request(app).post('/api/analytics/forget').send({ visitorId: visitor })).status, 204);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM activity_events WHERE visitor_id=?').get(visitor).n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM activity_events WHERE visitor_id=?').get(otherVisitor).n, 4);
+
+  const insertAged = db.prepare(`
+    INSERT INTO activity_events (visitor_id,session_id,event_type,path,created_at)
+    VALUES (?,?,'page_view','/index.html',datetime('now', ?))
+  `);
+  insertAged.run(otherVisitor, otherSession, '-400 days');
+  insertAged.run(otherVisitor, otherSession, '-10 days');
+  assert.equal(app.locals.purgeOldActivity(), 1);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM activity_events WHERE created_at < datetime('now','-395 days')").get().n, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM activity_events WHERE created_at < datetime('now','-9 days')").get().n, 1);
+});
+
 after(() => {
   db.close();
   fs.rmSync(path.join(__dirname, '..', '.test-uploads'), { recursive: true, force: true });

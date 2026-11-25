@@ -279,6 +279,9 @@
             body: JSON.stringify({ loved, rating: null, review: '' })
           });
           setFavorite(saved.loved);
+          window.valorTrack?.('favorite', {
+            eventId: event.id, value: saved.loved ? 'loved' : 'unloved', category: event.category, city: event.city
+          });
         } catch (error) {
           button.setAttribute('title', error.message);
         } finally {
@@ -517,6 +520,9 @@
     feedback.className = 'event-share-feedback';
     feedback.setAttribute('role', 'status');
     feedback.setAttribute('aria-live', 'polite');
+    [[shareButton, 'native'], [whatsappLink, 'whatsapp'], [copyButton, 'copy']].forEach(([control, channel]) => {
+      control.addEventListener('click', () => window.valorTrack?.('share', { eventId: event.id, value: channel }));
+    });
     actions.append(shareButton, whatsappLink, copyButton, feedback);
     return actions;
   }
@@ -678,6 +684,35 @@
     topSellingEventsSection.hidden = topEvents.length === 0;
   }
 
+  // "Recently viewed" and "Recommended for you" only use data this browser stored after the
+  // visitor accepted optional cookies (scripts/activity-tracker.js).
+  function renderPersonalisedSections() {
+    const consented = Boolean(window.valorConsent?.granted?.());
+    const personalisation = consented ? window.valorPersonalisation : null;
+    const upcoming = events.filter((event) => event.id && Date.parse(event.startsAt) > Date.now());
+    const recentIds = personalisation ? personalisation.recentEventIds() : [];
+    if (recentlyViewedSection && recentlyViewedGrid) {
+      const recent = recentIds
+        .map((id) => upcoming.find((event) => event.id === id))
+        .filter(Boolean)
+        .slice(0, 4);
+      recentlyViewedGrid.replaceChildren(...recent.map((event) => createEventCard(event)));
+      recentlyViewedSection.hidden = recent.length === 0;
+    }
+    if (recommendedSection && recommendedGrid) {
+      const interests = personalisation ? personalisation.interests() : { categories: {}, cities: {} };
+      const viewed = new Set(recentIds);
+      const score = (event) => (interests.categories?.[event.category] || 0) + (interests.cities?.[event.city] || 0);
+      const recommended = upcoming
+        .filter((event) => !viewed.has(event.id) && score(event) > 0)
+        .sort((left, right) => score(right) - score(left) || Date.parse(left.startsAt) - Date.parse(right.startsAt))
+        .slice(0, 4);
+      recommendedGrid.replaceChildren(...recommended.map((event) => createEventCard(event)));
+      if (personalisedPrompt) personalisedPrompt.hidden = consented || upcoming.length === 0;
+      recommendedSection.hidden = consented ? recommended.length === 0 : upcoming.length === 0;
+    }
+  }
+
   function renderFeaturedOffers() {
     if (featuredOffers) featuredOffers.replaceChildren(createSponsoredAdRail());
   }
@@ -689,6 +724,13 @@
   const topSellingEventsSection = document.getElementById('topSellingEventsSection');
   const topSellingEventsGrid = document.getElementById('topSellingEventsGrid');
   const featuredOffers = document.getElementById('featuredOffers');
+  const recentlyViewedSection = document.getElementById('recentlyViewedSection');
+  const recentlyViewedGrid = document.getElementById('recentlyViewedGrid');
+  const recommendedSection = document.getElementById('recommendedSection');
+  const recommendedGrid = document.getElementById('recommendedGrid');
+  const personalisedPrompt = document.getElementById('personalisedPrompt');
+  document.getElementById('personalisedPromptButton')?.addEventListener('click', () => window.valorConsent?.open());
+  document.addEventListener('valor:consent-change', renderPersonalisedSections);
 
   const adSlides = document.getElementById('adSlides');
   const adStage = document.getElementById('adStage');
@@ -1048,6 +1090,23 @@
     }
   }
 
+  // Search boxes filter on every keystroke; record what someone settled on, not each letter.
+  function trackInputAfterPause(input, type, details = {}) {
+    if (!input) return;
+    let timer = null;
+    input.addEventListener('input', () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const value = input.value.trim();
+        if (value.length >= 2) window.valorTrack?.(type, { ...details, value });
+      }, 1500);
+    });
+  }
+
+  function trackFilterChoice(kind, value) {
+    if (value && value !== 'All') window.valorTrack?.('filter', { kind, value });
+  }
+
   const exploreNav = document.querySelector('.explore-nav');
   if (exploreNav) {
     exploreNav.addEventListener('click', (event) => {
@@ -1055,6 +1114,7 @@
       if (!link) return;
       event.preventDefault();
       homeCategory = link.dataset.homeCategory;
+      trackFilterChoice('category', homeCategory);
       exploreNav.querySelectorAll('a[data-home-category]').forEach((item) => {
         const isActive = item === link;
         item.classList.toggle('is-active', isActive);
@@ -1075,6 +1135,8 @@
     homeSearchForm.querySelectorAll('input').forEach((input) => {
       input.addEventListener('input', applyHomeFilters);
     });
+    trackInputAfterPause(document.getElementById('homeEventSearch'), 'search');
+    trackInputAfterPause(document.getElementById('homeCitySearch'), 'filter', { kind: 'city' });
   }
 
   const allCategories = document.getElementById('allCategories');
@@ -1161,6 +1223,7 @@
         chip.setAttribute('aria-pressed', String(isActive));
       });
       filterAllEvents();
+      trackFilterChoice('category', button.dataset.category);
     });
     if (allCities) {
       allCities.addEventListener('click', (event) => {
@@ -1172,9 +1235,11 @@
           chip.setAttribute('aria-pressed', String(isActive));
         });
         filterAllEvents();
+        trackFilterChoice('city', button.dataset.city);
       });
     }
     if (allSearch) allSearch.addEventListener('input', filterAllEvents);
+    trackInputAfterPause(allSearch, 'search');
   }
 
   function updateListingStatus() {
@@ -1249,6 +1314,7 @@
     if (featured) renderEvents(featured, events);
     if (allEvents) renderEvents(allEvents, events);
     renderTopSellingEvents();
+    renderPersonalisedSections();
     renderFeaturedOffers();
     applyHomeFilters();
     refreshAllEvents();
@@ -1275,6 +1341,7 @@
     if (featured) renderEvents(featured, events);
     if (allEvents) renderEvents(allEvents, events);
     renderTopSellingEvents();
+    renderPersonalisedSections();
     renderFeaturedOffers();
     applyHomeFilters();
     refreshAllEvents();
@@ -1737,6 +1804,7 @@
     }
     activeEvent = events.find((item) => item.id === eventId);
     if (!activeEvent) return;
+    window.valorTrack?.('checkout_start', { eventId: activeEvent.id });
     document.getElementById('ticketEventName').textContent = `${activeEvent.title} · ${locationLine(activeEvent)}`;
     const availableTickets = activeEvent.tickets.filter((ticket) =>
       !ticket.regularPrice || !ticket.saleEnds || new Date(ticket.saleEnds).getTime() > Date.now()
@@ -1834,6 +1902,7 @@
         ticketFeedback.classList.add('error');
         return;
       }
+      window.valorTrack?.('checkout_submit', { eventId: activeEvent.id, value: isFreeTicket ? 'free' : paymentMethod });
       submitButton.disabled = true;
       ticketFeedback.classList.remove('error');
       ticketFeedback.textContent = Number(ticket.price) === 0

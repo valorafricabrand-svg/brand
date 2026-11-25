@@ -1021,6 +1021,7 @@
     document.getElementById('artistsSection').hidden = button.dataset.adminTab !== 'artists';
     document.getElementById('giftsSection').hidden = button.dataset.adminTab !== 'gifts';
     document.getElementById('remindersSection').hidden = button.dataset.adminTab !== 'reminders';
+    document.getElementById('analyticsSection').hidden = button.dataset.adminTab !== 'analytics';
     if (button.dataset.adminTab === 'partners') {
       loadPartners().catch((error) => setFeedback(feedback, error.message, true));
     }
@@ -1042,7 +1043,100 @@
     if (button.dataset.adminTab === 'hero-slides') {
       loadHeroSlides().catch((error) => setFeedback(feedback, error.message, true));
     }
+    if (button.dataset.adminTab === 'analytics') {
+      loadAnalytics().catch((error) => setFeedback(feedback, error.message, true));
+    }
   });
+
+  document.getElementById('analyticsDays').addEventListener('change', () => {
+    loadAnalytics().catch((error) => setFeedback(feedback, error.message, true));
+  });
+
+  function formatPercent(value) {
+    return value === null || value === undefined ? '—' : `${Math.round(value * 1000) / 10}%`;
+  }
+
+  function addRankedList(parent, title, rows, describe, emptyText) {
+    const group = document.createElement('div');
+    group.className = 'analytics-group';
+    addText(group, 'h3', '', title);
+    if (!rows.length) {
+      addText(group, 'p', 'empty', emptyText);
+    } else {
+      const list = document.createElement('ol');
+      list.className = 'ranked-list';
+      rows.forEach((row) => {
+        const [label, count] = describe(row);
+        const item = document.createElement('li');
+        addText(item, 'span', 'ranked-label', label);
+        addText(item, 'span', 'ranked-count', count);
+        list.appendChild(item);
+      });
+      group.appendChild(list);
+    }
+    parent.appendChild(group);
+  }
+
+  async function loadAnalytics() {
+    const mount = document.getElementById('analyticsContent');
+    const days = document.getElementById('analyticsDays').value;
+    const summary = await api(`/api/analytics/admin/summary?days=${encodeURIComponent(days)}`);
+    mount.replaceChildren();
+    const number = (value) => Number(value || 0).toLocaleString('en-KE');
+
+    const tiles = document.createElement('div');
+    tiles.className = 'stat-tiles';
+    [
+      ['Visitors', number(summary.totals.visitors)],
+      ['Visits', number(summary.totals.sessions)],
+      ['Page views', number(summary.totals.pageViews)],
+      ['Signed-in visitors', number(summary.totals.signedInVisitors)],
+      ['Cookie acceptance', `${formatPercent(summary.consent.acceptanceRate)} (${number(summary.consent.accepted)} of ${number(summary.consent.accepted + summary.consent.rejected)})`]
+    ].forEach(([label, value]) => {
+      const tile = document.createElement('div');
+      tile.className = 'stat-tile';
+      addText(tile, 'span', 'stat-label', label);
+      addText(tile, 'strong', 'stat-value', value);
+      tiles.appendChild(tile);
+    });
+    mount.appendChild(tiles);
+
+    const funnel = document.createElement('div');
+    funnel.className = 'analytics-group';
+    addText(funnel, 'h3', '', 'Ticket checkout funnel (visits)');
+    const steps = document.createElement('ol');
+    steps.className = 'ranked-list funnel-list';
+    summary.funnel.forEach((step) => {
+      const item = document.createElement('li');
+      addText(item, 'span', 'ranked-label', step.label);
+      addText(item, 'span', 'ranked-count', step.fromPrevious === null
+        ? number(step.sessions)
+        : `${number(step.sessions)} · ${formatPercent(step.fromPrevious)} of previous step`);
+      steps.appendChild(item);
+    });
+    funnel.appendChild(steps);
+    mount.appendChild(funnel);
+
+    const grid = document.createElement('div');
+    grid.className = 'analytics-grid';
+    addRankedList(grid, 'Top pages', summary.topPages,
+      (row) => [row.path, `${number(row.views)} views · ${number(row.visitors)} visitors`], 'No page views yet.');
+    addRankedList(grid, 'How people move between pages', summary.navigation,
+      (row) => [`${row.fromPath} → ${row.toPath}`, number(row.count)], 'No multi-page visits yet.');
+    addRankedList(grid, 'Top searches', summary.searches,
+      (row) => [row.value, number(row.count)], 'No searches yet.');
+    addRankedList(grid, 'Top filters', summary.filters,
+      (row) => [row.value, number(row.count)], 'No category or city filters used yet.');
+    addRankedList(grid, 'Most viewed events', summary.topEvents,
+      (row) => [row.title || row.eventId, `${number(row.views)} views · ${number(row.favourites)} loved · ${number(row.shares)} shares`],
+      'No event views yet.');
+    mount.appendChild(grid);
+
+    const busiest = summary.daily.reduce((best, day) => (day.visitors > best.visitors ? day : best), summary.daily[0]);
+    addText(mount, 'p', 'record-meta', busiest && busiest.visitors
+      ? `Busiest day: ${busiest.date} with ${number(busiest.visitors)} visitors and ${number(busiest.pageViews)} page views.`
+      : 'No visits recorded in this period yet.');
+  }
 
   const heroSlideForm = document.getElementById('heroSlideForm');
   const heroMediaType = heroSlideForm.elements.mediaType;

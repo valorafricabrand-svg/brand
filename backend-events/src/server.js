@@ -55,12 +55,23 @@ artistBookingEmailRetryTimer.unref();
 app.locals.retryPendingArtistBookingEmails().catch((error) => {
   console.error('Could not retry pending artist booking emails:', error);
 });
+function purgeOldActivity() {
+  try {
+    app.locals.purgeOldActivity();
+  } catch (error) {
+    console.error('Could not purge expired activity analytics:', error);
+  }
+}
+const activityPurgeTimer = setInterval(purgeOldActivity, 24 * 60 * 60 * 1000);
+activityPurgeTimer.unref();
+purgeOldActivity();
 
 function shutdown(signal) {
   console.log(`${signal} received; closing event service.`);
   clearInterval(ticketEmailRetryTimer);
   clearInterval(reminderEmailTimer);
   clearInterval(artistBookingEmailRetryTimer);
+  clearInterval(activityPurgeTimer);
   server.close(() => {
     require('./db').close();
     process.exit(0);

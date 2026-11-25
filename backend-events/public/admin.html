@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Event admin | Valor Africa</title>
-  <link rel="stylesheet" href="/admin-assets/admin.css?v=hero-video-library-3">
-  <script src="/admin-assets/admin.js?v=premium-trial-1" defer></script>
+  <link rel="stylesheet" href="/admin-assets/admin.css?v=site-analytics-1">
+  <script src="/admin-assets/admin.js?v=site-analytics-1" defer></script>
 </head>
 <body>
   <main class="admin-shell">
@@ -49,7 +49,21 @@
         <button class="tab" type="button" data-admin-tab="artists">Artists &amp; bookings</button>
         <button class="tab" type="button" data-admin-tab="gifts">Gift marketplace</button>
         <button class="tab" type="button" data-admin-tab="reminders">Reminder emails</button>
+        <button class="tab" type="button" data-admin-tab="analytics">Analytics</button>
       </nav>
+      <section class="card admin-section" id="analyticsSection" hidden>
+        <div class="section-heading">
+          <div><h2>Site analytics</h2><p>First-party activity from visitors who accepted optional cookies. People who reject are only counted in the acceptance rate, never tracked.</p></div>
+          <label>Period
+            <select id="analyticsDays">
+              <option value="7">Last 7 days</option>
+              <option value="30" selected>Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </label>
+        </div>
+        <div id="analyticsContent" aria-live="polite"></div>
+      </section>
       <section class="card admin-section" id="heroSlidesSection" hidden>
         <div class="section-heading">
           <div><h2>Homepage hero slides</h2><p>Add video or image promos, remove slides from rotation, and move a slide up to make it appear first.</p></div>

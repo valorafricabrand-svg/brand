@@ -897,6 +897,8 @@ function createApp(options = {}) {
   const sponsorshipClickLimiter = createSubmissionLimiter(1000, 'sponsorship clicks');
   const sponsorshipDeliveryLimiter = createSubmissionLimiter(20, 'sponsorship delivery reports');
   const eventViewLimiter = createSubmissionLimiter(1000, 'event views');
+  const activityLimiter = createSubmissionLimiter(600, 'activity events');
+  const consentChoiceLimiter = createSubmissionLimiter(50, 'cookie choices');
   const giftPurchaseLimiter = createSubmissionLimiter(8, 'gift purchases');
   const giftCodeAttemptLimiter = createSubmissionLimiter(10, 'gift-code attempts');
   const merchantApplicationLimiter = createSubmissionLimiter(5, 'gift merchant applications');
@@ -925,17 +927,26 @@ function createApp(options = {}) {
     return { accessToken: token, expiresIn: '30d', account };
   }
 
-  function requireAccount(req, res, next) {
+  function bearerToken(req) {
     const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-    if (!token) return res.status(401).json({ error: 'Sign in to your Valor Africa account to continue.' });
-    const account = db.prepare(`
+    return header.startsWith('Bearer ') ? header.slice(7) : '';
+  }
+
+  function findAccountForToken(token) {
+    if (!token) return null;
+    return db.prepare(`
       SELECT a.id,a.email,a.display_name AS displayName,a.email_verified_at AS emailVerifiedAt,
         a.marketing_emails_opt_out AS marketingEmailsOptOut,
         s.token_hash AS sessionTokenHash
       FROM account_sessions s JOIN accounts a ON a.id=s.account_id
       WHERE s.token_hash=? AND s.expires_at > datetime('now')
-    `).get(sha256(token));
+    `).get(sha256(token)) || null;
+  }
+
+  function requireAccount(req, res, next) {
+    const token = bearerToken(req);
+    if (!token) return res.status(401).json({ error: 'Sign in to your Valor Africa account to continue.' });
+    const account = findAccountForToken(token);
     if (!account) return res.status(401).json({ error: 'Your session has expired. Please sign in again.' });
     req.account = account;
     next();
@@ -3523,6 +3534,188 @@ function createApp(options = {}) {
       ON CONFLICT(event_id,view_date) DO UPDATE SET view_count=view_count+1
     `).run(event.id, today);
     res.status(204).end();
+  });
+
+  // First-party activity analytics. The browser only sends these after the visitor accepts
+  // optional cookies (scripts/privacy-consent.js); withdrawing consent calls /forget.
+  const activityEventTypes = new Set([
+    'page_view','search','filter','event_view','favorite','share',
+    'checkout_start','checkout_submit','checkout_result','sign_in'
+  ]);
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const keptPathParameters = ['slug', 'category', 'city'];
+  const ACTIVITY_RETENTION_DAYS = 395;
+
+  // Keep only the path plus a few non-identifying parameters: order, ticket, and share links
+  // carry access tokens or personal data in their query strings.
+  function activityPath(value) {
+    if (typeof value !== 'string' || !value.startsWith('/')) return '';
+    let url;
+    try {
+      url = new URL(value, 'https://valorafrica.co.ke');
+    } catch (error) {
+      return '';
+    }
+    const pathname = url.pathname === '/' ? '/index.html' : url.pathname;
+    const kept = new URLSearchParams();
+    keptPathParameters.forEach((key) => {
+      const parameter = url.searchParams.get(key);
+      if (parameter) kept.set(key, parameter);
+    });
+    const query = kept.toString();
+    return `${pathname}${query ? `?${query}` : ''}`.slice(0, 300);
+  }
+
+  function activityText(value, maximum) {
+    return typeof value === 'string' ? value.trim().slice(0, maximum) : '';
+  }
+
+  app.post('/api/analytics/events', activityLimiter, (req, res) => {
+    const { visitorId, sessionId, events: batch } = req.body || {};
+    if (typeof visitorId !== 'string' || !uuidPattern.test(visitorId)
+        || typeof sessionId !== 'string' || !uuidPattern.test(sessionId)) {
+      return res.status(400).json({ error: 'A valid visitor and session ID are required.' });
+    }
+    if (!Array.isArray(batch) || !batch.length || batch.length > 25) {
+      return res.status(400).json({ error: 'Send between 1 and 25 activity events.' });
+    }
+    const accountId = findAccountForToken(bearerToken(req))?.id || null;
+    const rows = batch
+      .filter((entry) => entry && typeof entry === 'object' && activityEventTypes.has(entry.type))
+      .map((entry) => ({
+        type: entry.type,
+        path: activityPath(entry.path),
+        referrerPath: activityPath(entry.referrerPath),
+        eventId: activityText(entry.eventId, 64) || null,
+        value: activityText(entry.value, 120)
+      }));
+    const insert = db.prepare(`
+      INSERT INTO activity_events (visitor_id,session_id,account_id,event_type,path,referrer_path,event_id,value)
+      VALUES (?,?,?,?,?,?,?,?)
+    `);
+    db.transaction(() => {
+      rows.forEach((row) => insert.run(
+        visitorId, sessionId, accountId, row.type, row.path, row.referrerPath, row.eventId, row.value
+      ));
+    })();
+    res.status(202).json({ recorded: rows.length });
+  });
+
+  app.post('/api/analytics/consent', consentChoiceLimiter, (req, res) => {
+    const choice = req.body?.choice;
+    if (!['accepted', 'rejected'].includes(choice)) return res.status(400).json({ error: 'Choose accepted or rejected.' });
+    db.prepare(`
+      INSERT INTO consent_choice_daily (choice_date,choice,choice_count) VALUES (?,?,1)
+      ON CONFLICT(choice_date,choice) DO UPDATE SET choice_count=choice_count+1
+    `).run(new Date().toISOString().slice(0, 10), choice);
+    res.status(204).end();
+  });
+
+  app.post('/api/analytics/forget', consentChoiceLimiter, (req, res) => {
+    const visitorId = req.body?.visitorId;
+    if (typeof visitorId !== 'string' || !uuidPattern.test(visitorId)) {
+      return res.status(400).json({ error: 'A valid visitor ID is required.' });
+    }
+    db.prepare('DELETE FROM activity_events WHERE visitor_id=?').run(visitorId);
+    res.status(204).end();
+  });
+
+  app.locals.purgeOldActivity = () => db.prepare(
+    `DELETE FROM activity_events WHERE created_at < datetime('now', ?)`
+  ).run(`-${ACTIVITY_RETENTION_DAYS} days`).changes;
+
+  app.get('/api/analytics/admin/summary', requireAdmin, (req, res) => {
+    const days = [7, 30, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+    const since = `-${days} days`;
+    const windowStart = db.prepare("SELECT datetime('now', ?) AS start").get(since).start;
+    const totals = db.prepare(`
+      SELECT COUNT(DISTINCT visitor_id) AS visitors,COUNT(DISTINCT session_id) AS sessions,
+        SUM(event_type='page_view') AS pageViews,
+        COUNT(DISTINCT account_id) AS signedInVisitors
+      FROM activity_events WHERE created_at >= ?
+    `).get(windowStart);
+    const dailyRows = db.prepare(`
+      SELECT substr(created_at,1,10) AS date,COUNT(DISTINCT visitor_id) AS visitors,
+        SUM(event_type='page_view') AS pageViews
+      FROM activity_events WHERE created_at >= ?
+      GROUP BY substr(created_at,1,10)
+    `).all(windowStart);
+    const dailyByDate = new Map(dailyRows.map((row) => [row.date, row]));
+    const daily = [];
+    for (let offset = days - 1; offset >= 0; offset -= 1) {
+      const date = new Date(Date.now() - offset * 86400000).toISOString().slice(0, 10);
+      const row = dailyByDate.get(date);
+      daily.push({ date, visitors: row ? row.visitors : 0, pageViews: row ? row.pageViews : 0 });
+    }
+    const topPages = db.prepare(`
+      SELECT path,COUNT(*) AS views,COUNT(DISTINCT visitor_id) AS visitors
+      FROM activity_events WHERE event_type='page_view' AND created_at >= ?
+      GROUP BY path ORDER BY views DESC LIMIT 15
+    `).all(windowStart);
+    const navigation = db.prepare(`
+      SELECT fromPath,toPath,COUNT(*) AS count FROM (
+        SELECT LAG(path) OVER (PARTITION BY session_id ORDER BY id) AS fromPath,path AS toPath
+        FROM activity_events WHERE event_type='page_view' AND created_at >= ?
+      )
+      WHERE fromPath IS NOT NULL AND fromPath != toPath
+      GROUP BY fromPath,toPath ORDER BY count DESC LIMIT 15
+    `).all(windowStart);
+    const funnelCounts = db.prepare(`
+      SELECT
+        COUNT(DISTINCT CASE WHEN event_type='event_view' THEN session_id END) AS viewed,
+        COUNT(DISTINCT CASE WHEN event_type='checkout_start' THEN session_id END) AS started,
+        COUNT(DISTINCT CASE WHEN event_type='checkout_submit' THEN session_id END) AS submitted,
+        COUNT(DISTINCT CASE WHEN event_type='checkout_result' AND value IN ('paid','confirmed') THEN session_id END) AS completed
+      FROM activity_events WHERE created_at >= ?
+    `).get(windowStart);
+    const funnelSteps = [
+      ['viewed', 'Viewed an event'],
+      ['started', 'Started checkout'],
+      ['submitted', 'Submitted payment details'],
+      ['completed', 'Got a paid or free ticket']
+    ];
+    const funnel = funnelSteps.map(([key, label], index) => {
+      const count = funnelCounts[key];
+      const previous = index ? funnelCounts[funnelSteps[index - 1][0]] : null;
+      return { step: key, label, sessions: count, fromPrevious: previous ? count / previous : null };
+    });
+    const rankedValues = (type) => db.prepare(`
+      SELECT lower(value) AS value,COUNT(*) AS count
+      FROM activity_events WHERE event_type=? AND value != '' AND created_at >= ?
+      GROUP BY lower(value) ORDER BY count DESC LIMIT 15
+    `).all(type, windowStart);
+    const topEvents = db.prepare(`
+      SELECT a.event_id AS eventId,e.title,
+        SUM(a.event_type='event_view') AS views,
+        SUM(a.event_type='favorite' AND a.value='loved') AS favourites,
+        SUM(a.event_type='share') AS shares
+      FROM activity_events a LEFT JOIN events e ON e.id=a.event_id
+      WHERE a.event_id IS NOT NULL AND a.created_at >= ?
+      GROUP BY a.event_id ORDER BY views DESC,favourites DESC LIMIT 10
+    `).all(windowStart);
+    const consentRows = db.prepare(`
+      SELECT choice,SUM(choice_count) AS count FROM consent_choice_daily
+      WHERE choice_date >= ? GROUP BY choice
+    `).all(windowStart.slice(0, 10));
+    const accepted = consentRows.find((row) => row.choice === 'accepted')?.count || 0;
+    const rejected = consentRows.find((row) => row.choice === 'rejected')?.count || 0;
+    res.json({
+      days,
+      totals: {
+        visitors: totals.visitors,
+        sessions: totals.sessions,
+        pageViews: totals.pageViews || 0,
+        signedInVisitors: totals.signedInVisitors
+      },
+      daily,
+      topPages,
+      navigation,
+      funnel,
+      searches: rankedValues('search'),
+      filters: rankedValues('filter'),
+      topEvents,
+      consent: { accepted, rejected, acceptanceRate: accepted + rejected ? accepted / (accepted + rejected) : null }
+    });
   });
 
   app.get('/api/events/mine', requireAccount, (req, res) => {
