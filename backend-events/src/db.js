@@ -792,6 +792,17 @@ if (!eventColumns.some((column) => column.name === 'updated_at')) {
 }
 db.exec('CREATE INDEX IF NOT EXISTS events_organizer ON events(organizer_account_id,created_at DESC)');
 
+const sponsorshipPurchaseColumns = db.prepare('PRAGMA table_info(sponsorship_purchases)').all();
+if (!sponsorshipPurchaseColumns.some((column) => column.name === 'video_url')) {
+  db.exec("ALTER TABLE sponsorship_purchases ADD COLUMN video_url TEXT NOT NULL DEFAULT ''");
+}
+if (!sponsorshipPurchaseColumns.some((column) => column.name === 'video_poster_url')) {
+  db.exec("ALTER TABLE sponsorship_purchases ADD COLUMN video_poster_url TEXT NOT NULL DEFAULT ''");
+}
+if (!sponsorshipPurchaseColumns.some((column) => column.name === 'tagline')) {
+  db.exec("ALTER TABLE sponsorship_purchases ADD COLUMN tagline TEXT NOT NULL DEFAULT ''");
+}
+
 const walletColumns = db.prepare('PRAGMA table_info(wallets)').all();
 if (!walletColumns.some((column) => column.name === 'account_id')) {
   db.exec('ALTER TABLE wallets ADD COLUMN account_id TEXT REFERENCES accounts(id)');

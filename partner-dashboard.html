@@ -18,8 +18,8 @@
   <link rel="stylesheet" href="styles/privacy-consent.css?v=cookie-badge-1">
   <script src="scripts/events-api.js?v=account-persistence-2" defer></script>
   <script src="scripts/partnership.js?v=partner-auto-2" defer></script>
-  <script src="scripts/sponsorship.js?v=partner-dashboard-1" defer></script>
-  <script src="scripts/partner-dashboard.js?v=sponsor-campaign-reports-1" defer></script>
+  <script src="scripts/sponsorship.js?v=billboard-video-1" defer></script>
+  <script src="scripts/partner-dashboard.js?v=billboard-video-1" defer></script>
   <script src="scripts/artist-marketplace-dashboard.js?v=1" defer></script>
   <script src="scripts/nav-toggle.js?v=1" defer></script>
   <script src="scripts/privacy-consent.js" defer></script>
@@ -92,7 +92,7 @@
           <p class="eyebrow">EVENT SPONSORSHIPS</p>
           <h2 id="sponsorshipDashboardTitle">Choose a package and track your campaign</h2>
           <p>Sign in is required. Your sponsor placement activates automatically after payment is confirmed and runs for the duration shown on the package.</p>
-          <form class="service-card service-form" id="sponsorCheckoutForm">
+          <form class="service-card service-form" id="sponsorCheckoutForm" enctype="multipart/form-data">
             <label>Brand or organization name<input name="brandName" maxlength="160" required></label>
             <fieldset class="ad-tier-fieldset">
               <legend>Sponsorship package</legend>
@@ -113,12 +113,21 @@
                   <input type="radio" name="tier" value="premium">
                   <span class="ad-tier-card-badge ad-tier-card-badge-premium">KES 200,000 · 60 days</span>
                   <strong class="ad-tier-card-name">Premium Partner</strong>
-                  <p class="ad-tier-card-desc">Everything in City, plus top billing in the sponsor strip on the homepage too.</p>
+                  <p class="ad-tier-card-desc">Everything in City, plus top billing in the sponsor strip and a video slot in the homepage billboard carousel.</p>
                 </label>
               </div>
             </fieldset>
             <label>Website (optional)<input name="websiteUrl" type="url" maxlength="2048" placeholder="https://..."></label>
             <label>Logo image link (optional, HTTPS)<input name="logoUrl" type="url" maxlength="2048" placeholder="https://..."></label>
+            <fieldset class="ad-tier-fieldset" id="billboardVideoFieldset" hidden>
+              <legend>Homepage billboard video (Premium Partner only)</legend>
+              <p class="checkout-note">Add a short video to run in the homepage billboard carousel, with click and viewable-impression tracking in your campaign report. A website link is required so people who click have somewhere to go.</p>
+              <label>Upload MP4 or WebM<input name="videoFile" type="file" accept="video/mp4,video/webm"></label>
+              <label>Or a video URL (HTTPS)<input name="videoUrl" type="url" maxlength="2048" placeholder="https://..."></label>
+              <label>Upload a poster image (JPG, PNG, GIF, or WebP)<input name="imageFile" type="file" accept="image/jpeg,image/png,image/gif,image/webp"></label>
+              <label>Or a poster image URL (HTTPS)<input name="posterUrl" type="url" maxlength="2048" placeholder="https://..."></label>
+              <label>Billboard tagline (optional)<input name="tagline" maxlength="160" placeholder="A short line shown on your billboard slide"></label>
+            </fieldset>
             <label>Your name<input name="buyerName" maxlength="120" autocomplete="name" required></label>
             <label>Payment method
               <select name="paymentMethod" id="sponsorPaymentMethod">

@@ -125,6 +125,7 @@
   let promotionDataPromise = Promise.resolve(null);
   let promotedEvents = [];
   let homepagePromotedEvents = [];
+  let billboardSponsors = [];
   let listingAvailable = null;
   let listingRequestInProgress = false;
   let listingRetryTimer = null;
@@ -146,8 +147,9 @@
     promotionDataPromise = Promise.allSettled([
       window.valorEventsApi('/api/ads/featured'),
       window.valorEventsApi('/api/health'),
-      window.valorEventsApi('/api/ads/featured?placement=homepage')
-    ]).then(([featuredResult, healthResult, homepageResult]) => ({
+      window.valorEventsApi('/api/ads/featured?placement=homepage'),
+      window.valorEventsApi('/api/sponsorships/featured-billboard')
+    ]).then(([featuredResult, healthResult, homepageResult, billboardResult]) => ({
       featuredEvents: featuredResult.status === 'fulfilled' && Array.isArray(featuredResult.value.events)
         ? featuredResult.value.events.map((event) => toPublicEvent(event, featuredResult.value.apiBase))
         : [],
@@ -156,7 +158,22 @@
         ? homepageResult.value.events.map((event) => toPublicEvent(event, homepageResult.value.apiBase))
         : [],
       health: healthResult.status === 'fulfilled' ? healthResult.value : null,
-      healthError: healthResult.status === 'rejected' ? healthResult.reason : null
+      healthError: healthResult.status === 'rejected' ? healthResult.reason : null,
+      billboardSponsors: billboardResult.status === 'fulfilled' && Array.isArray(billboardResult.value.sponsors)
+        ? billboardResult.value.sponsors.map((sponsor) => ({
+          id: sponsor.id,
+          isPartnershipPromo: true,
+          sponsorshipId: sponsor.id,
+          accent: 'blue',
+          title: sponsor.brandName,
+          category: 'Valor Africa Partner',
+          adVideo: sponsor.videoUrl,
+          adPoster: sponsor.videoPosterUrl || 'images/events/video-ad-poster.svg',
+          adDescription: sponsor.tagline || 'A proud partner of Valor Africa Events.',
+          adLink: apiBase ? `${apiBase}/api/sponsorships/${encodeURIComponent(sponsor.id)}/click?placement=homepage-billboard` : sponsor.websiteUrl,
+          adCta: 'Learn more'
+        }))
+        : []
     }));
   }
 
@@ -697,6 +714,7 @@
     }
     slide.dataset.adIndex = String(index);
     slide.dataset.eventId = event.id;
+    if (event.sponsorshipId) slide.dataset.sponsorshipId = event.sponsorshipId;
     slide.setAttribute('role', 'group');
     slide.setAttribute('aria-roledescription', 'slide');
     slide.setAttribute('aria-label', `${index + 1} of ${adEvents.length}: ${event.title}`);
@@ -870,6 +888,55 @@
     updateBillboardPlayback();
   }
 
+  function observeBillboardSponsorImpression(element, sponsorshipId) {
+    if (!('IntersectionObserver' in window) || !window.crypto?.randomUUID) return;
+    let timer = null;
+    let recorded = false;
+    let isViewable = false;
+    let observer;
+
+    function stopTimer() {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    }
+
+    function startTimer() {
+      if (recorded || timer !== null || !isViewable || document.visibilityState !== 'visible') return;
+      timer = window.setTimeout(async () => {
+        timer = null;
+        if (recorded || !isViewable || document.visibilityState !== 'visible') return;
+        recorded = true;
+        observer.disconnect();
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        try {
+          await window.valorEventsApi(`/api/sponsorships/${encodeURIComponent(sponsorshipId)}/viewable-impressions`, {
+            method: 'POST',
+            keepalive: true,
+            body: JSON.stringify({ impressionId: window.crypto.randomUUID(), placement: 'homepage-billboard' })
+          });
+        } catch (error) {
+          console.error('Could not record the billboard viewable impression:', error.message);
+        }
+      }, 1000);
+    }
+
+    observer = new IntersectionObserver(([entry]) => {
+      isViewable = entry.isIntersecting && entry.intersectionRatio >= 0.5;
+      if (isViewable) startTimer();
+      else stopTimer();
+    }, { threshold: [0, 0.5] });
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') startTimer();
+      else stopTimer();
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    observer.observe(element);
+  }
+
   function renderAdSlides() {
     if (!adSlides || !adStage) return;
     if (adObserver) adObserver.disconnect();
@@ -882,6 +949,9 @@
       const slide = createAdSlide(event, index);
       slide.setAttribute('role', 'listitem');
       group.appendChild(slide);
+    });
+    group.querySelectorAll('[data-sponsorship-id]').forEach((slide) => {
+      observeBillboardSponsorImpression(slide, slide.dataset.sponsorshipId);
     });
     const duplicate = group.cloneNode(true);
     duplicate.setAttribute('aria-hidden', 'true');
@@ -1138,6 +1208,7 @@
   function refreshPromotionalCarousel() {
     adEvents = [
       ...featuredVideoPromos,
+      ...billboardSponsors,
       ...billboardPromos,
       ...homepagePromotedEvents
     ];
@@ -1199,6 +1270,7 @@
     if (!data) return;
     promotedEvents = data.featuredEvents;
     homepagePromotedEvents = data.homepageEvents;
+    billboardSponsors = data.billboardSponsors;
     if (data.featuredError) console.warn('Sponsored event listings could not be loaded:', data.featuredError);
     if (featured) renderEvents(featured, events);
     if (allEvents) renderEvents(allEvents, events);

@@ -28,8 +28,12 @@ const uploadDirectory = path.resolve(process.env.UPLOAD_DIR || path.join(__dirna
 const heroAdUploadDirectory = path.resolve(
   process.env.HERO_AD_UPLOAD_DIR || path.join(uploadDirectory, '..', 'hero-ads')
 );
+const sponsorshipUploadDirectory = path.resolve(
+  process.env.SPONSORSHIP_UPLOAD_DIR || path.join(uploadDirectory, '..', 'sponsorships')
+);
 fs.mkdirSync(uploadDirectory, { recursive: true });
 fs.mkdirSync(heroAdUploadDirectory, { recursive: true });
+fs.mkdirSync(sponsorshipUploadDirectory, { recursive: true });
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -803,6 +807,14 @@ function createApp(options = {}) {
       response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     }
   }));
+  app.use('/uploads/sponsorships', express.static(sponsorshipUploadDirectory, {
+    fallthrough: false,
+    maxAge: '1d',
+    setHeaders(response) {
+      response.setHeader('X-Content-Type-Options', 'nosniff');
+      response.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    }
+  }));
 
   const loginLimiter = createLoginLimiter();
   const accountLoginLimiter = createLoginLimiter(20);
@@ -1060,6 +1072,23 @@ function createApp(options = {}) {
       const error = new Error(file.fieldname === 'imageFile'
         ? 'Upload a JPG, PNG, GIF, or WebP image.'
         : 'Upload an MP4 or WebM hero video.');
+      error.status = 400;
+      return callback(error);
+    }
+  }).fields([{ name: 'videoFile', maxCount: 1 }, { name: 'imageFile', maxCount: 1 }]);
+  const sponsorshipMediaUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024, files: 2, fields: 16, parts: 18, fieldSize: 10000 },
+    fileFilter(req, file, callback) {
+      if (file.fieldname === 'videoFile' && ['video/mp4','video/webm'].includes(file.mimetype)) {
+        return callback(null, true);
+      }
+      if (file.fieldname === 'imageFile' && ['image/jpeg','image/png','image/gif','image/webp'].includes(file.mimetype)) {
+        return callback(null, true);
+      }
+      const error = new Error(file.fieldname === 'imageFile'
+        ? 'Upload a JPG, PNG, GIF, or WebP image.'
+        : 'Upload an MP4 or WebM billboard video.');
       error.status = 400;
       return callback(error);
     }
@@ -2739,9 +2768,26 @@ function createApp(options = {}) {
     res.json({ sponsors: rows });
   });
 
+  app.get('/api/sponsorships/featured-billboard', (req, res) => {
+    const rows = db.prepare(`
+      SELECT id,brand_name AS brandName,tagline,website_url AS websiteUrl,
+        video_url AS videoUrl,video_poster_url AS videoPosterUrl
+      FROM sponsorship_purchases
+      WHERE status='active' AND julianday(ends_at) > julianday('now') AND video_url != ''
+      ORDER BY paid_at DESC
+      LIMIT 10
+    `).all();
+    const absolutize = (value) => (value && value.startsWith('/') ? `${req.protocol}://${req.get('host')}${value}` : value);
+    res.json({
+      sponsors: rows.map((row) => ({ ...row, videoUrl: absolutize(row.videoUrl), videoPosterUrl: absolutize(row.videoPosterUrl) }))
+    });
+  });
+
   app.get('/api/sponsorships/:id/click', sponsorshipClickLimiter, (req, res) => {
     const placement = typeof req.query.placement === 'string' ? req.query.placement : '';
-    if (placement !== 'home-sponsor-strip') return res.status(400).json({ error: 'Choose a supported sponsorship placement.' });
+    if (!['home-sponsor-strip', 'homepage-billboard'].includes(placement)) {
+      return res.status(400).json({ error: 'Choose a supported sponsorship placement.' });
+    }
     const purchase = db.prepare(`
       SELECT id,website_url AS websiteUrl FROM sponsorship_purchases
       WHERE id=? AND status='active' AND julianday(starts_at) <= julianday('now')
@@ -2797,7 +2843,7 @@ function createApp(options = {}) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(impressionId)) {
       return res.status(400).json({ error: 'A valid impression ID is required.' });
     }
-    if (placement !== 'home-sponsor-strip') {
+    if (!['home-sponsor-strip', 'homepage-billboard'].includes(placement)) {
       return res.status(400).json({ error: 'Choose a supported sponsorship placement.' });
     }
     const sponsorship = db.prepare(`
@@ -2962,6 +3008,7 @@ function createApp(options = {}) {
         payment_method AS paymentMethod,amount_kes AS amountKes,
         result_description AS resultDescription,starts_at AS startsAt,
         ends_at AS endsAt,created_at AS createdAt,
+        video_url AS videoUrl,video_poster_url AS videoPosterUrl,tagline,
         (SELECT COUNT(*) FROM sponsorship_viewable_impressions i
           WHERE i.sponsorship_purchase_id=sponsorship_purchases.id) AS viewableImpressions
       FROM sponsorship_purchases
@@ -4433,7 +4480,8 @@ function createApp(options = {}) {
       SELECT id,tier,brand_name AS brandName,website_url AS websiteUrl,logo_url AS logoUrl,
         buyer_name AS buyerName,phone,amount_kes AS amountKes,payment_method AS paymentMethod,
         status,result_description AS resultDescription,starts_at AS startsAt,ends_at AS endsAt,
-        created_at AS createdAt,paid_at AS paidAt
+        created_at AS createdAt,paid_at AS paidAt,
+        video_url AS videoUrl,video_poster_url AS videoPosterUrl,tagline
       FROM sponsorship_purchases
       ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'pending' THEN 1 WHEN 'review' THEN 2 ELSE 3 END,created_at DESC
       LIMIT 500
@@ -5236,7 +5284,7 @@ function createApp(options = {}) {
     return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
   }
 
-  app.post('/api/sponsorships', requireAccount, requirePartnerTermsAcknowledgement, async (req, res, next) => {
+  app.post('/api/sponsorships', requireAccount, requirePartnerTermsAcknowledgement, sponsorshipMediaUpload, async (req, res, next) => {
     try {
       const paymentMethod = req.body && req.body.paymentMethod || 'mpesa';
       if (!['mpesa','wallet','nowpayments','paypal'].includes(paymentMethod)) {
@@ -5249,7 +5297,10 @@ function createApp(options = {}) {
       if (paymentMethod === 'paypal' && !paypalGateway.isConfigured()) {
         return res.status(503).json({ error: 'PayPal checkout is not enabled yet. Choose M-Pesa or Valor Wallet.' });
       }
-      const { tier, brandName, websiteUrl: inputWebsite, logoUrl: inputLogo, buyerName, phone: inputPhone } = req.body || {};
+      const {
+        tier, brandName, websiteUrl: inputWebsite, logoUrl: inputLogo, buyerName, phone: inputPhone,
+        videoUrl: inputVideoUrl, posterUrl: inputPosterUrl, tagline: inputTagline
+      } = req.body || {};
       const tierInfo = sponsorshipTiers[tier];
       if (!tierInfo) return res.status(400).json({ error: 'Choose a sponsorship package.' });
       if (typeof brandName !== 'string' || !brandName.trim() || brandName.length > 160) {
@@ -5276,6 +5327,41 @@ function createApp(options = {}) {
       if (typeof buyerName !== 'string' || !buyerName.trim() || buyerName.length > 120) {
         return res.status(400).json({ error: 'Enter your name.' });
       }
+      const videoFile = req.files?.videoFile?.[0];
+      const posterFile = req.files?.imageFile?.[0];
+      const tagline = typeof inputTagline === 'string' ? inputTagline.trim() : '';
+      if (tagline.length > 160) return res.status(400).json({ error: 'Billboard tagline must be 160 characters or fewer.' });
+      const wantsBillboard = Boolean(videoFile || posterFile || tagline || inputVideoUrl || inputPosterUrl);
+      if (wantsBillboard && tierInfo.rank < 3) {
+        return res.status(400).json({ error: 'Homepage billboard video is only available on the Premium Partner package.' });
+      }
+      let videoUrl = '';
+      if (videoFile) {
+        if (!validHeroVideo(videoFile.buffer)) return res.status(400).json({ error: 'The uploaded file is not a supported MP4 or WebM video.' });
+      } else if (typeof inputVideoUrl === 'string' && inputVideoUrl.trim()) {
+        videoUrl = inputVideoUrl.trim();
+        if (videoUrl.length > 2048) return res.status(400).json({ error: 'Video link must be 2,048 characters or fewer.' });
+        try {
+          if (new URL(videoUrl).protocol !== 'https:') return res.status(400).json({ error: 'Video links must use HTTPS.' });
+        } catch (error) {
+          return res.status(400).json({ error: 'Enter a valid HTTPS video link.' });
+        }
+      }
+      let videoPosterUrl = '';
+      if (posterFile) {
+        if (!validImage(posterFile.buffer)) return res.status(400).json({ error: 'The uploaded poster is not a supported image.' });
+      } else if (typeof inputPosterUrl === 'string' && inputPosterUrl.trim()) {
+        videoPosterUrl = inputPosterUrl.trim();
+        if (videoPosterUrl.length > 2048) return res.status(400).json({ error: 'Poster link must be 2,048 characters or fewer.' });
+        try {
+          if (new URL(videoPosterUrl).protocol !== 'https:') return res.status(400).json({ error: 'Poster links must use HTTPS.' });
+        } catch (error) {
+          return res.status(400).json({ error: 'Enter a valid HTTPS poster image link.' });
+        }
+      }
+      if ((videoUrl || videoFile) && !websiteUrl) {
+        return res.status(400).json({ error: 'Add a website link so people who click your billboard ad have somewhere to go.' });
+      }
       req.wallet = paymentMethod === 'wallet' ? walletForAccount(req.account.id) : null;
       if (paymentMethod === 'wallet' && !req.wallet) return res.status(409).json({ error: 'Verify and link your phone number before paying from your wallet.' });
       const phone = paymentMethod === 'wallet'
@@ -5290,6 +5376,15 @@ function createApp(options = {}) {
       const brandNameTrimmed = brandName.trim();
       const buyerNameTrimmed = buyerName.trim();
 
+      if (videoFile) videoUrl = `/uploads/sponsorships/${id}.${validHeroVideo(videoFile.buffer)}`;
+      if (posterFile) videoPosterUrl = `/uploads/sponsorships/${id}-poster.${validImage(posterFile.buffer)}`;
+      try {
+        if (videoFile) fs.writeFileSync(path.join(sponsorshipUploadDirectory, path.basename(videoUrl)), videoFile.buffer, { flag: 'wx' });
+        if (posterFile) fs.writeFileSync(path.join(sponsorshipUploadDirectory, path.basename(videoPosterUrl)), posterFile.buffer, { flag: 'wx' });
+      } catch (error) {
+        return next(error);
+      }
+
       function activateNow() {
         const beginsAt = new Date(Math.floor(Date.now() / 1000) * 1000);
         const endsAt = new Date(beginsAt.getTime() + tierInfo.days * 86400000);
@@ -5302,11 +5397,13 @@ function createApp(options = {}) {
         db.transaction(() => {
           db.prepare(`
             INSERT INTO sponsorship_purchases
-              (id,access_token_hash,account_id,tier,brand_name,website_url,logo_url,buyer_name,phone,amount_kes,payment_method)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+              (id,access_token_hash,account_id,tier,brand_name,website_url,logo_url,buyer_name,phone,amount_kes,payment_method,
+               video_url,video_poster_url,tagline)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           `).run(
             id, sha256(accessToken), req.account ? req.account.id : null, tier, brandNameTrimmed,
-            websiteUrl, logoUrl, buyerNameTrimmed, phone, tierInfo.priceKes, paymentMethod
+            websiteUrl, logoUrl, buyerNameTrimmed, phone, tierInfo.priceKes, paymentMethod,
+            videoUrl, videoPosterUrl, tagline
           );
           if (paymentMethod === 'wallet') {
             const balance = db.prepare("SELECT COALESCE(SUM(amount_kes),0) AS balance FROM wallet_transactions WHERE wallet_id=? AND status='completed'")
@@ -5322,6 +5419,8 @@ function createApp(options = {}) {
           }
         })();
       } catch (error) {
+        if (videoFile) { try { fs.unlinkSync(path.join(sponsorshipUploadDirectory, path.basename(videoUrl))); } catch {} }
+        if (posterFile) { try { fs.unlinkSync(path.join(sponsorshipUploadDirectory, path.basename(videoPosterUrl))); } catch {} }
         if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
         throw error;
       }
@@ -6074,8 +6173,12 @@ function createApp(options = {}) {
   app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
     if (error instanceof multer.MulterError) {
-      if (error.code === 'LIMIT_FILE_SIZE' && req.path.startsWith('/api/ads/admin/hero-slides')) {
+      if (error.code === 'LIMIT_FILE_SIZE'
+          && (req.path.startsWith('/api/ads/admin/hero-slides') || req.path.startsWith('/api/admin/hero-slides'))) {
         return res.status(400).json({ error: 'Hero videos must be 100 MB or smaller.' });
+      }
+      if (error.code === 'LIMIT_FILE_SIZE' && req.path.startsWith('/api/sponsorships')) {
+        return res.status(400).json({ error: 'Billboard videos must be 100 MB or smaller.' });
       }
       return res.status(400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'Event poster must be 10 MB or smaller.' : 'Invalid image upload.' });
     }

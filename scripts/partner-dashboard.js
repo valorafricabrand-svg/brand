@@ -207,6 +207,13 @@
       const impressionNote = document.createElement('p');
       impressionNote.textContent = 'Counted when at least half of this placement is visible for one continuous second while the page is visible. This does not guarantee human attention.';
       item.append(heading, status, period, impressions, impressionNote);
+      if (purchase.videoUrl) {
+        const billboard = document.createElement('p');
+        billboard.textContent = purchase.tagline
+          ? `Homepage billboard video: live · "${purchase.tagline}"`
+          : 'Homepage billboard video: live';
+        item.appendChild(billboard);
+      }
 
       const campaignRunning = purchase.status === 'active' &&
         Date.parse(purchase.endsAt) > Date.now();

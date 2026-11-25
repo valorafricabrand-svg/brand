@@ -2,6 +2,7 @@ process.env.NODE_ENV = 'test';
 process.env.DB_PATH = ':memory:';
 process.env.UPLOAD_DIR = require('path').join(__dirname, '..', '.test-uploads');
 process.env.HERO_AD_UPLOAD_DIR = require('path').join(__dirname, '..', '.test-uploads', 'hero-ads');
+process.env.SPONSORSHIP_UPLOAD_DIR = require('path').join(__dirname, '..', '.test-uploads', 'sponsorships');
 process.env.JWT_SECRET = 'test-only-secret-not-used-outside-test-1234567890';
 process.env.ADMIN_USERNAME = 'test-admin';
 process.env.ADMIN_PASSWORD = 'test-admin-password-long-enough';
@@ -3196,6 +3197,75 @@ test('sponsor campaign links attribute paid orders and organizers submit verifia
   assert.equal(verifiedDelivery.status, 'verified');
   assert.equal(verifiedDelivery.verifiedBy, 'test-admin');
   assert.equal(verifiedDelivery.attendanceCount, 250);
+});
+
+test('premium sponsors can run a tracked homepage billboard video', async () => {
+  const fakeMp4 = Buffer.concat([Buffer.alloc(4), Buffer.from('ftyp'), Buffer.alloc(8)]);
+  const fakePng = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), Buffer.alloc(8)]);
+
+  const communityAuth = createTestAccountAuth(`billboard-community-${crypto.randomUUID()}@example.com`);
+  createTestWallet(communityAuth, 100000);
+  const notPremium = await request(app).post('/api/sponsorships').set(communityAuth).send({
+    tier: 'community', brandName: 'Too Small', websiteUrl: 'https://small.example',
+    videoUrl: 'https://small.example/ad.mp4', buyerName: 'Sam', paymentMethod: 'wallet'
+  });
+  assert.equal(notPremium.status, 400);
+  assert.match(notPremium.body.error, /Premium Partner/);
+
+  const premiumAuth = createTestAccountAuth(`billboard-premium-${crypto.randomUUID()}@example.com`);
+  createTestWallet(premiumAuth, 500000);
+  const noWebsite = await request(app).post('/api/sponsorships').set(premiumAuth)
+    .field('tier', 'premium').field('brandName', 'No Site').field('buyerName', 'Ann').field('paymentMethod', 'wallet')
+    .attach('videoFile', fakeMp4, { filename: 'ad.mp4', contentType: 'video/mp4' });
+  assert.equal(noWebsite.status, 400);
+  assert.match(noWebsite.body.error, /website link/);
+
+  const purchase = await request(app).post('/api/sponsorships').set(premiumAuth)
+    .field('tier', 'premium').field('brandName', 'EABL').field('websiteUrl', 'https://eabl.example')
+    .field('tagline', 'Proud partner of Kenyan live events').field('buyerName', 'Ann').field('paymentMethod', 'wallet')
+    .attach('videoFile', fakeMp4, { filename: 'ad.mp4', contentType: 'video/mp4' })
+    .attach('imageFile', fakePng, { filename: 'poster.png', contentType: 'image/png' });
+  assert.equal(purchase.status, 201);
+  assert.equal(purchase.body.status, 'active');
+  const purchaseId = purchase.body.purchaseId;
+
+  const billboard = await request(app).get('/api/sponsorships/featured-billboard');
+  assert.equal(billboard.status, 200);
+  const slide = billboard.body.sponsors.find((sponsor) => sponsor.id === purchaseId);
+  assert.ok(slide);
+  assert.equal(slide.brandName, 'EABL');
+  assert.equal(slide.tagline, 'Proud partner of Kenyan live events');
+  assert.match(slide.videoUrl, new RegExp(`/uploads/sponsorships/${purchaseId}\\.mp4$`));
+  assert.match(slide.videoPosterUrl, new RegExp(`/uploads/sponsorships/${purchaseId}-poster\\.png$`));
+  const servedVideo = await request(app).get(`/uploads/sponsorships/${purchaseId}.mp4`);
+  assert.equal(servedVideo.status, 200);
+  assert.ok(!billboard.body.sponsors.some((sponsor) => sponsor.brandName === 'Too Small'));
+
+  const click = await request(app).get(`/api/sponsorships/${purchaseId}/click?placement=homepage-billboard`);
+  assert.equal(click.status, 302);
+  assert.equal(click.headers.location, 'https://eabl.example/');
+  const impression = await request(app).post(`/api/sponsorships/${purchaseId}/viewable-impressions`)
+    .send({ impressionId: crypto.randomUUID(), placement: 'homepage-billboard' });
+  assert.equal(impression.status, 202);
+  assert.equal(impression.body.recorded, true);
+
+  const report = await request(app).get(`/api/sponsorships/${purchaseId}/report`).set(premiumAuth);
+  assert.equal(report.status, 200);
+  const billboardPlacement = report.body.placements.find((placement) => placement.placement === 'homepage-billboard');
+  assert.equal(billboardPlacement.impressions, 1);
+  assert.equal(billboardPlacement.clicks, 1);
+  assert.equal(billboardPlacement.clickThroughRate, 1);
+
+  const mine = await request(app).get('/api/sponsorships/me').set(premiumAuth);
+  assert.equal(mine.body.purchases[0].tagline, 'Proud partner of Kenyan live events');
+  assert.ok(mine.body.purchases[0].videoUrl);
+  const adminList = await request(app).get('/api/sponsorships/admin').set(admin);
+  assert.ok(adminList.body.purchases.find((row) => row.id === purchaseId).videoUrl);
+
+  const cancel = await request(app).patch(`/api/sponsorships/admin/${purchaseId}`).set(admin).send({ status: 'cancelled' });
+  assert.equal(cancel.status, 200);
+  const afterCancel = await request(app).get('/api/sponsorships/featured-billboard');
+  assert.ok(!afterCancel.body.sponsors.some((sponsor) => sponsor.id === purchaseId));
 });
 
 test('event pages report sold-out status and homepage review highlights include other reviewed events', async () => {

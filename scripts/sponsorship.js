@@ -15,6 +15,7 @@
     const paymentMethod = document.getElementById('sponsorPaymentMethod');
     const phoneInput = document.getElementById('sponsorPhone');
     const submitButton = document.getElementById('sponsorCheckoutSubmit');
+    const billboardFieldset = document.getElementById('billboardVideoFieldset');
     const labels = { mpesa: 'M-Pesa', wallet: 'Valor Wallet', nowpayments: 'NOWPayments', paypal: 'PayPal' };
     let paymentsConfigured = false;
 
@@ -26,6 +27,14 @@
     }
     paymentMethod.addEventListener('change', updatePaymentFields);
     updatePaymentFields();
+
+    function updateBillboardFields() {
+      const isPremium = form.elements.tier.value === 'premium';
+      billboardFieldset.hidden = !isPremium;
+      if (!isPremium) billboardFieldset.querySelectorAll('input').forEach((input) => { input.value = ''; });
+    }
+    form.querySelectorAll('input[name="tier"]').forEach((radio) => radio.addEventListener('change', updateBillboardFields));
+    updateBillboardFields();
 
     api('/api/health').then((health) => { paymentsConfigured = Boolean(health.paymentsConfigured); }).catch(() => {});
 
@@ -45,10 +54,13 @@
       submitButton.disabled = true;
       setFeedback(feedback, 'Starting your sponsorship checkout…');
       try {
+        const data = new FormData(form);
+        if (!form.elements.videoFile.files.length) data.delete('videoFile');
+        if (!form.elements.imageFile.files.length) data.delete('imageFile');
         const result = await api('/api/sponsorships', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
-          body: JSON.stringify(values)
+          body: data
         });
         window.sessionStorage.setItem(`valor-sponsorship-${result.purchaseId}`, result.accessToken);
         if (result.checkoutUrl) {

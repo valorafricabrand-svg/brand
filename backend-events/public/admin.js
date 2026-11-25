@@ -854,6 +854,18 @@
       if (purchase.startsAt && purchase.endsAt) addText(card, 'p', 'record-contact',
         `Active ${new Date(purchase.startsAt).toLocaleString()} → ${new Date(purchase.endsAt).toLocaleString()}`);
       if (purchase.resultDescription) addText(card, 'p', 'record-description', purchase.resultDescription);
+      if (purchase.videoUrl) {
+        const videoLine = document.createElement('p');
+        videoLine.className = 'record-contact';
+        const videoLink = document.createElement('a');
+        videoLink.href = purchase.videoUrl;
+        videoLink.target = '_blank';
+        videoLink.rel = 'noopener noreferrer';
+        videoLink.textContent = '▶ Billboard video ad';
+        videoLine.appendChild(videoLink);
+        if (purchase.tagline) videoLine.append(` · "${purchase.tagline}"`);
+        card.appendChild(videoLine);
+      }
       if (['active','pending','review'].includes(purchase.status)) {
         const actions = document.createElement('div');
         actions.className = 'record-actions';
